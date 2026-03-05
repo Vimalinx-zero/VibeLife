@@ -214,6 +214,11 @@ const AIChatWidget: React.FC = () => {
               transition={{ type: 'spring', stiffness: 180, damping: 25 }}
               className="absolute bottom-5 w-[min(92vw,840px)] h-20 dark:bg-black/80 bg-white/90 backdrop-blur-2xl border dark:border-white/10 border-white/40 dark:text-white text-gray-800 rounded-full shadow-2xl pointer-events-auto"
               style={{ left: 'calc((100vw - min(92vw, 840px)) / 2)' }}
+              onClick={() => {
+                if (!isOpen) {
+                  openChat();
+                }
+              }}
               onMouseEnter={() => setIsDockHovered(true)}
               onMouseLeave={() => {
                 if (!isOpen) {
