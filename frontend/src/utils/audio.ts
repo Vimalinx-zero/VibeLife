@@ -17,6 +17,14 @@ const initAudioContext = (): AudioContext => {
     const AudioContextClass = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext;
     audioContext = new AudioContextClass();
   }
+
+  // ✅ 如果 AudioContext 被暂停，尝试恢复
+  if (audioContext.state === 'suspended') {
+    audioContext.resume().catch(err => {
+      console.warn('Failed to resume AudioContext:', err);
+    });
+  }
+
   return audioContext;
 };
 

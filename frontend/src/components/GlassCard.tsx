@@ -9,6 +9,9 @@ interface GlassCardProps {
   className?: string;
   onClick?: (e: MouseEvent<HTMLDivElement>) => void;
   delay?: number;
+  hoverScale?: number;
+  hoverLift?: number;
+  hoverShadow?: string;
 }
 
 /**
@@ -16,16 +19,16 @@ interface GlassCardProps {
  * 避免不必要的重新渲染
  * ✅ 优化动画性能：GPU 加速、减少动画时长、will-change 提示
  */
-const GlassCard = memo(({ children, className, onClick, delay = 0 }: GlassCardProps) => {
+const GlassCard = memo(({ children, className, onClick, delay = 0, hoverScale = 1.02, hoverLift = -5, hoverShadow = "0 20px 40px rgba(0,0,0,0.2)" }: GlassCardProps) => {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: delay, ease: "easeOut" }}
       whileHover={{
-        scale: 1.02,
-        y: -5,
-        boxShadow: "0 20px 40px rgba(0,0,0,0.2)",
+        scale: hoverScale,
+        y: hoverLift,
+        boxShadow: hoverShadow,
         transition: { duration: 0.2, ease: "easeOut" } // ✅ 缩短动画时长
       }}
       whileTap={{ scale: 0.98 }}

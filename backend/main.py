@@ -45,6 +45,8 @@ from json_import_routes import router as json_import_router  # ✨ 新增：JSON
 from ai_routes import router as ai_router  # ✨ 新增：AI功能路由
 from auth_routes import router as auth_router  # ✨ 新增：认证路由
 from git_routes import router as git_router  # ✨ 新增：Git 管理路由
+from project_routes import router as project_router
+from quick_capture_routes import router as quick_capture_router
 
 # 1. 数据库初始化：创建所有表结构
 models.Base.metadata.create_all(bind=engine)
@@ -123,6 +125,8 @@ app.include_router(ai_router)
 app.include_router(auth_router)
 # ✨ 新增：注册 Git 管理路由
 app.include_router(git_router)
+app.include_router(project_router)
+app.include_router(quick_capture_router)
 
 
 # 2. 启动事件：注入 Mock 种子数据 (防止数据库为空)

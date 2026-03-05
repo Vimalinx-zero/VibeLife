@@ -164,7 +164,17 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
   // Timer completion handler
   const handleTimerComplete = useCallback(async () => {
     setTimerStatus('idle');
-    playChime('complete');
+
+    // ✅ 确保 AudioContext 已初始化（用户已交互）
+    try {
+      // 初始化 AudioContext（用户已经点击了开始按钮）
+      const { initAudioContext } = await import('../utils/audio');
+      initAudioContext();
+      // 播放完成铃声
+      playChime('complete');
+    } catch (error) {
+      console.error('Failed to play completion chime:', error);
+    }
 
     // Calculate study duration
     let durationMinutes = 0;

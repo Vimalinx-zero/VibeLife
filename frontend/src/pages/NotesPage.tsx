@@ -12,6 +12,7 @@ import TagCloud from "../components/TagCloud";
 import BacklinksPanel from "../components/BacklinksPanel";
 import NoteSearch from "../components/NoteSearch";
 import TagSettings from "../components/TagSettings";
+import { quickCaptureAPI } from "../utils/api";
 
 interface NoteItem {
   id: string;
@@ -130,8 +131,7 @@ const NotesPage = () => {
         saveNote();
       }
       // 打开创建模态框
-      setShowCreateModal(true);
-      setNewItemType("file");
+      openCreateModal('file');
     },
 
     // Ctrl+S - 保存笔记
@@ -149,6 +149,24 @@ const NotesPage = () => {
   const [showInfoModal, setShowInfoModal] = useState<boolean>(false); // ✨ 新增信息弹窗
   const [newItemName, setNewItemName] = useState<string>("");
   const [newItemType, setNewItemType] = useState<"file" | "folder">("file");
+  const [newItemSourceType, setNewItemSourceType] = useState<'none' | 'url' | 'image' | 'pdf' | 'doc' | 'video'>('none');
+  const [newItemSourceUri, setNewItemSourceUri] = useState<string>('');
+  const [creatingItem, setCreatingItem] = useState<boolean>(false);
+
+  const openCreateModal = (type: 'file' | 'folder') => {
+    setNewItemType(type);
+    setNewItemName('');
+    setNewItemSourceType('none');
+    setNewItemSourceUri('');
+    setShowCreateModal(true);
+  };
+
+  const closeCreateModal = () => {
+    setShowCreateModal(false);
+    setNewItemName('');
+    setNewItemSourceType('none');
+    setNewItemSourceUri('');
+  };
 
   // Modal States for File Operations
   const [showRenameModal, setShowRenameModal] = useState<boolean>(false);
@@ -389,11 +407,41 @@ const NotesPage = () => {
 
   const createItem = async () => {
     if (!newItemName.trim()) return;
+    if (creatingItem) return;
+
     const parentId = viewData.info.type === 'file' ? viewData.info.parent_id : viewData.info.id;
-    await apiClient.post("/notes/create", { parent_id: parentId || 'root', name: newItemName, type: newItemType });
-    setShowCreateModal(false);
-    setNewItemName("");
-    loadNode(parentId || 'root');
+    setCreatingItem(true);
+    try {
+      const createRes = await apiClient.post("/notes/create", { parent_id: parentId || 'root', name: newItemName, type: newItemType });
+
+      if (newItemType === 'file' && newItemSourceType !== 'none' && newItemSourceUri.trim()) {
+        try {
+          const capture = await quickCaptureAPI.capture({
+            source_type: newItemSourceType,
+            source_uri: newItemSourceUri.trim(),
+            title: newItemName.trim()
+          });
+
+          const createdId = createRes?.data?.item?.id;
+          if (createdId) {
+            await apiClient.post('/notes/save', {
+              id: createdId,
+              content: `# ${newItemName.trim()}\n\n> 来源类型：${newItemSourceType}\n> 来源地址：${newItemSourceUri.trim()}\n\n## 摘要\n${capture.summary || ''}\n`,
+              name: newItemName,
+              tags: capture.tags || []
+            });
+          }
+        } catch (captureError) {
+          console.error('Quick capture failed:', captureError);
+          showToast('⚠️ 笔记已创建，来源采集失败');
+        }
+      }
+
+      closeCreateModal();
+      loadNode(parentId || 'root');
+    } finally {
+      setCreatingItem(false);
+    }
   };
 
   // --- 右键菜单 ---
@@ -580,7 +628,7 @@ const NotesPage = () => {
                   currentId={currentId}
                   sortedItems={sortedItems}
                   onLoadNode={loadNode}
-                  onCreateItem={(type) => { setNewItemType(type); setShowCreateModal(true); }}
+                  onCreateItem={(type) => openCreateModal(type)}
                   onContextMenu={handleContextMenu}
                   onDropItem={async (draggedId, targetId) => {
                     try {
@@ -848,14 +896,48 @@ const NotesPage = () => {
       
       {/* 1. 新建模态框 */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowCreateModal(false)}>
+        <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={closeCreateModal}>
           <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-2xl w-80 border border-white/10" onClick={e => e.stopPropagation()}>
             <h3 className="font-bold text-lg mb-4 text-slate-800 dark:text-white">New {newItemType === 'folder' ? 'Folder' : 'Note'}</h3>
             <input autoFocus type="text" className="w-full p-3 rounded-xl bg-gray-100 dark:bg-black/20 border-none outline-none mb-4 font-bold dark:text-white"
               placeholder="Enter name..." value={newItemName} onChange={e => setNewItemName(e.target.value)} onKeyDown={e => e.key === 'Enter' && createItem()} />
+
+            {newItemType === 'file' && (
+              <div className="mb-4 space-y-2">
+                <select
+                  value={newItemSourceType}
+                  onChange={(event) => setNewItemSourceType(event.target.value as 'none' | 'url' | 'image' | 'pdf' | 'doc' | 'video')}
+                  className="w-full p-2.5 rounded-xl bg-gray-100 dark:bg-black/20 border-none outline-none text-sm dark:text-white"
+                >
+                  <option value="none">来源：无（普通新建）</option>
+                  <option value="url">来源：链接</option>
+                  <option value="image">来源：图片</option>
+                  <option value="pdf">来源：PDF</option>
+                  <option value="doc">来源：文档</option>
+                  <option value="video">来源：视频</option>
+                </select>
+
+                {newItemSourceType !== 'none' && (
+                  <input
+                    type="text"
+                    value={newItemSourceUri}
+                    onChange={(event) => setNewItemSourceUri(event.target.value)}
+                    placeholder="输入 URL 或本地文件路径"
+                    className="w-full p-2.5 rounded-xl bg-gray-100 dark:bg-black/20 border-none outline-none text-sm dark:text-white"
+                  />
+                )}
+              </div>
+            )}
+
             <div className="flex gap-2">
-              <button onClick={() => setShowCreateModal(false)} className="flex-1 py-2 rounded-lg bg-gray-100 dark:bg-white/10 font-bold text-sm hover:opacity-80 dark:text-white">Cancel</button>
-              <button onClick={createItem} className="flex-1 py-2 rounded-lg bg-blue-500 text-white font-bold text-sm hover:bg-blue-600">Create</button>
+              <button onClick={closeCreateModal} className="flex-1 py-2 rounded-lg bg-gray-100 dark:bg-white/10 font-bold text-sm hover:opacity-80 dark:text-white">Cancel</button>
+              <button
+                onClick={createItem}
+                disabled={creatingItem || !newItemName.trim() || (newItemType === 'file' && newItemSourceType !== 'none' && !newItemSourceUri.trim())}
+                className="flex-1 py-2 rounded-lg bg-blue-500 text-white font-bold text-sm hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {creatingItem ? 'Creating...' : 'Create'}
+              </button>
             </div>
           </div>
         </div>
@@ -916,8 +998,8 @@ const NotesPage = () => {
               <div className="px-3 py-2 text-[10px] font-bold uppercase opacity-50 border-b border-white/10 mb-1 text-slate-500 dark:text-slate-400">
                 Folder Actions
               </div>
-              <button onClick={() => { setNewItemType('folder'); setShowCreateModal(true); setCtxMenu({...ctxMenu, show: false}); }} className="text-left px-4 py-2 text-sm font-bold hover:bg-blue-500 hover:text-white transition-colors dark:text-gray-200">New Folder</button>
-              <button onClick={() => { setNewItemType('file'); setShowCreateModal(true); setCtxMenu({...ctxMenu, show: false}); }} className="text-left px-4 py-2 text-sm font-bold hover:bg-blue-500 hover:text-white transition-colors dark:text-gray-200">New Note</button>
+              <button onClick={() => { openCreateModal('folder'); setCtxMenu({...ctxMenu, show: false}); }} className="text-left px-4 py-2 text-sm font-bold hover:bg-blue-500 hover:text-white transition-colors dark:text-gray-200">New Folder</button>
+              <button onClick={() => { openCreateModal('file'); setCtxMenu({...ctxMenu, show: false}); }} className="text-left px-4 py-2 text-sm font-bold hover:bg-blue-500 hover:text-white transition-colors dark:text-gray-200">New Note</button>
               
               <div className="h-px bg-gray-200 dark:bg-white/10 my-1"></div>
               <div className="px-3 py-1 text-[10px] font-bold opacity-40 uppercase">Sort By</div>

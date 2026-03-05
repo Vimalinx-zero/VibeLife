@@ -10,6 +10,7 @@ import { ToastProvider } from "./context/ToastContext";
 import { MediaProvider } from "./context/MediaContext";
 import { AuthProvider } from "./context/AuthContext";
 import LoadingScreen from "./components/LoadingScreen";
+import AIChatWidget from "./components/AIChatWidget";
 
 // ✅ 懒加载页面组件 - 显著减少首屏加载时间
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -23,9 +24,9 @@ const CollectionsPage = lazy(() => import("./pages/CollectionsPage"));
 const CollectionDetailPage = lazy(() => import("./pages/CollectionDetailPage"));
 const AIImportPage = lazy(() => import("./pages/AIImportPage"));
 const DataManagementPage = lazy(() => import("./pages/DataManagementPage"));
-// ✨ 新增：认证页面
-const LoginPage = lazy(() => import("./pages/LoginPage"));
-const RegisterPage = lazy(() => import("./pages/RegisterPage"));
+const SchedulePage = lazy(() => import("./pages/SchedulePage"));
+const ProjectsPage = lazy(() => import("./pages/ProjectsPage"));
+const QuickCapturePage = lazy(() => import("./pages/QuickCapturePage"));
 
 
 const AppContent = () => {
@@ -54,84 +55,27 @@ const AppContent = () => {
             <TopBar />
             <Suspense fallback={<LoadingScreen />}>
                 <Routes>
-                    {/* ✨ 新增：认证路由（无需保护） */}
-                    <Route path="/login" element={<LoginPage />} />
-                    <Route path="/register" element={<RegisterPage />} />
-
-                    {/* 受保护的路由 */}
-                    <Route path="/" element={
-                        <ProtectedRoute>
-                            <Dashboard />
-                        </ProtectedRoute>
-                    } />
-                    <Route path="/quiz" element={
-                        <ProtectedRoute>
-                            <QuizPage />
-                        </ProtectedRoute>
-                    } />
-
-                    {/* ✅ 修改：/mistakes 直接指向重型错题本 */}
-                    <Route path="/mistakes" element={
-                        <ProtectedRoute>
-                            <MistakeVaultPage />
-                        </ProtectedRoute>
-                    } />
-
-                    {/* 删除旧的 MistakeVaultPage 路由，或者保留重定向 */}
-                    {/* <Route path="/mistakes/vault" element={<MistakeVaultPage />} /> */}
-
-                    {/* 笔记入口 */}
-                    <Route path="/notes" element={
-                        <ProtectedRoute>
-                            <NotesPage />
-                        </ProtectedRoute>
-                    } />
-
-                    {/* ✅ 新增：ANKI 记忆卡入口 */}
-                    <Route path="/anki" element={
-                        <ProtectedRoute>
-                            <AnkiPage />
-                        </ProtectedRoute>
-                    } />
-                    <Route path="/anki/review" element={
-                        <ProtectedRoute>
-                            <AnkiReviewPage />
-                        </ProtectedRoute>
-                    } />
-                    <Route path="/anki/collections" element={
-                        <ProtectedRoute>
-                            <CollectionsPage />
-                        </ProtectedRoute>
-                    } />
-                    <Route path="/anki/collections/:collectionId" element={
-                        <ProtectedRoute>
-                            <CollectionDetailPage />
-                        </ProtectedRoute>
-                    } />
-
-                    {/* ✅ 新增：学习工作台入口 */}
-                    <Route path="/workbench" element={
-                        <ProtectedRoute>
-                            <WorkbenchPage />
-                        </ProtectedRoute>
-                    } />
-
-                    {/* ✅ 新增：AI 智能导入入口 */}
-                    <Route path="/ai-import" element={
-                        <ProtectedRoute>
-                            <AIImportPage />
-                        </ProtectedRoute>
-                    } />
-
-                    {/* ✅ 新增：数据管理入口 */}
-                    <Route path="/data-management" element={
-                        <ProtectedRoute>
-                            <DataManagementPage />
-                        </ProtectedRoute>
-                    } />
+                    {/* 主页 */}
+                    <Route path="/" element={<Dashboard />} />
+                    <Route path="/quiz" element={<QuizPage />} />
+                    <Route path="/mistakes" element={<MistakeVaultPage />} />
+                    <Route path="/notes" element={<NotesPage />} />
+                    <Route path="/anki" element={<AnkiPage />} />
+                    <Route path="/anki/review" element={<AnkiReviewPage />} />
+                    <Route path="/anki/collections" element={<CollectionsPage />} />
+                    <Route path="/anki/collections/:collectionId" element={<CollectionDetailPage />} />
+                    <Route path="/workbench" element={<WorkbenchPage />} />
+                    <Route path="/projects" element={<ProjectsPage />} />
+                    <Route path="/quick-capture" element={<QuickCapturePage />} />
+                    <Route path="/schedule" element={<SchedulePage />} />
+                    <Route path="/ai-import" element={<AIImportPage />} />
+                    <Route path="/data-management" element={<DataManagementPage />} />
                 </Routes>
             </Suspense>
         </BrowserRouter>
+
+        {/* 全局 AI 对话组件 */}
+        <AIChatWidget />
       </div>
     </div>
   );

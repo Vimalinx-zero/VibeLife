@@ -324,6 +324,95 @@ export const userAPI = {
   }
 };
 
+export interface ProjectStepDTO {
+  id: string;
+  title: string;
+  owner: string;
+  due: string;
+  done: boolean;
+}
+
+export interface ProjectResourceDTO {
+  id: string;
+  name: string;
+  kind: '文档' | '链接' | '文件' | string;
+  note: string;
+}
+
+export interface ProjectEmailDTO {
+  id: string;
+  from: string;
+  subject: string;
+  summary: string;
+  importance: '高' | '中' | '低' | string;
+  time: string;
+}
+
+export interface ProjectRecordDTO {
+  id: string;
+  name: string;
+  category: 'life' | 'work' | 'study' | string;
+  subtitle: string;
+  status: '正常推进' | '需关注' | '有阻塞' | string;
+  nextAction: string;
+  steps: ProjectStepDTO[];
+  resources: ProjectResourceDTO[];
+  emails: ProjectEmailDTO[];
+}
+
+export const projectsAPI = {
+  getProjects: (category?: string): Promise<ProjectRecordDTO[]> => {
+    const suffix = category ? `?category=${encodeURIComponent(category)}` : '';
+    return apiClient.get<{ projects: ProjectRecordDTO[] }>(`/projects${suffix}`).then((res) => res.data.projects || []);
+  }
+};
+
+export interface QuickCaptureRecordDTO {
+  id: string;
+  title: string;
+  source_type: string;
+  source_uri: string;
+  summary: string;
+  tags: string[];
+  project_id: string | null;
+  created_at: string;
+}
+
+export const quickCaptureAPI = {
+  capture: (payload: {
+    source_type: string;
+    source_uri: string;
+    project_id?: string;
+    title?: string;
+  }): Promise<QuickCaptureRecordDTO> => {
+    return apiClient
+      .post<{ success: boolean; capture: QuickCaptureRecordDTO }>("/quick-capture", payload)
+      .then((res) => res.data.capture);
+  },
+  list: (projectId?: string): Promise<QuickCaptureRecordDTO[]> => {
+    const suffix = projectId ? `?project_id=${encodeURIComponent(projectId)}` : "";
+    return apiClient
+      .get<{ captures: QuickCaptureRecordDTO[] }>(`/quick-capture${suffix}`)
+      .then((res) => res.data.captures || []);
+  },
+  search: (query: string): Promise<
+    Array<{
+      id: string;
+      score: number;
+      title: string;
+      summary: string;
+      tags: string[];
+      source_type: string;
+      project_id: string | null;
+    }>
+  > => {
+    const suffix = `?query=${encodeURIComponent(query)}`;
+    return apiClient
+      .get<{ results: Array<{ id: string; score: number; title: string; summary: string; tags: string[]; source_type: string; project_id: string | null }> }>(`/quick-capture/search${suffix}`)
+      .then((res) => res.data.results || []);
+  }
+};
+
 // ✅ 新增：导出 apiClient 供其他模块使用
 export { apiClient };
 
@@ -335,6 +424,8 @@ export default {
   anki: ankiAPI,
   data: dataAPI,
   dashboard: dashboardAPI,
-  user: userAPI
+  user: userAPI,
+  projects: projectsAPI,
+  quickCapture: quickCaptureAPI
 };
 // Force Vite reload

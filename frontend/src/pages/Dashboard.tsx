@@ -359,8 +359,8 @@ function Dashboard() {
 
         {/* ========== 第一行：欢迎卡片 + 刷题四件套 ========== */}
 
-        {/* 欢迎卡片 (2x2) - 包含今日统计 */}
-        <GlassCard className="col-span-1 md:col-span-2 md:row-span-2 p-8 flex flex-col justify-between min-h-[400px]">
+        {/* 欢迎卡片 (2x2) - 包含统计 */}
+        <GlassCard className="col-span-1 md:col-span-2 md:row-span-2 p-8 flex flex-col justify-between min-h-[400px]" onClick={() => navigate('/workbench')}>
           <div>
             <h1 className="text-4xl md:text-5xl font-bold mb-2 dark:text-white text-gray-900">
               {getGreeting()}, {profile.name}.
@@ -370,37 +370,37 @@ function Dashboard() {
             {/* 今日统计 - 5 个维度 */}
             <div className="grid grid-cols-5 gap-3 mb-6">
               <StatItem
-                label="今日学习"
-                value={formatDuration(studyStats.duration_minutes || 0)}
-                icon={Icons.Clock}
-                bgColor="bg-blue-500/20"
-                textColor="text-blue-500"
-              />
-              <StatItem
-                label="完成题目"
-                value={studyStats.questions_completed || 0}
-                icon={Icons.CheckCircle}
-                bgColor="bg-green-500/20"
-                textColor="text-green-500"
-              />
-              <StatItem
-                label="新增笔记"
+                label="笔记"
                 value={studyStats.notes_created || 0}
                 icon={Icons.BookOpen}
                 bgColor="bg-yellow-500/20"
                 textColor="text-yellow-500"
               />
               <StatItem
-                label="复习错题"
-                value={studyStats.mistakes_reviewed || 0}
+                label="今日日志"
+                value={studyStats.duration_minutes || 0}
+                icon={Icons.Clock}
+                bgColor="bg-blue-500/20"
+                textColor="text-blue-500"
+              />
+              <StatItem
+                label="完成项目"
+                value={stats.notes_count || 0}
                 icon={Icons.CheckCircle}
+                bgColor="bg-green-500/20"
+                textColor="text-green-500"
+              />
+              <StatItem
+                label="待办"
+                value={coachData?.snapshot.pending_todos || 0}
+                icon={Icons.Clock}
                 bgColor="bg-red-500/20"
                 textColor="text-red-500"
               />
               <StatItem
-                label="记忆卡"
-                value={studyStats.anki_reviews || 0}
-                icon={Icons.Brain}
+                label="工作时间"
+                value={coachData?.snapshot.today_study_minutes || 0}
+                icon={Icons.Clock}
                 bgColor="bg-purple-500/20"
                 textColor="text-purple-500"
               />
@@ -412,11 +412,9 @@ function Dashboard() {
               <div className="text-7xl font-thin font-mono dark:text-white text-gray-900">
                 {formatTime(currentTime)}
               </div>
-              {lastActivity && (
-                <p className="text-xs text-gray-500 mt-2">
-                  上次学习：{lastActivity.description || '继续加油！'}
-                </p>
-              )}
+              <p className="text-xs text-gray-500 mt-2">
+                点击卡片进入工作台
+              </p>
             </div>
             <div className="flex gap-3">
               <button
@@ -424,44 +422,37 @@ function Dashboard() {
                 onClick={() => navigate('/workbench')}
                 className="px-6 py-3 bg-indigo-500 hover:bg-indigo-600 text-white rounded-full font-semibold transition-all shadow-lg hover:shadow-indigo-500/30 hover:scale-105"
               >
-                学习工作台
-              </button>
-              <button
-                type="button"
-                onClick={handleResumeLearning}
-                className="px-8 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-full font-semibold transition-all shadow-lg hover:shadow-blue-500/30 hover:scale-105"
-              >
-                继续学习
+                进入工作台
               </button>
             </div>
           </div>
         </GlassCard>
 
-        {/* 刷题四件套 (2x2) */}
-        {/* 智能刷题 */}
-        <GlassCard className="p-6 relative group overflow-hidden" delay={0.1} onClick={() => navigate('/quiz')}>
+        {/* 工作四件套 (2x2) */}
+        {/* 日程规划 */}
+        <GlassCard className="p-6 relative group overflow-hidden" delay={0.1} onClick={() => navigate('/schedule')}>
           <div className="flex justify-between items-start relative z-10">
             <div className="p-3 bg-blue-500/20 rounded-2xl text-blue-500">
-              <Icons.Pen />
+              <Icons.Clock />
             </div>
             <div className="text-right">
               <span className="text-3xl font-bold block dark:text-white text-gray-900">
-                {stats.mistakes_count || 0}
+                4
               </span>
-              <span className="text-xs text-gray-500">待重练</span>
+              <span className="text-xs text-gray-500">本月</span>
             </div>
           </div>
           <div className="mt-6 relative z-10">
-            <h3 className="font-semibold text-lg dark:text-white text-gray-900">错题重练</h3>
-            <p className="text-xs text-gray-500 mt-1">攻克薄弱环节</p>
+            <h3 className="font-semibold text-lg dark:text-white text-gray-900">日程规划</h3>
+            <p className="text-xs text-gray-500 mt-1">查看完整日历</p>
           </div>
         </GlassCard>
 
-        {/* 错题积累 */}
-        <GlassCard className="p-6 relative group overflow-hidden" delay={0.2} onClick={() => navigate('/mistakes')}>
+        {/* 项目跟踪 */}
+        <GlassCard className="p-6 relative group overflow-hidden" delay={0.2} onClick={() => navigate('/projects')}>
           <div className="flex justify-between items-start relative z-10">
-            <div className="p-3 bg-red-500/20 rounded-2xl text-red-500">
-              <Icons.Bug />
+            <div className="p-3 bg-green-500/20 rounded-2xl text-green-500">
+              <Icons.CheckCircle />
             </div>
             <div className="text-right">
               <span className="text-3xl font-bold block dark:text-white text-gray-900">
@@ -470,8 +461,8 @@ function Dashboard() {
             </div>
           </div>
           <div className="mt-6 relative z-10">
-            <h3 className="font-semibold text-lg dark:text-white text-gray-900">错题本</h3>
-            <p className="text-xs text-gray-500 mt-1">深度复习</p>
+            <h3 className="font-semibold text-lg dark:text-white text-gray-900">项目跟踪</h3>
+            <p className="text-xs text-gray-500 mt-1">活跃项目状态</p>
           </div>
         </GlassCard>
 
@@ -489,26 +480,26 @@ function Dashboard() {
           </div>
           <div className="mt-6 relative z-10">
             <h3 className="font-semibold text-lg dark:text-white text-gray-900">随手笔记</h3>
-            <p className="text-xs text-gray-500 mt-1">管理笔记</p>
+            <p className="text-xs text-gray-500 mt-1">记录想法</p>
           </div>
         </GlassCard>
 
-        {/* ANKI 记忆卡 */}
-        <GlassCard className="p-6 relative group overflow-hidden" delay={0.35} onClick={() => navigate('/anki')}>
+        {/* 日志 */}
+        <GlassCard className="p-6 relative group overflow-hidden" delay={0.35} onClick={() => navigate('/notes')}>
           <div className="flex justify-between items-start relative z-10">
             <div className="p-3 bg-purple-500/20 rounded-2xl text-purple-500">
-              <Icons.Brain />
+              <Icons.Clock />
             </div>
             <div className="text-right">
               <span className="text-3xl font-bold block dark:text-white text-gray-900">
-                {studyStats.anki_reviews || 0}
+                {studyStats.duration_minutes || 0}
               </span>
-              <span className="text-xs text-gray-500">今日复习</span>
+              <span className="text-xs text-gray-500">今日</span>
             </div>
           </div>
           <div className="mt-6 relative z-10">
-            <h3 className="font-semibold text-lg dark:text-white text-gray-900">记忆卡</h3>
-            <p className="text-xs text-gray-500 mt-1">间隔重复</p>
+            <h3 className="font-semibold text-lg dark:text-white text-gray-900">日志</h3>
+            <p className="text-xs text-gray-500 mt-1">工作记录</p>
           </div>
         </GlassCard>
 
@@ -520,8 +511,8 @@ function Dashboard() {
         <GlassCard className="col-span-1 md:col-span-2 md:row-span-2 p-5 h-[300px] md:h-[320px] overflow-hidden" delay={0.58}>
           <div className="flex items-start justify-between gap-4 mb-4">
             <div>
-              <h3 className="text-lg font-bold dark:text-white text-gray-900">今日 AI 学习教练</h3>
-              <p className="text-xs text-gray-500 mt-1">基于错题、Anki 到期和待办自动生成行动建议</p>
+              <h3 className="text-lg font-bold dark:text-white text-gray-900">一键生成今日计划</h3>
+              <p className="text-xs text-gray-500 mt-1">基于项目进度和待办自动生成行动建议</p>
             </div>
             <button
               type="button"
@@ -529,32 +520,32 @@ function Dashboard() {
               disabled={coachGenerating || coachLoading}
               className="px-3 py-2 text-xs font-semibold rounded-lg bg-indigo-500 hover:bg-indigo-600 text-white transition-colors disabled:opacity-60"
             >
-              {coachGenerating ? '生成中...' : '一键生成今日计划'}
+              {coachGenerating ? '生成中...' : '生成计划'}
             </button>
           </div>
 
           <div className="h-[calc(100%-64px)] overflow-y-auto pr-1">
             {coachLoading ? (
-              <div className="text-sm text-gray-500">AI 教练分析中...</div>
+              <div className="text-sm text-gray-500">AI 分析中...</div>
             ) : (
               <>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
-                <div className="text-xs rounded-lg px-3 py-2 bg-red-500/10 text-red-600 dark:text-red-300">
-                  薄弱错题 {coachData?.snapshot.weak_mistakes_count || 0}
+                <div className="text-xs rounded-lg px-3 py-2 bg-green-500/10 text-green-600 dark:text-green-300">
+                  活跃项目 {stats.notes_count || 0}
                 </div>
                 <div className="text-xs rounded-lg px-3 py-2 bg-purple-500/10 text-purple-600 dark:text-purple-300">
-                  到期卡片 {coachData?.snapshot.due_cards_count || 0}
+                  今日日志 {studyStats.duration_minutes || 0}
                 </div>
                 <div className="text-xs rounded-lg px-3 py-2 bg-amber-500/10 text-amber-700 dark:text-amber-300">
                   待办 {coachData?.snapshot.pending_todos || 0}
                 </div>
                 <div className="text-xs rounded-lg px-3 py-2 bg-blue-500/10 text-blue-600 dark:text-blue-300">
-                  今日学习 {coachData?.snapshot.today_study_minutes || 0} min
+                  工作时间 {coachData?.snapshot.today_study_minutes || 0} min
                 </div>
               </div>
 
               <p className="text-sm text-gray-700 dark:text-gray-200 mb-4">
-                {coachData?.coach_message || '先做高收益任务，再做稳定巩固。'}
+                {coachData?.coach_message || '先完成高优先级任务，再做项目推进。'}
               </p>
 
               <div className="flex flex-wrap gap-2 mb-4">
@@ -565,7 +556,7 @@ function Dashboard() {
                   7天完成率 {Math.round((coachData?.adaptive?.completion_rate || 0) * 100)}%
                 </span>
                 <span className="text-xs rounded-full px-3 py-1 bg-sky-500/10 text-sky-600 dark:text-sky-300">
-                  日均学习 {coachData?.adaptive?.avg_daily_study_minutes || 0} min
+                  日均工作 {coachData?.adaptive?.avg_daily_study_minutes || 0} min
                 </span>
               </div>
 
