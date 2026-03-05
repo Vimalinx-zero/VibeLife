@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 
 interface Message {
   id: string;
@@ -9,7 +10,7 @@ interface Message {
 
 const AIChatWidget: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const [isHovering, setIsHovering] = useState(false);
+  const [isDockHovered, setIsDockHovered] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -22,13 +23,13 @@ const AIChatWidget: React.FC = () => {
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  const shouldShowDock = isDockHovered || isOpen;
 
   useEffect(() => {
-    scrollToBottom();
+    if (messages.length === 0) {
+      return;
+    }
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   useEffect(() => {
@@ -91,7 +92,7 @@ const AIChatWidget: React.FC = () => {
     return '我明白了。让我想想...如果你需要更详细的帮助，可以告诉我具体想做什么，我会尽力帮你！';
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -100,150 +101,162 @@ const AIChatWidget: React.FC = () => {
 
   const handleClose = () => {
     setIsOpen(false);
-    setIsHovering(false);
+    setIsDockHovered(false);
+  };
+
+  const openChat = () => {
+    setIsOpen(true);
+    setIsDockHovered(true);
   };
 
   return (
     <>
-      {/* 毛玻璃遮罩 */}
-      {isOpen && (
-        <div 
-          className="fixed inset-0 z-40 bg-black/30 backdrop-blur-md transition-opacity duration-300"
-          onClick={handleClose}
-        />
-      )}
-
-      {/* 聊天窗口 */}
-      <div 
-        className={`
-          fixed bottom-0 left-0 right-0 z-50
-          transition-all duration-300 ease-out
-          ${isOpen ? 'h-screen' : 'h-16'}
-        `}
-        onMouseEnter={() => setIsHovering(true)}
-        onMouseLeave={() => !isOpen && setIsHovering(false)}
-      >
-        {/* 未激活状态：输入框 */}
-        {!isOpen && (
-          <div 
-            className={`
-              h-full backdrop-blur-md bg-white/80 dark:bg-gray-800/80 
-              border-t border-gray-200 dark:border-gray-700
-              transition-all duration-300
-              ${isHovering ? 'opacity-100' : 'opacity-0'}
-            `}
-          >
-            <div className="h-full flex items-center px-6">
-              <input
-                onClick={() => setIsOpen(true)}
-                placeholder="和 Wilson 聊聊..."
-                className="w-full px-4 py-2 rounded-full bg-gray-100 dark:bg-gray-700 
-                         text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400
-                         focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
-                readOnly
-              />
-            </div>
-          </div>
-        )}
-
-        {/* 激活状态：全屏聊天窗口 */}
+      <AnimatePresence>
         {isOpen && (
-          <div className="h-full flex flex-col bg-transparent">
-            {/* 顶部导航栏 */}
-            <div className="h-16 backdrop-blur-md bg-white/80 dark:bg-gray-800/80 
-                          border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-6">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 
-                              flex items-center justify-center">
-                  <span className="text-white text-xl">🐺</span>
-                </div>
-                <div>
-                  <h3 className="font-semibold dark:text-white text-gray-900">Wilson</h3>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">AI 助手</p>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-[92] bg-black/15 backdrop-blur-[2px]"
+            onClick={handleClose}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 16 }}
+            transition={{ duration: 0.25, ease: 'easeOut' }}
+            className="fixed left-1/2 -translate-x-1/2 bottom-32 z-[93] w-[95%] md:w-[90%] max-w-6xl h-[min(58vh,620px)] pointer-events-none"
+          >
+            <div className="h-full rounded-[2rem] bg-white/30 dark:bg-black/25 backdrop-blur-xl border border-white/40 dark:border-white/10 shadow-2xl p-5 flex flex-col pointer-events-auto">
+              <div className="flex-1 overflow-y-auto pr-1 flex flex-col justify-end">
+                <div className="space-y-3">
+                  <AnimatePresence initial={false}>
+                    {messages.map((message) => (
+                      <motion.div
+                        key={message.id}
+                        layout
+                        initial={{ opacity: 0, y: 26, scale: 0.98 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -10, scale: 0.98 }}
+                        transition={{ duration: 0.24, ease: 'easeOut' }}
+                        className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
+                      >
+                        <div
+                          className={`max-w-[80%] rounded-2xl px-4 py-3 shadow-lg ${
+                            message.type === 'user'
+                              ? 'bg-indigo-500 text-white'
+                              : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white'
+                          }`}
+                        >
+                          <p className="whitespace-pre-wrap">{message.content}</p>
+                          <p
+                            className={`text-xs mt-1 ${
+                              message.type === 'user' ? 'text-white/70' : 'text-gray-500 dark:text-gray-400'
+                            }`}
+                          >
+                            {message.timestamp.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        </div>
+                      </motion.div>
+                    ))}
+
+                    {isTyping && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0 }}
+                        className="flex justify-start"
+                      >
+                        <div className="bg-white dark:bg-gray-800 rounded-2xl px-4 py-3 shadow-lg">
+                          <div className="flex gap-1">
+                            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                  <div ref={messagesEndRef} />
                 </div>
               </div>
-
-              <button
-                onClick={handleClose}
-                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-              >
-                <svg className="w-6 h-6 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
             </div>
-
-            {/* 消息区域（透明背景） */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              {messages.map((message, index) => (
-                <div
-                  key={message.id}
-                  className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'} 
-                            animate-slideUp`}
-                  style={{ animationDelay: `${index * 0.05}s` }}
-                >
-                  <div
-                    className={`
-                      max-w-[70%] rounded-2xl px-4 py-3 shadow-lg
-                      ${message.type === 'user'
-                        ? 'bg-indigo-500 text-white'
-                        : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white'
-                      }
-                    `}
-                  >
-                    <p className="whitespace-pre-wrap">{message.content}</p>
-                    <p className={`text-xs mt-1 ${message.type === 'user' ? 'text-white/70' : 'text-gray-500 dark:text-gray-400'}`}>
-                      {message.timestamp.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
-                    </p>
-                  </div>
-                </div>
-              ))}
-              
-              {isTyping && (
-                <div className="flex justify-start animate-slideUp">
-                  <div className="bg-white dark:bg-gray-800 rounded-2xl px-4 py-3 shadow-lg">
-                    <div className="flex gap-1">
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                    </div>
-                  </div>
-                </div>
-              )}
-              
-              <div ref={messagesEndRef} />
-            </div>
-
-            {/* 底部输入区域 */}
-            <div className="h-16 backdrop-blur-md bg-white/80 dark:bg-gray-800/80 
-                          border-t border-gray-200 dark:border-gray-700 flex items-center gap-3 px-6">
-              <input
-                ref={inputRef}
-                type="text"
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="输入消息..."
-                className="flex-1 px-4 py-2 rounded-full bg-gray-100 dark:bg-gray-700 
-                         text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400
-                         focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-              <button
-                onClick={handleSend}
-                disabled={!inputValue.trim()}
-                className="p-2 rounded-full bg-indigo-500 hover:bg-indigo-600 text-white 
-                         disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                </svg>
-              </button>
-            </div>
-          </div>
+          </motion.div>
         )}
+      </AnimatePresence>
+
+      <div className="fixed bottom-0 left-0 w-full h-36 z-[95] flex justify-center pointer-events-none">
+        <button
+          type="button"
+          aria-label="展开 AI 输入栏"
+          className="absolute inset-x-0 bottom-0 h-8 pointer-events-auto"
+          onMouseEnter={() => setIsDockHovered(true)}
+          onMouseLeave={() => {
+            if (!isOpen) {
+              setIsDockHovered(false);
+            }
+          }}
+        />
+
+        <AnimatePresence>
+          {shouldShowDock && (
+            <motion.div
+              initial={{ y: 120, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 120, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 180, damping: 25 }}
+              className="absolute bottom-0 w-[95%] md:w-[90%] max-w-6xl h-28 dark:bg-black/80 bg-white/90 backdrop-blur-2xl border-t border-x dark:border-white/10 border-white/40 dark:text-white text-gray-800 rounded-t-[3rem] shadow-2xl pointer-events-auto"
+              onMouseEnter={() => setIsDockHovered(true)}
+              onMouseLeave={() => {
+                if (!isOpen) {
+                  setIsDockHovered(false);
+                }
+              }}
+            >
+              <div className="h-full px-8 md:px-12 flex items-center gap-3">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={inputValue}
+                  onClick={openChat}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder={isOpen ? '输入消息，回车发送...' : '和 Wilson 聊聊...'}
+                  className="flex-1 bg-transparent border-none focus:ring-0 focus:outline-none text-base text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
+                />
+
+                {isOpen ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleClose}
+                      className="px-4 py-2 rounded-full dark:bg-white/10 bg-black/5 hover:dark:bg-white/20 hover:bg-black/10 dark:text-white text-gray-700 transition-colors text-sm"
+                    >
+                      收起
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSend}
+                      disabled={!inputValue.trim()}
+                      className="px-5 py-2.5 rounded-full bg-indigo-500 hover:bg-indigo-600 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                    >
+                      发送
+                    </button>
+                  </>
+                ) : (
+                  <div className="text-xs font-semibold uppercase tracking-widest opacity-45">AI</div>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
-
-
     </>
   );
 };
