@@ -23,6 +23,8 @@ const AIChatWidget: React.FC = () => {
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dockRef = useRef<HTMLDivElement>(null);
+  const chatCanvasRef = useRef<HTMLDivElement>(null);
   const shouldShowDock = isDockHovered || isOpen;
 
   useEffect(() => {
@@ -36,6 +38,50 @@ const AIChatWidget: React.FC = () => {
     if (isOpen && inputRef.current) {
       inputRef.current.focus();
     }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!shouldShowDock || isOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (dockRef.current && target && !dockRef.current.contains(target)) {
+        setIsDockHovered(false);
+      }
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+    };
+  }, [shouldShowDock, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (!target || !chatCanvasRef.current || !chatCanvasRef.current.contains(target)) {
+        return;
+      }
+
+      const elementTarget = target instanceof Element ? target : null;
+      if (elementTarget?.closest('[data-chat-item="true"]')) {
+        return;
+      }
+
+      setIsOpen(false);
+      setIsDockHovered(false);
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+    };
   }, [isOpen]);
 
   const handleSend = async () => {
@@ -134,7 +180,7 @@ const AIChatWidget: React.FC = () => {
             className="fixed bottom-36 z-[93] w-[min(92vw,840px)] h-[min(58vh,620px)] pointer-events-none"
             style={{ left: 'calc((100vw - min(92vw, 840px)) / 2 - 8px)' }}
           >
-            <div className="h-full flex flex-col pointer-events-auto">
+            <div ref={chatCanvasRef} className="h-full flex flex-col pointer-events-auto">
               <div className="flex-1 overflow-y-auto pr-1 flex flex-col justify-end">
                 <div className="space-y-3">
                   <AnimatePresence initial={false}>
@@ -149,6 +195,7 @@ const AIChatWidget: React.FC = () => {
                         className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
                       >
                         <div
+                          data-chat-item="true"
                           className={`max-w-[80%] rounded-2xl px-4 py-3 shadow-lg ${
                             message.type === 'user'
                               ? 'bg-indigo-500 text-white'
@@ -174,7 +221,7 @@ const AIChatWidget: React.FC = () => {
                         exit={{ opacity: 0 }}
                         className="flex justify-start"
                       >
-                        <div className="bg-white dark:bg-gray-800 rounded-2xl px-4 py-3 shadow-lg">
+                        <div data-chat-item="true" className="bg-white dark:bg-gray-800 rounded-2xl px-4 py-3 shadow-lg">
                           <div className="flex gap-1">
                             <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
                             <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
@@ -208,6 +255,7 @@ const AIChatWidget: React.FC = () => {
         <AnimatePresence>
           {shouldShowDock && (
             <motion.div
+              ref={dockRef}
               initial={{ y: 120, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 120, opacity: 0 }}
