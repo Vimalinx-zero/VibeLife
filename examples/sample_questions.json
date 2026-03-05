@@ -1,0 +1,296 @@
+{
+  "version": "1.0.0",
+  "batch": true,
+  "metadata": {
+    "total": 3,
+    "description": "示例题目集 - 物理、数学、英语",
+    "created_at": "2025-12-25T18:00:00Z"
+  },
+  "questions": [
+    {
+      "meta": {
+        "id": "q_phys_001",
+        "source": "manual",
+        "created_at": "2025-12-25T18:00:00Z",
+        "updated_at": "2025-12-25T18:00:00Z",
+        "author": "user_alex",
+        "verified": true
+      },
+      "base_info": {
+        "subject": "physics",
+        "type": "single_choice",
+        "difficulty": 3,
+        "estimated_time": 120,
+        "macro_tags": {
+          "scenario_model": "经典力学",
+          "competency": "应用",
+          "grade": "高中",
+          "chapter": "牛顿运动定律",
+          "topic": "牛顿第二定律"
+        }
+      },
+      "content": {
+        "stem": "一个质量为 2kg 的物体，在光滑水平面上受到一个 10N 的水平拉力作用，求物体的加速度。",
+        "media": {
+          "image_url": null,
+          "audio_url": null,
+          "video_url": null
+        }
+      },
+      "steps": [
+        {
+          "step_index": 0,
+          "step_id": "s_001",
+          "interaction_type": "single_choice",
+          "stem": "根据牛顿第二定律，物体的加速度是多少？",
+          "analysis": "使用公式 F = ma",
+          "options": [
+            {
+              "key": "A",
+              "content": "2 m/s²",
+              "is_correct": false,
+              "gain_micro_tags": ["基础计算"],
+              "diagnosis": {
+                "knowledge_gap": ["牛顿第二定律公式"],
+                "cognitive_flaw": "计算错误",
+                "severity": "low",
+                "hint": "F = ma, 注意单位的统一"
+              }
+            },
+            {
+              "key": "B",
+              "content": "5 m/s²",
+              "is_correct": true,
+              "gain_micro_tags": ["牛顿第二定律", "基础计算"],
+              "diagnosis": null
+            },
+            {
+              "key": "C",
+              "content": "10 m/s²",
+              "is_correct": false,
+              "gain_micro_tags": [],
+              "diagnosis": {
+                "knowledge_gap": ["加速度概念"],
+                "cognitive_flaw": "概念混淆",
+                "severity": "medium",
+                "hint": "加速度不是力，需要用 F=ma 计算"
+              }
+            },
+            {
+              "key": "D",
+              "content": "20 m/s²",
+              "is_correct": false,
+              "gain_micro_tags": [],
+              "diagnosis": {
+                "knowledge_gap": ["数值计算"],
+                "cognitive_flaw": "粗心",
+                "severity": "low",
+                "hint": "检查 a = F/m 的计算"
+              }
+            }
+          ]
+        }
+      ],
+      "summary": {
+        "answer": "B",
+        "explanation": "根据牛顿第二定律 F = ma，得 a = F/m = 10N/2kg = 5m/s²",
+        "key_points": [
+          "牛顿第二定律公式 F=ma",
+          "力的单位是牛顿(N)，质量单位是千克(kg)",
+          "加速度单位是 m/s²"
+        ],
+        "extended_reading": null
+      }
+    },
+    {
+      "meta": {
+        "id": "q_math_001",
+        "source": "manual",
+        "created_at": "2025-12-25T18:00:00Z",
+        "updated_at": "2025-12-25T18:00:00Z",
+        "author": "user_alex",
+        "verified": true
+      },
+      "base_info": {
+        "subject": "math",
+        "type": "single_choice",
+        "difficulty": 2,
+        "estimated_time": 180,
+        "macro_tags": {
+          "scenario_model": "代数",
+          "competency": "理解",
+          "grade": "初中",
+          "chapter": "一元二次方程",
+          "topic": "求根公式"
+        }
+      },
+      "content": {
+        "stem": "方程 x² - 5x + 6 = 0 的解是？",
+        "media": {
+          "image_url": null,
+          "audio_url": null,
+          "video_url": null
+        }
+      },
+      "steps": [
+        {
+          "step_index": 0,
+          "step_id": "s_001",
+          "interaction_type": "single_choice",
+          "stem": "选择正确的解",
+          "analysis": "使用因式分解或求根公式",
+          "options": [
+            {
+              "key": "A",
+              "content": "x₁ = 1, x₂ = 6",
+              "is_correct": false,
+              "gain_micro_tags": [],
+              "diagnosis": {
+                "knowledge_gap": ["因式分解"],
+                "cognitive_flaw": "计算错误",
+                "severity": "low",
+                "hint": "检查因数相乘是否等于6"
+              }
+            },
+            {
+              "key": "B",
+              "content": "x₁ = 2, x₂ = 3",
+              "is_correct": true,
+              "gain_micro_tags": ["一元二次方程", "因式分解"],
+              "diagnosis": null
+            },
+            {
+              "key": "C",
+              "content": "x₁ = -2, x₂ = -3",
+              "is_correct": false,
+              "gain_micro_tags": [],
+              "diagnosis": {
+                "knowledge_gap": ["符号处理"],
+                "cognitive_flaw": "符号错误",
+                "severity": "low",
+                "hint": "二次项系数为正，常数项为正，两根同号"
+              }
+            },
+            {
+              "key": "D",
+              "content": "x₁ = 2, x₂ = -3",
+              "is_correct": false,
+              "gain_micro_tags": [],
+              "diagnosis": {
+                "knowledge_gap": ["韦达定理"],
+                "cognitive_flaw": "概念混淆",
+                "severity": "medium",
+                "hint": "检查两根之和是否等于5"
+              }
+            }
+          ]
+        }
+      ],
+      "summary": {
+        "answer": "B",
+        "explanation": "x² - 5x + 6 = 0 可以因式分解为 (x-2)(x-3) = 0，所以 x₁ = 2, x₂ = 3",
+        "key_points": [
+          "一元二次方程的因式分解法",
+          "韦达定理：x₁+x₂=5, x₁·x₂=6",
+          "求根公式：x = (-b±√(b²-4ac))/(2a)"
+        ],
+        "extended_reading": null
+      }
+    },
+    {
+      "meta": {
+        "id": "q_eng_001",
+        "source": "manual",
+        "created_at": "2025-12-25T18:00:00Z",
+        "updated_at": "2025-12-25T18:00:00Z",
+        "author": "user_alex",
+        "verified": true
+      },
+      "base_info": {
+        "subject": "english",
+        "type": "single_choice",
+        "difficulty": 2,
+        "estimated_time": 60,
+        "macro_tags": {
+          "scenario_model": "语法",
+          "competency": "应用",
+          "grade": "高中",
+          "chapter": "时态",
+          "topic": "现在完成时"
+        }
+      },
+      "content": {
+        "stem": "I _____ the book twice.",
+        "media": {
+          "image_url": null,
+          "audio_url": null,
+          "video_url": null
+        }
+      },
+      "steps": [
+        {
+          "step_index": 0,
+          "step_id": "s_001",
+          "interaction_type": "single_choice",
+          "stem": "选择正确的动词形式",
+          "analysis": "考察现在完成时的构成",
+          "options": [
+            {
+              "key": "A",
+              "content": "read",
+              "is_correct": false,
+              "gain_micro_tags": [],
+              "diagnosis": {
+                "knowledge_gap": ["时态构成"],
+                "cognitive_flaw": "时态混淆",
+                "severity": "medium",
+                "hint": "表示过去发生的动作对现在造成的影响，应用现在完成时"
+              }
+            },
+            {
+              "key": "B",
+              "content": "have read",
+              "is_correct": true,
+              "gain_micro_tags": ["现在完成时", "动词变形"],
+              "diagnosis": null
+            },
+            {
+              "key": "C",
+              "content": "reads",
+              "is_correct": false,
+              "gain_micro_tags": [],
+              "diagnosis": {
+                "knowledge_gap": ["时态用法"],
+                "cognitive_flaw": "时态错误",
+                "severity": "low",
+                "hint": "一般现在时表示经常性动作，不符合语境"
+              }
+            },
+            {
+              "key": "D",
+              "content": "am reading",
+              "is_correct": false,
+              "gain_micro_tags": [],
+              "diagnosis": {
+                "knowledge_gap": ["时态用法"],
+                "cognitive_flaw": "语境理解错误",
+                "severity": "medium",
+                "hint": "现在进行时表示正在进行的动作，但'twice'表示已完成的次数"
+              }
+            }
+          ]
+        }
+      ],
+      "summary": {
+        "answer": "B",
+        "explanation": "现在完成时构成：have/has + 过去分词。表示过去发生的动作对现在造成的影响。'twice'表示动作已完成两次，对现在的影响是已经读过两遍。",
+        "key_points": [
+          "现在完成时：have/has + 过去分词",
+          "read 的过去分词还是 read",
+          "现在完成时强调对现在的影响"
+        ],
+        "extended_reading": "现在完成时与一般过去时的区别：一般过去时只强调过去的动作，与现在无关；现在完成时强调过去的动作对现在的影响。"
+      }
+    }
+  ]
+}

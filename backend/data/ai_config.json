@@ -1,0 +1,27 @@
+{
+  "provider": "openclaw",
+  "ollama": {
+    "baseURL": "http://localhost:11434",
+    "model": "qwen:7b"
+  },
+  "openai": {
+    "apiKey": "",
+    "baseURL": "https://api.openai.com/v1",
+    "model": "gpt-4o-mini"
+  },
+  "deepseek": {
+    "apiKey": "",
+    "baseURL": "https://api.deepseek.com/v1",
+    "model": "deepseek-chat"
+  },
+  "openclaw": {
+    "model": "zai/glm-5",
+    "thinking": "low",
+    "agent": "main"
+  },
+  "custom": {
+    "apiKey": "",
+    "baseURL": "",
+    "model": ""
+  }
+}

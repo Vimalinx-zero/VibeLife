@@ -1,0 +1,812 @@
+{
+  "nodes": {
+    "question_q_single_001": {
+      "type": "question",
+      "label": "数学题：求导数...",
+      "metadata": {
+        "id": "q_single_001",
+        "subject": "mathematics",
+        "difficulty": 2,
+        "type": "single_choice",
+        "tags": [
+          "mathematics"
+        ]
+      },
+      "size": 3
+    },
+    "question_q_multiple_001": {
+      "type": "question",
+      "label": "关于动能定理，下列说法正确的是：...",
+      "metadata": {
+        "id": "q_multiple_001",
+        "subject": "physics",
+        "difficulty": 3,
+        "type": "multiple_choice",
+        "tags": [
+          "physics"
+        ]
+      },
+      "size": 3
+    },
+    "question_q_fill_001": {
+      "type": "question",
+      "label": "测试填空题...",
+      "metadata": {
+        "id": "q_fill_001",
+        "subject": "chemistry",
+        "difficulty": 2,
+        "type": "fill_blank",
+        "tags": [
+          "chemistry"
+        ]
+      },
+      "size": 3
+    },
+    "question_q_proof_001": {
+      "type": "question",
+      "label": "1...",
+      "metadata": {
+        "id": "q_proof_001",
+        "subject": "mathematics",
+        "difficulty": 2,
+        "type": "single_choice",
+        "tags": [
+          "mathematics"
+        ]
+      },
+      "size": 3
+    },
+    "question_q_essay_001": {
+      "type": "question",
+      "label": "简述光合作用的过程和意义。...",
+      "metadata": {
+        "id": "q_essay_001",
+        "subject": "biology",
+        "difficulty": 3,
+        "type": "essay",
+        "tags": [
+          "biology"
+        ]
+      },
+      "size": 3
+    },
+    "question_q_bio_thermo_001": {
+      "type": "question",
+      "label": "人体通过多种调节机制保持体温的相对稳定。下列说法正确的是 ( )...",
+      "metadata": {
+        "id": "q_bio_thermo_001",
+        "subject": "biology",
+        "difficulty": 2,
+        "type": "multiple_choice",
+        "tags": [
+          "biology",
+          "体温调节模型",
+          "酸碱平衡模型",
+          "寒冷刺激 → 神经调节 → 骨骼肌/血管反应",
+          "体温调节",
+          "肾上腺激素",
+          "内环境pH",
+          "解剖结构混淆",
+          "生理机制混淆"
+        ]
+      },
+      "size": 3
+    },
+    "question_q_auto_001": {
+      "type": "question",
+      "label": "海水的温盐结构决定了营养物质的分布变化。中沙群岛地理环境独特,鱼类丰富,是一个渔业尚待开发的海域。某...",
+      "metadata": {
+        "id": "q_auto_001",
+        "subject": "geography",
+        "difficulty": 3,
+        "type": "essay",
+        "tags": [
+          "geography",
+          "海洋地理",
+          "渔业资源开发",
+          "温盐结构分析 → 环境特征评估 → 渔业应用决策",
+          "海水温盐分布",
+          "海洋地形",
+          "增殖放流",
+          "图表分析能力不足",
+          "地理要素联系理解不深"
+        ]
+      },
+      "size": 3
+    },
+    "question_q_bio_2023_甲_19": {
+      "type": "question",
+      "label": "19. (2023 全国甲, 30.9分) 某研究小组以某种哺乳动物（动物甲）为对象研究水盐平衡调节...",
+      "metadata": {
+        "id": "q_bio_2023_甲_19",
+        "subject": "biology",
+        "difficulty": 3,
+        "type": "fill_blank",
+        "tags": [
+          "biology",
+          "水盐平衡调节",
+          "失水/饮水 → 渗透压变化 → 感受器 → 中枢/激素 → 效应器 → 尿量变化",
+          "水盐平衡",
+          "下丘脑",
+          "抗利尿激素",
+          "神经-体液调节",
+          "概念混淆",
+          "中档题",
+          "概念辨析题",
+          "分析",
+          "高考真题"
+        ]
+      },
+      "size": 3
+    },
+    "question_q_bio_gaokao_2023_19": {
+      "type": "question",
+      "label": "(2023 全国甲) 某研究小组以某种哺乳动物（动物甲）为对象研究水盐平衡调节，发现动物失水达到一定...",
+      "metadata": {
+        "id": "q_bio_gaokao_2023_19",
+        "subject": "biology",
+        "difficulty": 3,
+        "type": "composite",
+        "tags": [
+          "biology",
+          "水盐平衡调节",
+          "负反馈调节",
+          "渗透压变化 → 下丘脑感受 → 激素/神经调节 → 效应器反应",
+          "内环境稳态",
+          "下丘脑功能",
+          "抗利尿激素",
+          "神经-体液调节",
+          "概念混淆：调节中枢 vs 感觉中枢",
+          "混淆调节方式：误写为负反馈调节",
+          "中档题",
+          "填空题",
+          "分析",
+          "高考真题"
+        ]
+      },
+      "size": 3
+    },
+    "question_q_bio_2023_jia_19": {
+      "type": "question",
+      "label": "19. (2023 全国甲, 30.9分) 某研究小组以某种哺乳动物（动物甲）为对象研究水盐平衡调节...",
+      "metadata": {
+        "id": "q_bio_2023_jia_19",
+        "subject": "biology",
+        "difficulty": 3,
+        "type": "composite",
+        "tags": [
+          "biology",
+          "水盐平衡调节",
+          "渗透压变化 → 感受器 → 中枢/激素 → 效应器 → 尿量变化",
+          "水盐平衡",
+          "下丘脑",
+          "抗利尿激素",
+          "神经-体液调节",
+          "调节方式分类混淆",
+          "因果逻辑表述不清",
+          "中档题",
+          "概念辨析题",
+          "分析",
+          "高考真题"
+        ]
+      },
+      "size": 3
+    },
+    "card_card_1766943281354": {
+      "type": "card",
+      "label": "肾上腺素是由肾上腺的哪个部位分泌的？...",
+      "metadata": {
+        "id": "card_1766943281354",
+        "tags": [
+          "生物",
+          "内分泌",
+          "解剖"
+        ],
+        "deck": "生物::必修三::激素调节"
+      },
+      "size": 2
+    },
+    "card_card_1766943281371": {
+      "type": "card",
+      "label": "寒冷环境下，参与体温调节的传出神经包括哪两类？...",
+      "metadata": {
+        "id": "card_1766943281371",
+        "tags": [
+          "生物",
+          "神经调节",
+          "体温"
+        ],
+        "deck": "生物::必修三::神经调节"
+      },
+      "size": 2
+    },
+    "card_card_1766943281387": {
+      "type": "card",
+      "label": "炎热环境下，皮肤血管会发生什么变化？...",
+      "metadata": {
+        "id": "card_1766943281387",
+        "tags": [
+          "生物",
+          "体温调节",
+          "易错点"
+        ],
+        "deck": "生物::必修三::体温调节"
+      },
+      "size": 2
+    },
+    "card_card_1766943281401": {
+      "type": "card",
+      "label": "过度呼吸（如炎热喘息）为什么会导致内环境 pH 上升？...",
+      "metadata": {
+        "id": "card_1766943281401",
+        "tags": [
+          "生物",
+          "内环境",
+          "酸碱平衡"
+        ],
+        "deck": "生物::必修三::内环境"
+      },
+      "size": 2
+    },
+    "card_card_1767142848415": {
+      "type": "card",
+      "label": "什么是叶绿体...",
+      "metadata": {
+        "id": "card_1767142848415",
+        "tags": [
+          "AI",
+          "问答",
+          "2025-12",
+          "2025-Q4"
+        ],
+        "deck": "AI 问答"
+      },
+      "size": 2
+    },
+    "card_card_1767145903533": {
+      "type": "card",
+      "label": "甲状腺激素的分级调节过程是什么？...",
+      "metadata": {
+        "id": "card_1767145903533",
+        "tags": [
+          "AI",
+          "问答",
+          "2025-12",
+          "2025-Q4"
+        ],
+        "deck": "AI 问答"
+      },
+      "size": 2
+    },
+    "card_card_1767146050019": {
+      "type": "card",
+      "label": "肾上腺皮质和肾上腺髓质都分泌什么...",
+      "metadata": {
+        "id": "card_1767146050019",
+        "tags": [
+          "AI",
+          "问答",
+          "2025-12",
+          "2025-Q4"
+        ],
+        "deck": "AI 问答"
+      },
+      "size": 2
+    },
+    "card_card_1767153239658": {
+      "type": "card",
+      "label": "线粒体是什么...",
+      "metadata": {
+        "id": "card_1767153239658",
+        "tags": [
+          "AI",
+          "问答",
+          "2025-12",
+          "2025-Q4"
+        ],
+        "deck": "AI 问答"
+      },
+      "size": 2
+    },
+    "card_card_1767237778061": {
+      "type": "card",
+      "label": "什么是牛顿第一定律？...",
+      "metadata": {
+        "id": "card_1767237778061",
+        "tags": [
+          "AI",
+          "问答",
+          "2026-01",
+          "2026-Q1"
+        ],
+        "deck": "AI 问答"
+      },
+      "size": 2
+    },
+    "card_card_1767346011509": {
+      "type": "card",
+      "label": "什么是海水温盐结构？...",
+      "metadata": {
+        "id": "card_1767346011509",
+        "tags": [
+          "地理",
+          "海洋地理",
+          "概念"
+        ],
+        "deck": "地理::海洋地理::概念"
+      },
+      "size": 2
+    },
+    "card_card_1767346011550": {
+      "type": "card",
+      "label": "海台海域和海盆海域的温盐结构有什么区别？...",
+      "metadata": {
+        "id": "card_1767346011550",
+        "tags": [
+          "地理",
+          "海洋地理",
+          "对比"
+        ],
+        "deck": "地理::海洋地理::对比"
+      },
+      "size": 2
+    },
+    "card_card_1767346011582": {
+      "type": "card",
+      "label": "增殖放流选择地点时需要考虑哪些因素？...",
+      "metadata": {
+        "id": "card_1767346011582",
+        "tags": [
+          "地理",
+          "渔业资源",
+          "应用"
+        ],
+        "deck": "地理::渔业资源::应用"
+      },
+      "size": 2
+    },
+    "card_card_1767582967676": {
+      "type": "card",
+      "label": "哺乳动物水盐平衡的调节中枢在哪里？...",
+      "metadata": {
+        "id": "card_1767582967676",
+        "tags": [
+          "生物",
+          "调节中枢",
+          "基础"
+        ],
+        "deck": "生物::必修三::内环境稳态"
+      },
+      "size": 2
+    },
+    "card_card_1767582967682": {
+      "type": "card",
+      "label": "抗利尿激素（ADH）的合成与释放部位分别是？...",
+      "metadata": {
+        "id": "card_1767582967682",
+        "tags": [
+          "生物",
+          "激素",
+          "易错点"
+        ],
+        "deck": "生物::必修三::激素调节"
+      },
+      "size": 2
+    },
+    "card_card_1767582967690": {
+      "type": "card",
+      "label": "大量饮水后，尿量为什么会增加？（简述机制）...",
+      "metadata": {
+        "id": "card_1767582967690",
+        "tags": [
+          "生物",
+          "简答题",
+          "机制分析"
+        ],
+        "deck": "生物::必修三::水盐平衡"
+      },
+      "size": 2
+    },
+    "card_card_1767582967695": {
+      "type": "card",
+      "label": "当细胞外液渗透压升高时，机体会发生哪些变化？...",
+      "metadata": {
+        "id": "card_1767582967695",
+        "tags": [
+          "生物",
+          "逻辑链",
+          "调节过程"
+        ],
+        "deck": "生物::必修三::水盐平衡"
+      },
+      "size": 2
+    }
+  },
+  "edges": [
+    {
+      "from": "question_q_single_001",
+      "to": "question_q_proof_001",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: mathematics"
+    },
+    {
+      "from": "question_q_essay_001",
+      "to": "question_q_bio_thermo_001",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: biology"
+    },
+    {
+      "from": "question_q_essay_001",
+      "to": "question_q_bio_2023_甲_19",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: biology"
+    },
+    {
+      "from": "question_q_essay_001",
+      "to": "question_q_bio_gaokao_2023_19",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: biology"
+    },
+    {
+      "from": "question_q_essay_001",
+      "to": "question_q_bio_2023_jia_19",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: biology"
+    },
+    {
+      "from": "question_q_bio_thermo_001",
+      "to": "question_q_bio_2023_甲_19",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: biology"
+    },
+    {
+      "from": "question_q_bio_thermo_001",
+      "to": "question_q_bio_gaokao_2023_19",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: biology"
+    },
+    {
+      "from": "question_q_bio_thermo_001",
+      "to": "question_q_bio_2023_jia_19",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: biology"
+    },
+    {
+      "from": "question_q_bio_2023_甲_19",
+      "to": "question_q_bio_gaokao_2023_19",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: biology"
+    },
+    {
+      "from": "question_q_bio_2023_甲_19",
+      "to": "question_q_bio_2023_jia_19",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: biology"
+    },
+    {
+      "from": "question_q_bio_gaokao_2023_19",
+      "to": "question_q_bio_2023_jia_19",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: biology"
+    },
+    {
+      "from": "question_q_bio_thermo_001",
+      "to": "card_card_1766943281387",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: 体温调节"
+    },
+    {
+      "from": "question_q_auto_001",
+      "to": "card_card_1767346011509",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: 海洋地理"
+    },
+    {
+      "from": "question_q_auto_001",
+      "to": "card_card_1767346011550",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: 海洋地理"
+    },
+    {
+      "from": "card_card_1767346011509",
+      "to": "card_card_1767346011550",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: 海洋地理"
+    },
+    {
+      "from": "card_card_1766943281354",
+      "to": "card_card_1766943281371",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: 生物"
+    },
+    {
+      "from": "card_card_1766943281354",
+      "to": "card_card_1766943281387",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: 生物"
+    },
+    {
+      "from": "card_card_1766943281354",
+      "to": "card_card_1766943281401",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: 生物"
+    },
+    {
+      "from": "card_card_1766943281354",
+      "to": "card_card_1767582967676",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: 生物"
+    },
+    {
+      "from": "card_card_1766943281354",
+      "to": "card_card_1767582967682",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: 生物"
+    },
+    {
+      "from": "card_card_1766943281354",
+      "to": "card_card_1767582967690",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: 生物"
+    },
+    {
+      "from": "card_card_1766943281354",
+      "to": "card_card_1767582967695",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: 生物"
+    },
+    {
+      "from": "card_card_1766943281371",
+      "to": "card_card_1766943281387",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: 生物"
+    },
+    {
+      "from": "card_card_1766943281371",
+      "to": "card_card_1766943281401",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: 生物"
+    },
+    {
+      "from": "card_card_1766943281371",
+      "to": "card_card_1767582967676",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: 生物"
+    },
+    {
+      "from": "card_card_1766943281371",
+      "to": "card_card_1767582967682",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: 生物"
+    },
+    {
+      "from": "card_card_1766943281371",
+      "to": "card_card_1767582967690",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: 生物"
+    },
+    {
+      "from": "card_card_1766943281371",
+      "to": "card_card_1767582967695",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: 生物"
+    },
+    {
+      "from": "card_card_1766943281387",
+      "to": "card_card_1766943281401",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: 生物"
+    },
+    {
+      "from": "card_card_1766943281387",
+      "to": "card_card_1767582967676",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: 生物"
+    },
+    {
+      "from": "card_card_1766943281387",
+      "to": "card_card_1767582967682",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: 生物"
+    },
+    {
+      "from": "card_card_1766943281387",
+      "to": "card_card_1767582967690",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: 生物"
+    },
+    {
+      "from": "card_card_1766943281387",
+      "to": "card_card_1767582967695",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: 生物"
+    },
+    {
+      "from": "card_card_1766943281401",
+      "to": "card_card_1767582967676",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: 生物"
+    },
+    {
+      "from": "card_card_1766943281401",
+      "to": "card_card_1767582967682",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: 生物"
+    },
+    {
+      "from": "card_card_1766943281401",
+      "to": "card_card_1767582967690",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: 生物"
+    },
+    {
+      "from": "card_card_1766943281401",
+      "to": "card_card_1767582967695",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: 生物"
+    },
+    {
+      "from": "card_card_1767582967676",
+      "to": "card_card_1767582967682",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: 生物"
+    },
+    {
+      "from": "card_card_1767582967676",
+      "to": "card_card_1767582967690",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: 生物"
+    },
+    {
+      "from": "card_card_1767582967676",
+      "to": "card_card_1767582967695",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: 生物"
+    },
+    {
+      "from": "card_card_1767582967682",
+      "to": "card_card_1767582967690",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: 生物"
+    },
+    {
+      "from": "card_card_1767582967682",
+      "to": "card_card_1767582967695",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: 生物"
+    },
+    {
+      "from": "card_card_1767582967690",
+      "to": "card_card_1767582967695",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: 生物"
+    },
+    {
+      "from": "card_card_1767142848415",
+      "to": "card_card_1767145903533",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: AI"
+    },
+    {
+      "from": "card_card_1767142848415",
+      "to": "card_card_1767146050019",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: AI"
+    },
+    {
+      "from": "card_card_1767142848415",
+      "to": "card_card_1767153239658",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: AI"
+    },
+    {
+      "from": "card_card_1767142848415",
+      "to": "card_card_1767237778061",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: AI"
+    },
+    {
+      "from": "card_card_1767145903533",
+      "to": "card_card_1767146050019",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: AI"
+    },
+    {
+      "from": "card_card_1767145903533",
+      "to": "card_card_1767153239658",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: AI"
+    },
+    {
+      "from": "card_card_1767145903533",
+      "to": "card_card_1767237778061",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: AI"
+    },
+    {
+      "from": "card_card_1767146050019",
+      "to": "card_card_1767153239658",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: AI"
+    },
+    {
+      "from": "card_card_1767146050019",
+      "to": "card_card_1767237778061",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: AI"
+    },
+    {
+      "from": "card_card_1767153239658",
+      "to": "card_card_1767237778061",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: AI"
+    },
+    {
+      "from": "card_card_1767346011509",
+      "to": "card_card_1767346011582",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: 地理"
+    },
+    {
+      "from": "card_card_1767346011550",
+      "to": "card_card_1767346011582",
+      "weight": 0.8,
+      "type": "same_tag",
+      "label": "共同标签: 地理"
+    }
+  ]
+}
