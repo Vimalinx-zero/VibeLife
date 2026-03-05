@@ -131,9 +131,10 @@ const AIChatWidget: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 16 }}
             transition={{ duration: 0.25, ease: 'easeOut' }}
-            className="fixed left-1/2 -translate-x-1/2 bottom-32 z-[93] w-[95%] md:w-[90%] max-w-6xl h-[min(58vh,620px)] pointer-events-none"
+            className="fixed bottom-36 z-[93] w-[min(92vw,840px)] h-[min(58vh,620px)] pointer-events-none"
+            style={{ left: 'calc((100vw - min(92vw, 840px)) / 2 - 8px)' }}
           >
-            <div className="h-full rounded-[2rem] bg-white/30 dark:bg-black/25 backdrop-blur-xl border border-white/40 dark:border-white/10 shadow-2xl p-5 flex flex-col pointer-events-auto">
+            <div className="h-full flex flex-col pointer-events-auto">
               <div className="flex-1 overflow-y-auto pr-1 flex flex-col justify-end">
                 <div className="space-y-3">
                   <AnimatePresence initial={false}>
@@ -191,11 +192,11 @@ const AIChatWidget: React.FC = () => {
         )}
       </AnimatePresence>
 
-      <div className="fixed bottom-0 left-0 w-full h-36 z-[95] flex justify-center pointer-events-none">
+      <div className="fixed bottom-0 left-0 w-full h-40 z-[95] flex justify-center pointer-events-none">
         <button
           type="button"
           aria-label="展开 AI 输入栏"
-          className="absolute inset-x-0 bottom-0 h-8 pointer-events-auto"
+          className="absolute inset-x-0 bottom-0 h-10 pointer-events-auto"
           onMouseEnter={() => setIsDockHovered(true)}
           onMouseLeave={() => {
             if (!isOpen) {
@@ -211,7 +212,8 @@ const AIChatWidget: React.FC = () => {
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 120, opacity: 0 }}
               transition={{ type: 'spring', stiffness: 180, damping: 25 }}
-              className="absolute bottom-0 w-[95%] md:w-[90%] max-w-6xl h-28 dark:bg-black/80 bg-white/90 backdrop-blur-2xl border-t border-x dark:border-white/10 border-white/40 dark:text-white text-gray-800 rounded-t-[3rem] shadow-2xl pointer-events-auto"
+              className="absolute bottom-5 w-[min(92vw,840px)] h-20 dark:bg-black/80 bg-white/90 backdrop-blur-2xl border dark:border-white/10 border-white/40 dark:text-white text-gray-800 rounded-full shadow-2xl pointer-events-auto"
+              style={{ left: 'calc((100vw - min(92vw, 840px)) / 2)' }}
               onMouseEnter={() => setIsDockHovered(true)}
               onMouseLeave={() => {
                 if (!isOpen) {
@@ -219,7 +221,7 @@ const AIChatWidget: React.FC = () => {
                 }
               }}
             >
-              <div className="h-full px-8 md:px-12 flex items-center gap-3">
+              <div className="h-full px-7 md:px-10 flex items-center gap-3">
                 <input
                   ref={inputRef}
                   type="text"
