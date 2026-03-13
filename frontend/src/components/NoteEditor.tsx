@@ -37,7 +37,6 @@ export interface NoteEditorProps {
   onLoadNode?: (nodeId: string) => void;
   onDeleteNote?: (noteId: string) => void;
   onInsertLink: () => void;
-  onInsertQuestion: () => void;
   viewMode: 'edit' | 'read' | 'split';
   setViewMode: (mode: 'edit' | 'read' | 'split') => void;
   autoTag?: boolean;
@@ -147,7 +146,6 @@ const NoteEditor = ({
   onLoadNode,
   onDeleteNote,    // ✅ 新增：删除笔记回调
   onInsertLink,     // ✅ 直接调用，不在组件内实现
-  onInsertQuestion, // ✅ 直接调用，不在组件内实现
   viewMode,
   setViewMode,
   autoTag = true,    // ✨ 新增：自动标签设置
@@ -455,7 +453,6 @@ const NoteEditor = ({
 
              {/* ✅ 修改：不再弹 prompt，直接调用父组件传入的回调，打开选择器 */}
              <button onClick={onInsertLink} className="px-2 py-1 bg-blue-500/10 text-blue-600 hover:bg-blue-500 hover:text-white rounded text-xs font-bold transition-all flex items-center gap-1"><Icons.Link className="w-3 h-3" /> Note</button>
-             <button onClick={onInsertQuestion} className="px-2 py-1 bg-purple-500/10 text-purple-600 hover:bg-purple-500 hover:text-white rounded text-xs font-bold transition-all flex items-center gap-1"><span className="font-serif font-black">Q</span> Import</button>
          </div>
 
         <button onClick={handleSave} className="px-4 py-1.5 bg-blue-600 text-white rounded-lg font-bold text-xs hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 active:scale-95 flex items-center gap-2">

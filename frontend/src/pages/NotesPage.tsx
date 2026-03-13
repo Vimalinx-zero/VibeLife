@@ -1,13 +1,11 @@
 import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import axios from "axios";
 import { apiClient } from "../utils/api"; // ✅ 修复：导入 apiClient 以自动添加 token
 import { useNavigate, useLocation } from "react-router-dom";
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
 import FileExplorer from "../components/FileExplorer";
 import NoteEditor from "../components/NoteEditor";
 import AIAssistant from "../components/AIAssistant";
-import SmartKnowledgePanel from "../components/SmartKnowledgePanel"; // ✨ 新的统一知识面板
 import TagCloud from "../components/TagCloud";
 import BacklinksPanel from "../components/BacklinksPanel";
 import NoteSearch from "../components/NoteSearch";
@@ -99,7 +97,6 @@ const NotesPage = () => {
   // UI States
   const [viewMode, setViewMode] = useState<"split" | "edit" | "read">("read");
   const [aiOpen, setAiOpen] = useState<boolean>(false);
-  const [smartKnowledgeOpen, setSmartKnowledgeOpen] = useState<boolean>(false); // ✨ 统一的知识面板开关
 
   // Sorting State
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'name', order: 'asc' }); // key: 'name' | 'date', order: 'asc' | 'desc'
@@ -184,12 +181,8 @@ const NotesPage = () => {
   });
   const [isMoveLoading, setIsMoveLoading] = useState<boolean>(false);
 
-  // ✅ 新增：错题列表数据 (用于 Import Question 模态框)
-  const [mistakesList, setMistakesList] = useState<any[]>([]);
-
   // Ref Picker States
   const [showRefModal, setShowRefModal] = useState<boolean>(false);
-  const [refMode, setRefMode] = useState<'note' | 'question'>('note'); // 'note' | 'question'
 
   const [toastMsg, setToastMsg] = useState<string | null>(null); // Toast 消息状态
 
@@ -201,15 +194,7 @@ const NotesPage = () => {
 
   // 插入引用 (Link Insertion)
   const handleInsertRef = (item: any) => {
-      let textToInsert = "";
-
-      if (refMode === 'note') {
-          // 插入笔记链接：[[note:id]]
-          textToInsert = `[[note:${item.id}]]`;
-      } else {
-          // 插入题目卡片
-          textToInsert = `[[gk_${item.question_id}]]`;
-      }
+      const textToInsert = `[[note:${item.id}]]`;
 
       // ✅ 修复1：使用 ID 直接获取 textarea，而不是依赖 activeElement
       const textarea = document.getElementById("note-textarea") as HTMLTextAreaElement;
@@ -470,9 +455,6 @@ const NotesPage = () => {
     }
   };
 
-  const insertLink = () => { const id = prompt("Enter Note ID:"); if(id) setContent(prev => prev + ` [[note:${id}]]`); };
-  const insertQuestion = () => { const id = prompt("Enter Q ID:"); if(id) setContent(prev => prev + ` [[${id}]]`); };
-
   // === 交互函数：文件操作相关 ===
   
   // 1. 提交重命名 (优化版：同步更新 activeFile 防止编辑器刷新)
@@ -526,21 +508,8 @@ const NotesPage = () => {
 
   // --- 专用 Handler: 打开引用选择器 (避免内联函数导致重渲染) --- 
   const handleOpenLinkModal = () => { 
-      setRefMode('note'); 
       loadMoveNode('root'); 
       setShowRefModal(true); 
-  }; 
-
-  // ✅ 修改：实现真实数据拉取 
-  const handleOpenQuestionModal = async () => { 
-      setRefMode('question'); 
-      setShowRefModal(true); 
-      
-      // ✅ 拉取错题数据
-      try {
-          const res = await apiClient.get("/mistakes");
-          setMistakesList(res.data);
-      } catch (e) { console.error(e); } 
   }; 
 
   return (
@@ -563,17 +532,10 @@ const NotesPage = () => {
           <NoteSearch onLoadNote={loadNode} />
         </div>
 
-        {/* 右侧：AI Assist + 知识面板 + 设置按钮 */}
+        {/* 右侧：AI Assist + 设置按钮 */}
         <div className="ml-auto flex items-center gap-3 pointer-events-auto">
-          {/* AI 对话按钮 */}
           <button
-            onClick={() => {
-              setAiOpen(!aiOpen);
-              // 关闭知识面板以避免冲突
-              if (!aiOpen && smartKnowledgeOpen) {
-                setSmartKnowledgeOpen(false);
-              }
-            }}
+            onClick={() => setAiOpen(!aiOpen)}
             className={`px-4 py-2 rounded-full border border-white/20 transition-all duration-300 backdrop-blur-md shadow-sm flex items-center gap-2 group font-bold ${
               aiOpen
                 ? 'bg-blue-500 text-white border-blue-500 shadow-lg shadow-blue-500/30'
@@ -584,30 +546,6 @@ const NotesPage = () => {
             <span>AI对话</span>
             <div className={`w-2 h-2 rounded-full ${aiOpen ? 'bg-white animate-pulse' : 'bg-green-500'}`}></div>
           </button>
-
-          {/* 知识面板按钮（合并后） */}
-          {activeFile && activeFile.type === 'file' && (
-            <button
-              onClick={() => {
-                setSmartKnowledgeOpen(!smartKnowledgeOpen);
-                // 关闭AI对话以避免冲突
-                if (!smartKnowledgeOpen && aiOpen) {
-                  setAiOpen(false);
-                }
-              }}
-              className={`px-4 py-2 rounded-full border transition-all duration-300 backdrop-blur-md shadow-sm flex items-center gap-2 font-bold ${
-                smartKnowledgeOpen
-                  ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white border-transparent shadow-lg shadow-purple-500/30'
-                  : 'bg-white/80 dark:bg-slate-800/80 border-white/20 text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700'
-              }`}
-            >
-              <Icons.Sparkles className="w-4 h-4" />
-              <span>知识面板</span>
-              {smartKnowledgeOpen && (
-                <div className="w-2 h-2 rounded-full bg-white animate-pulse"></div>
-              )}
-            </button>
-          )}
 
           {/* 标签设置按钮 */}
           <TagSettings
@@ -697,8 +635,6 @@ const NotesPage = () => {
 
                         // ✅ 修改：使用上面定义的稳定函数，不再使用内联箭头函数
                         onInsertLink={handleOpenLinkModal}
-                        onInsertQuestion={handleOpenQuestionModal}
-
                         viewMode={viewMode} setViewMode={setViewMode}
                         aiOpen={aiOpen}
                         autoTag={tagSettings.autoTag}
@@ -887,9 +823,6 @@ const NotesPage = () => {
             </AnimatePresence>
         </div>
         <AIAssistant isOpen={aiOpen} context={activeFile ? { type: 'note', id: activeFile.id } : null} />
-
-        {/* ✨ 统一的知识面板（合并 Knowledge + AI Explain） */}
-        <SmartKnowledgePanel isOpen={smartKnowledgeOpen} type="note" id={activeFile?.id} />
       </div>
 
       {/* --- Modals --- */}
@@ -1035,117 +968,58 @@ const NotesPage = () => {
                   <div className="p-4 border-b border-gray-200/50 dark:border-white/10 shrink-0 bg-white/50 dark:bg-white/5 flex justify-between items-center">
                       <div className="flex flex-col">
                           <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                              {refMode === 'note' ? <Icons.SortAlpha className="w-5 h-5 text-blue-500"/> : <Icons.FolderArrow className="w-5 h-5 text-purple-500"/>}
-                              <span>{refMode === 'note' ? "Insert Note Link" : "Import Mistake Card"}</span>
+                              <Icons.SortAlpha className="w-5 h-5 text-blue-500"/>
+                              <span>Insert Note Link</span>
                           </h3>
                           <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider opacity-70">
-                              {refMode === 'note' ? "Select a file to reference" : "Choose a question to review"}
+                              Select a file to reference
                           </p>
                       </div>
                       
-                      {/* 如果是 Note 模式，显示面包屑导航 */}
-                      {refMode === 'note' && (
-                          <div className="flex items-center gap-1 bg-white dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-lg px-2 py-1 text-xs overflow-x-auto no-scrollbar max-w-[200px]">
-                              <button onClick={() => loadMoveNode('root')} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-white/10 text-blue-500"><Icons.FolderArrow className="w-3 h-3" /></button>
-                              {moveViewData.breadcrumbs.length > 0 && <span className="opacity-30">/</span>}
-                              <span className="truncate">{moveViewData.info.name}</span>
-                          </div>
-                      )}
+                      <div className="flex items-center gap-1 bg-white dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-lg px-2 py-1 text-xs overflow-x-auto no-scrollbar max-w-[200px]">
+                          <button onClick={() => loadMoveNode('root')} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-white/10 text-blue-500"><Icons.FolderArrow className="w-3 h-3" /></button>
+                          {moveViewData.breadcrumbs.length > 0 && <span className="opacity-30">/</span>}
+                          <span className="truncate">{moveViewData.info.name}</span>
+                      </div>
                   </div>
 
-                  {/* --- Body: Content Switcher --- */}
+                  {/* --- Body --- */}
                   <div className="flex-1 overflow-y-auto custom-scrollbar p-2 bg-gray-50/50 dark:bg-transparent">
-                      
-                      {/* A. 笔记选择模式 (原有逻辑) */}
-                      {refMode === 'note' ? (
-                          <div className="space-y-1">
-                              {/* 上一级 */}
-                              {moveViewData.info.id !== 'root' && (
-                                  <div onClick={() => loadMoveNode(moveViewData.info.parent_id || 'root')} className="flex items-center gap-3 p-3 rounded-xl cursor-pointer hover:bg-white dark:hover:bg-white/5 border border-transparent hover:border-gray-200 dark:hover:border-white/5 transition-all opacity-70 hover:opacity-100">
-                                      <div className="w-8 h-8 rounded-lg bg-gray-200 dark:bg-white/10 flex items-center justify-center"><Icons.ArrowUp className="w-4 h-4"/></div>
-                                      <span className="font-bold text-sm">.. Up Level</span>
-                                  </div>
-                              )}
-                              {/* 文件夹 */}
-                              {moveViewData.items.filter(i => i.type === 'folder').map(folder => (
-                                  <div key={folder.id} onClick={() => loadMoveNode(folder.id)} className="flex items-center gap-3 p-3 rounded-xl cursor-pointer hover:bg-white dark:hover:bg-white/5 border border-transparent hover:border-gray-200 dark:hover:border-white/5 transition-all">
-                                      <div className="w-8 h-8 rounded-lg bg-yellow-100 dark:bg-yellow-500/20 text-yellow-600 flex items-center justify-center"><Icons.FolderArrow className="w-4 h-4"/></div>
-                                      <span className="font-bold text-sm flex-1 truncate">{folder.name}</span>
-                                      <Icons.ArrowDown className="w-3 h-3 -rotate-90 opacity-30"/>
-                                  </div>
-                              ))}
-                              {/* 文件 */}
-                              {moveViewData.items.filter(i => i.type === 'file').map(file => (
-                                  <div key={file.id} onClick={() => handleInsertRef(file)} className="group flex items-center gap-3 p-3 rounded-xl cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-500/10 border border-transparent hover:border-blue-200 dark:hover:border-blue-500/30 transition-all">
-                                      <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-500/20 text-blue-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-                                          <Icons.SortAlpha className="w-4 h-4"/>
-                                      </div>
-                                      <div className="flex-1 min-w-0">
-                                          <div className="font-bold text-sm text-slate-700 dark:text-slate-200 truncate">{file.name}</div>
-                                          <div className="text-[10px] text-gray-400">{file.date}</div>
-                                      </div>
-                                      <button className="px-3 py-1 bg-blue-500 text-white text-xs font-bold rounded-lg opacity-0 group-hover:opacity-100 transition-opacity shadow-lg">
-                                          Link
-                                      </button>
-                                  </div>
-                              ))}
-                          </div>
-                      ) : (
-                          
-                      /* B. 错题选择模式 (新逻辑) */
                       <div className="space-y-4 p-2">
-                          {/* 按科目简单分组渲染 */}
-                          {['Physics', 'Mathematics', 'English', 'Other'].map(subject => {
-                              const subItems = mistakesList.filter(m => {
-                                  const mistSub = (m.subject || 'Other').toLowerCase();
-                                  const filterSub = subject.toLowerCase();
-                                  return mistSub === filterSub;
-                              });
-                              if (subItems.length === 0) return null;
-                              
-                              return (
-                                  <div key={subject}>
-                                      <div className="text-[10px] font-bold uppercase text-gray-400 mb-2 ml-2 tracking-wider sticky top-0 bg-white/80 dark:bg-[#1e293b]/90 backdrop-blur py-1 z-10">{subject}</div>
-                                      <div className="space-y-2">
-                                          {subItems.map(m => (
-                                              <div 
-                                                  key={m.id} 
-                                                  onClick={() => handleInsertRef(m)}
-                                                  className="group relative p-4 rounded-xl bg-white dark:bg-white/5 border border-gray-200 dark:border-white/5 hover:border-purple-400 dark:hover:border-purple-500/50 cursor-pointer transition-all hover:shadow-lg"
-                                              >
-                                                  <div className="flex justify-between items-start mb-1">
-                                                      <span className="text-[10px] font-mono text-purple-500 bg-purple-50 dark:bg-purple-500/10 px-1.5 py-0.5 rounded">#{m.id}</span>
-                                                      <div className="flex gap-1">
-                                                          {m.diagnosis_tags?.slice(0,2).map(tag => (
-                                                              <span key={tag} className="text-[9px] bg-gray-100 dark:bg-white/10 text-gray-500 px-1.5 rounded">{tag}</span>
-                                                          ))}
-                                                      </div>
-                                                  </div>
-                                                  <div className="text-sm font-bold text-slate-700 dark:text-slate-200 line-clamp-2 leading-relaxed">
-                                                      {m.stem_snapshot || m.wrong_step_stem || "No content preview"}
-                                                  </div>
-                                                  
-                                                  {/* Hover Action */}
-                                                  <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                      <button className="px-4 py-2 bg-purple-600 text-white text-xs font-bold rounded-lg shadow-xl hover:scale-105 active:scale-95 transition-transform">
-                                                          Import
-                                                      </button>
-                                                  </div>
-                                              </div>
-                                          ))}
-                                      </div>
+                          {moveViewData.info.id !== 'root' && (
+                              <div onClick={() => loadMoveNode(moveViewData.info.parent_id || 'root')} className="flex items-center gap-3 p-3 rounded-xl cursor-pointer hover:bg-white dark:hover:bg-white/5 border border-transparent hover:border-gray-200 dark:hover:border-white/5 transition-all opacity-70 hover:opacity-100">
+                                  <div className="w-8 h-8 rounded-lg bg-gray-200 dark:bg-white/10 flex items-center justify-center"><Icons.ArrowUp className="w-4 h-4"/></div>
+                                  <span className="font-bold text-sm">.. Up Level</span>
+                              </div>
+                          )}
+                          {moveViewData.items.filter(i => i.type === 'folder').map(folder => (
+                              <div key={folder.id} onClick={() => loadMoveNode(folder.id)} className="flex items-center gap-3 p-3 rounded-xl cursor-pointer hover:bg-white dark:hover:bg-white/5 border border-transparent hover:border-gray-200 dark:hover:border-white/5 transition-all">
+                                  <div className="w-8 h-8 rounded-lg bg-yellow-100 dark:bg-yellow-500/20 text-yellow-600 flex items-center justify-center"><Icons.FolderArrow className="w-4 h-4"/></div>
+                                  <span className="font-bold text-sm flex-1 truncate">{folder.name}</span>
+                                  <Icons.ArrowDown className="w-3 h-3 -rotate-90 opacity-30"/>
+                              </div>
+                          ))}
+                          {moveViewData.items.filter(i => i.type === 'file').map(file => (
+                              <div key={file.id} onClick={() => handleInsertRef(file)} className="group flex items-center gap-3 p-3 rounded-xl cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-500/10 border border-transparent hover:border-blue-200 dark:hover:border-blue-500/30 transition-all">
+                                  <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-500/20 text-blue-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                      <Icons.SortAlpha className="w-4 h-4"/>
                                   </div>
-                              );
-                          })}
-                          
-                          {mistakesList.length === 0 && (
+                                  <div className="flex-1 min-w-0">
+                                      <div className="font-bold text-sm text-slate-700 dark:text-slate-200 truncate">{file.name}</div>
+                                      <div className="text-[10px] text-gray-400">{file.date}</div>
+                                  </div>
+                                  <button className="px-3 py-1 bg-blue-500 text-white text-xs font-bold rounded-lg opacity-0 group-hover:opacity-100 transition-opacity shadow-lg">
+                                      Link
+                                  </button>
+                              </div>
+                          ))}
+                          {moveViewData.items.length === 0 && (
                               <div className="py-20 text-center opacity-50">
                                   <div className="text-4xl mb-2">📭</div>
-                                  <p className="font-bold">No mistakes found</p>
+                                  <p className="font-bold">No notes found</p>
                               </div>
                           )}
                       </div>
-                      )}
                   </div>
               </div>
           </motion.div>

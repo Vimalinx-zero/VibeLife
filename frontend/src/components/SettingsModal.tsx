@@ -245,12 +245,10 @@ const SettingsModal = () => {
 
   const { user, logout } = useAuth();  // ✨ 新增：获取认证用户信息
   const toast = useToast();
-  const fileInputRef = useRef(null);
 
    const [activeTab, setActiveTab] = useState("profile");  // ✨ 改为默认打开 profile
-   const [stats, setStats] = useState<{ questions: number; mistakes: number; notes: number; folders: number } | null>(null);
+   const [stats, setStats] = useState<{ notes: number; folders: number } | null>(null);
    const [loading, setLoading] = useState(false);
-  const [importing, setImporting] = useState(false);
 
   // ✨ 新增：修改密码状态
   const [passwordForm, setPasswordForm] = useState({
@@ -357,7 +355,10 @@ const SettingsModal = () => {
   const fetchStats = async () => {
     try {
       const response = await apiClient.get('/data/stats');
-      setStats(response.data);
+      setStats({
+        notes: response.data?.notes ?? 0,
+        folders: response.data?.folders ?? 0,
+      });
     } catch (error) {
       console.error('Failed to fetch stats:', error);
     }
@@ -374,52 +375,18 @@ const SettingsModal = () => {
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `flowstudy_${type}_${Date.now()}.json`);
+      link.setAttribute('download', `vibelife_${type}_${Date.now()}.json`);
       document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
 
-      toast.success(`${type === 'all' ? '完整数据' : type}导出成功！`);
+      toast.success(type === 'notes' ? '笔记导出成功！' : `${type} 导出成功！`);
     } catch (error) {
       const err = error as Error;
       toast.error(`导出失败: ${err.message}`);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    try {
-      setImporting(true);
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        try {
-          const result = e.target?.result;
-          if (typeof result !== 'string') return;
-          const jsonData = JSON.parse(result);
-          const response = await apiClient.post('/data/import/questions', jsonData);
-
-          if (response.data.success) {
-            toast.success(`导入成功！已导入 ${response.data.imported} 道题目`);
-            await fetchStats(); // 刷新统计
-          } else {
-            toast.warning(`部分导入成功: ${response.data.imported}/${response.data.total}`);
-          }
-        } catch (error) {
-          const err = error as any;
-          toast.error(`导入失败: ${err.response?.data?.detail || err.message}`);
-        }
-      };
-      reader.readAsText(file);
-    } catch (error) {
-      toast.error('文件读取失败');
-    } finally {
-      setImporting(false);
-      event.target.value = ''; // 重置文件输入
     }
   };
 
@@ -480,7 +447,7 @@ const SettingsModal = () => {
                             </button>
                         ))}
                     </div>
-                    <div className="text-xs text-gray-400 dark:text-gray-600 text-center font-mono">v1.0.0 FlowStudy</div>
+                    <div className="text-xs text-gray-400 dark:text-gray-600 text-center font-mono">v1.0.0 VibeLife</div>
                 </div>
 
                 {/* 右侧内容 */}
@@ -866,15 +833,7 @@ const SettingsModal = () => {
                                                 </button>
                                             </div>
                                             {stats ? (
-                                                <div className="grid grid-cols-4 gap-4">
-                                                    <div className="text-center">
-                                                        <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">{stats.questions}</div>
-                                                        <div className="text-xs text-gray-500 dark:text-gray-400">题目</div>
-                                                    </div>
-                                                    <div className="text-center">
-                                                        <div className="text-3xl font-bold text-red-600 dark:text-red-400">{stats.mistakes}</div>
-                                                        <div className="text-xs text-gray-500 dark:text-gray-400">错题</div>
-                                                    </div>
+                                                <div className="grid grid-cols-2 gap-4">
                                                     <div className="text-center">
                                                         <div className="text-3xl font-bold text-green-600 dark:text-green-400">{stats.notes}</div>
                                                         <div className="text-xs text-gray-500 dark:text-gray-400">笔记</div>
@@ -897,22 +856,6 @@ const SettingsModal = () => {
                                             </h4>
                                             <div className="grid grid-cols-2 gap-4">
                                                 <button
-                                                    onClick={() => handleExport('questions')}
-                                                    disabled={loading}
-                                                    className="p-4 rounded-xl border dark:border-white/10 hover:bg-green-50 dark:hover:bg-green-500/10 hover:border-green-500 dark:hover:border-green-500/30 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                                                >
-                                                    <div className="font-bold dark:text-white">题库</div>
-                                                    <div className="text-xs text-gray-500 dark:text-gray-400">导出所有题目</div>
-                                                </button>
-                                                <button
-                                                    onClick={() => handleExport('mistakes')}
-                                                    disabled={loading}
-                                                    className="p-4 rounded-xl border dark:border-white/10 hover:bg-red-50 dark:hover:bg-red-500/10 hover:border-red-500 dark:hover:border-red-500/30 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                                                >
-                                                    <div className="font-bold dark:text-white">错题本</div>
-                                                    <div className="text-xs text-gray-500 dark:text-gray-400">导出错题记录</div>
-                                                </button>
-                                                <button
                                                     onClick={() => handleExport('notes')}
                                                     disabled={loading}
                                                     className="p-4 rounded-xl border dark:border-white/10 hover:bg-blue-50 dark:hover:bg-blue-500/10 hover:border-blue-500 dark:hover:border-blue-500/30 transition disabled:opacity-50 disabled:cursor-not-allowed"
@@ -920,53 +863,13 @@ const SettingsModal = () => {
                                                     <div className="font-bold dark:text-white">笔记</div>
                                                     <div className="text-xs text-gray-500 dark:text-gray-400">导出所有笔记</div>
                                                 </button>
-                                                <button
-                                                    onClick={() => handleExport('all')}
-                                                    disabled={loading}
-                                                    className="p-4 rounded-xl border-2 border-purple-200 dark:border-purple-500/30 hover:bg-purple-50 dark:hover:bg-purple-500/10 hover:border-purple-500 dark:hover:border-purple-500/50 transition disabled:opacity-50 disabled:cursor-not-allowed bg-purple-50/50 dark:bg-purple-500/10"
-                                                >
-                                                    <div className="font-bold text-purple-700 dark:text-purple-300">完整备份</div>
-                                                    <div className="text-xs text-purple-600/70 dark:text-purple-400">所有数据</div>
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        {/* 导入功能 */}
-                                        <div className="mb-8">
-                                            <h4 className="font-bold dark:text-white mb-4 flex items-center gap-2">
-                                                <Icons.Upload className="w-5 h-5 text-blue-500" />
-                                                导入数据
-                                            </h4>
-                                            <div className="p-6 rounded-2xl border-2 border-dashed border-gray-300 dark:border-white/10 hover:border-blue-500 dark:hover:border-blue-500/30 transition bg-gray-50/50 dark:bg-white/5">
-                                                <input
-                                                    ref={fileInputRef}
-                                                    type="file"
-                                                    accept=".json"
-                                                    onChange={handleImport}
-                                                    disabled={importing}
-                                                    className="hidden"
-                                                    id="file-import"
-                                                />
-                                                <label
-                                                    htmlFor="file-import"
-                                                    className={`flex flex-col items-center justify-center gap-4 py-8 cursor-pointer ${importing ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                                >
-                                                    <div className={`w-16 h-16 rounded-full flex items-center justify-center ${importing ? 'bg-gray-400' : 'bg-blue-500 text-white'} transition`}>
-                                                        {importing ? (
-                                                            <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                                        ) : (
-                                                            <Icons.Upload className="w-8 h-8" />
-                                                        )}
+                                                <div className="p-4 rounded-xl border dark:border-white/10 bg-gray-50/50 dark:bg-white/5 flex items-center justify-between">
+                                                    <div>
+                                                        <div className="font-bold dark:text-white">说明</div>
+                                                        <div className="text-xs text-gray-500 dark:text-gray-400">当前仅保留笔记数据导出。</div>
                                                     </div>
-                                                    <div className="text-center">
-                                                        <div className="font-bold dark:text-white">
-                                                            {importing ? '导入中...' : '点击选择文件'}
-                                                        </div>
-                                                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                                            支持 JSON 格式题目文件
-                                                        </div>
-                                                    </div>
-                                                </label>
+                                                    <Icons.FileText className="w-5 h-5 text-blue-500" />
+                                                </div>
                                             </div>
                                         </div>
 

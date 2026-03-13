@@ -1,10 +1,9 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { lazy, Suspense } from "react";
 import TopBar from "./components/TopBar";
 import SettingsModal from "./components/SettingsModal";
 import GlobalShortcuts from "./components/GlobalShortcuts";
 import ErrorBoundary from "./components/ErrorBoundary";
-import ProtectedRoute from "./components/ProtectedRoute";
 import { ThemeProvider, useTheme } from "./context/ThemeContext";
 import { ToastProvider } from "./context/ToastContext";
 import { MediaProvider } from "./context/MediaContext";
@@ -12,22 +11,12 @@ import { AuthProvider } from "./context/AuthContext";
 import LoadingScreen from "./components/LoadingScreen";
 import AIChatWidget from "./components/AIChatWidget";
 
-// ✅ 懒加载页面组件 - 显著减少首屏加载时间
 const Dashboard = lazy(() => import("./pages/Dashboard"));
-const QuizPage = lazy(() => import("./pages/QuizPage"));
 const NotesPage = lazy(() => import("./pages/NotesPage"));
-const MistakeVaultPage = lazy(() => import("./pages/MistakeVaultPage"));
-const AnkiPage = lazy(() => import("./pages/AnkiPage"));
-const AnkiReviewPage = lazy(() => import("./pages/AnkiReviewPage"));
 const WorkbenchPage = lazy(() => import("./pages/WorkbenchPage"));
-const CollectionsPage = lazy(() => import("./pages/CollectionsPage"));
-const CollectionDetailPage = lazy(() => import("./pages/CollectionDetailPage"));
-const AIImportPage = lazy(() => import("./pages/AIImportPage"));
-const DataManagementPage = lazy(() => import("./pages/DataManagementPage"));
-const SchedulePage = lazy(() => import("./pages/SchedulePage"));
 const ProjectsPage = lazy(() => import("./pages/ProjectsPage"));
 const QuickCapturePage = lazy(() => import("./pages/QuickCapturePage"));
-
+const SchedulePage = lazy(() => import("./pages/SchedulePage"));
 
 const AppContent = () => {
   const { background, isDark } = useTheme();
@@ -55,21 +44,19 @@ const AppContent = () => {
             <TopBar />
             <Suspense fallback={<LoadingScreen />}>
                 <Routes>
-                    {/* 主页 */}
                     <Route path="/" element={<Dashboard />} />
-                    <Route path="/quiz" element={<QuizPage />} />
-                    <Route path="/mistakes" element={<MistakeVaultPage />} />
                     <Route path="/notes" element={<NotesPage />} />
-                    <Route path="/anki" element={<AnkiPage />} />
-                    <Route path="/anki/review" element={<AnkiReviewPage />} />
-                    <Route path="/anki/collections" element={<CollectionsPage />} />
-                    <Route path="/anki/collections/:collectionId" element={<CollectionDetailPage />} />
                     <Route path="/workbench" element={<WorkbenchPage />} />
                     <Route path="/projects" element={<ProjectsPage />} />
                     <Route path="/quick-capture" element={<QuickCapturePage />} />
                     <Route path="/schedule" element={<SchedulePage />} />
-                    <Route path="/ai-import" element={<AIImportPage />} />
-                    <Route path="/data-management" element={<DataManagementPage />} />
+                    <Route path="/quiz" element={<Navigate to="/" replace />} />
+                    <Route path="/mistakes" element={<Navigate to="/" replace />} />
+                    <Route path="/anki" element={<Navigate to="/" replace />} />
+                    <Route path="/anki/*" element={<Navigate to="/" replace />} />
+                    <Route path="/ai-import" element={<Navigate to="/" replace />} />
+                    <Route path="/data-management" element={<Navigate to="/" replace />} />
+                    <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
             </Suspense>
         </BrowserRouter>

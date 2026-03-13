@@ -49,7 +49,7 @@ const LoadingScreen = () => {
             animate={{ opacity: [0.5, 1, 0.5] }}
             transition={{ duration: 2, repeat: Infinity }}
           >
-            FlowStudy
+            VibeLife
           </motion.h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">加载中...</p>
         </div>

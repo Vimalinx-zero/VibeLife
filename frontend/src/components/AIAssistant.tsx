@@ -30,7 +30,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ isOpen, context = null }) => 
     {
       id: 1,
       role: 'assistant',
-      content: '你好！我是你的 AI 学习助手。有什么可以帮助你的吗？'
+      content: '你好！我是你的 AI 笔记助手。有什么可以帮助你的吗？'
     }
   ]);
   const [input, setInput] = useState('');
@@ -65,7 +65,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ isOpen, context = null }) => 
       const token = localStorage.getItem('token');
       const response = await axios.post('http://localhost:8000/api/ai/chat', {
         message: userMessage.content,
-        context: context, // 传递上下文（当前题目/笔记信息）
+        context: context, // 传递当前笔记上下文
         history: messages.slice(-5).map(m => ({ // 只发送最近5条消息作为上下文
           role: m.role,
           content: m.content

@@ -160,16 +160,16 @@ function Dashboard() {
     },
     suggestions: [
       {
-        id: 'steady-quiz',
-        title: '完成 10 道巩固练习',
-        reason: '先保持连续学习节奏',
-        target: '/quiz',
+        id: 'steady-workbench',
+        title: '整理今日待办',
+        reason: '先收拢今天最重要的事情',
+        target: '/workbench',
         estimated_minutes: 20,
         subject: 'general',
-        todo_text: '完成 10 道巩固练习'
+        todo_text: '整理今日待办'
       }
     ],
-    coach_message: '先完成一组巩固练习，再进入错题复盘。'
+    coach_message: '先完成高优先级事项，再推进项目和笔记。'
   }), []);
 
   // 更新时钟
@@ -327,26 +327,18 @@ function Dashboard() {
   // 断点续学处理
   const handleResumeLearning = () => {
     if (lastActivity) {
-      // 根据上次活动类型跳转
       switch(lastActivity.type) {
-        case 'quiz':
-          navigate('/quiz');
-          break;
         case 'note':
           navigate('/notes');
           break;
-        case 'mistake':
-          navigate('/mistakes');
-          break;
-        case 'anki':
-          navigate('/anki');
+        case 'workbench':
+          navigate('/workbench');
           break;
         default:
-          navigate('/quiz');
+          navigate('/workbench');
       }
     } else {
-      // 没有历史记录，默认跳转到刷题
-      navigate('/quiz');
+      navigate('/workbench');
     }
   };
 

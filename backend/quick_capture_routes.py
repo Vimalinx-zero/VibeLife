@@ -103,7 +103,7 @@ async def quick_capture(
         normalized_markdown=normalized_text,
         summary=summary,
         tags=tags,
-        metadata=metadata,
+        capture_metadata=metadata,
         created_at=now,
         updated_at=now,
     )

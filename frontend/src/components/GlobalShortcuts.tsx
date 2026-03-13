@@ -18,67 +18,56 @@ const GlobalShortcuts = () => {
 
   // 全局快捷键配置
   useKeyboardShortcuts({
-    // ========== 页面导航 ==========
-    // Alt+数字快速导航
     'alt+1': () => {
       navigate('/');
-      toast.info('🏠 仪表板');
+      toast.info('🏠 主页');
     },
     'alt+2': () => {
-      navigate('/quiz');
-      toast.info('✏️ 智能刷题');
+      navigate('/projects');
+      toast.info('📁 项目');
     },
     'alt+3': () => {
-      navigate('/mistakes');
-      toast.info('🐛 错题本');
+      navigate('/workbench');
+      toast.info('🧰 工作台');
     },
     'alt+4': () => {
       navigate('/notes');
       toast.info('📝 笔记');
     },
     'alt+5': () => {
-      navigate('/anki');
-      toast.info('🧠 记忆卡');
+      navigate('/quick-capture');
+      toast.info('⚡ 采集');
     },
     'alt+6': () => {
-      navigate('/workbench');
-      toast.info('⏱️ 学习工作台');
+      navigate('/schedule');
+      toast.info('🗓️ 日程');
     },
 
-    // ========== 通用功能 ==========
-    // Escape 返回上一页
     'escape': () => {
-      // 如果快捷键帮助打开，关闭它
       if (showHotkeys) {
         setShowHotkeys(false);
         return;
       }
 
-       // 检查是否有打开的弹窗或模态框
       const modals = document.querySelectorAll('[class*="modal"], [class*="dialog"]');
       if (modals.length > 0) {
-        // 尝试关闭第一个模态框
         const firstModal = modals[0] as HTMLElement;
         if (firstModal && 'close' in firstModal && typeof firstModal.close === 'function') {
           firstModal.close();
         }
       } else {
-        // 否则返回上一页
-        navigate(-1);
+        navigate('/');
       }
     },
 
-    // Ctrl+K 快速搜索
     'ctrl+k': () => {
-      toast.info('🔍 快速搜索功能开发中...');
+      toast.info('🔍 快速搜索开发中...');
     },
 
-    // Ctrl+Shift+K / Ctrl+/ 显示快捷键帮助
     'ctrl+shift+k': handleShowHotkeys,
     'ctrl+/': handleShowHotkeys,
     'shift+/': handleShowHotkeys,
 
-    // Ctrl+D 切换深色/浅色模式
     'ctrl+d': () => {
       toggleDarkMode();
       toast.info('🎨 已切换主题');

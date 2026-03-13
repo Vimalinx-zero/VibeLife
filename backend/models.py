@@ -413,6 +413,6 @@ class QuickNoteCapture(Base):
     normalized_markdown = Column(Text, default="")
     summary = Column(Text, default="")
     tags = Column(JSON, default=list)
-    metadata = Column(JSON, default=dict)
+    capture_metadata = Column("metadata", JSON, default=dict)
     created_at = Column(String, default=lambda: datetime.datetime.utcnow().isoformat())
     updated_at = Column(String, default=lambda: datetime.datetime.utcnow().isoformat())

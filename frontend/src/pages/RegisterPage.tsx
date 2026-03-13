@@ -54,9 +54,9 @@ const RegisterPage = () => {
         {/* 标题 */}
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-            FlowStudy
+            VibeLife
           </h1>
-          <p className="text-gray-600 dark:text-gray-300">创建账号，开启学习之旅</p>
+          <p className="text-gray-600 dark:text-gray-300">创建账号，开始管理你的笔记</p>
         </div>
 
         {/* 注册表单 */}

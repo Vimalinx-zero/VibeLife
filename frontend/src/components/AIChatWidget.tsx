@@ -120,7 +120,7 @@ const AIChatWidget: React.FC = () => {
     }
     
     if (lowerInput.includes('日程') || lowerInput.includes('计划')) {
-      return '你今天有 3 个任务：完成 FlowStudy 的报告、审查代码、部署 VibeLife。要查看详细日程吗？';
+      return '你今天有 3 个任务：整理笔记、审查代码、处理 VibeLife 的本地配置。要查看详细安排吗？';
     }
     
     if (lowerInput.includes('项目')) {

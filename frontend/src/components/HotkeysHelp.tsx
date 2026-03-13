@@ -27,18 +27,16 @@ const HotkeysHelp = ({ isOpen, onClose }) => {
 
         {/* Content */}
         <div className="px-6 py-4 overflow-y-auto max-h-[60vh] space-y-6">
-
-          {/* 页面导航 */}
           <section>
             <h3 className="text-lg font-bold mb-3 text-blue-600 dark:text-blue-400">🧭 页面导航</h3>
             <div className="grid grid-cols-2 gap-2">
               {Object.entries({
-                'Alt + 1': '🏠 仪表板',
-                'Alt + 2': '✏️ 智能刷题',
-                'Alt + 3': '🐛 错题本',
+                'Alt + 1': '🏠 主页',
+                'Alt + 2': '📁 项目',
+                'Alt + 3': '🧰 工作台',
                 'Alt + 4': '📝 笔记',
-                'Alt + 5': '🧠 记忆卡',
-                'Alt + 6': '⏱️ 学习工作台',
+                'Alt + 5': '⚡ 采集',
+                'Alt + 6': '🗓️ 日程',
               }).map(([key, desc]) => (
                 <div key={key} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-white/5 rounded-lg">
                   <span className="dark:text-gray-300">{desc}</span>
@@ -50,32 +48,6 @@ const HotkeysHelp = ({ isOpen, onClose }) => {
             </div>
           </section>
 
-          {/* 刷题页面 */}
-          <section>
-            <h3 className="text-lg font-bold mb-3 text-green-600 dark:text-green-400">✏️ 刷题页面</h3>
-            <div className="space-y-2">
-              {[
-                { keys: ['Space'], desc: '显示答案/下一题' },
-                { keys: ['1', '2', '3', '4'], desc: '选择选项 A/B/C/D' },
-                { keys: ['Enter'], desc: '提交答案' },
-                { keys: ['Ctrl + F'], desc: '收藏/取消收藏' },
-                { keys: ['Ctrl + R'], desc: '刷新题目' },
-              ].map(({ keys, desc }) => (
-                <div key={desc} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-white/5 rounded-lg">
-                  <span className="dark:text-gray-300">{desc}</span>
-                  <div className="flex gap-1">
-                    {keys.map((key) => (
-                      <kbd key={key} className="px-2 py-1 text-sm font-mono bg-white dark:bg-slate-700 border dark:border-white/10 rounded shadow-sm dark:text-gray-300">
-                        {key}
-                      </kbd>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          {/* 笔记页面 */}
           <section>
             <h3 className="text-lg font-bold mb-3 text-yellow-600 dark:text-yellow-400">📝 笔记页面</h3>
             <div className="space-y-2">
@@ -84,8 +56,7 @@ const HotkeysHelp = ({ isOpen, onClose }) => {
                 { keys: ['Ctrl + S'], desc: '保存笔记' },
                 { keys: ['Ctrl + B'], desc: '加粗选中文本' },
                 { keys: ['Ctrl + I'], desc: '斜体选中文本' },
-                { keys: ['Ctrl + Shift + C'], desc: '插入代码块' },
-                { keys: ['Ctrl + Shift + L'], desc: '插入链接' },
+                { keys: ['Ctrl + Shift + X'], desc: '切换分栏编辑' },
               ].map(({ keys, desc }) => (
                 <div key={desc} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-white/5 rounded-lg">
                   <span className="dark:text-gray-300">{desc}</span>
@@ -97,34 +68,11 @@ const HotkeysHelp = ({ isOpen, onClose }) => {
             </div>
           </section>
 
-          {/* 记忆卡复习 */}
-          <section>
-            <h3 className="text-lg font-bold mb-3 text-purple-600 dark:text-purple-400">🧠 记忆卡复习</h3>
-            <div className="space-y-2">
-              {[
-                { keys: ['Space'], desc: '翻卡' },
-                { keys: ['1'], desc: '评分：忘记了' },
-                { keys: ['2'], desc: '评分：有印象' },
-                { keys: ['3'], desc: '评分：记得' },
-                { keys: ['4'], desc: '评分：轻松' },
-                { keys: ['Enter'], desc: '提交评分' },
-              ].map(({ keys, desc }) => (
-                <div key={desc} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-white/5 rounded-lg">
-                  <span className="dark:text-gray-300">{desc}</span>
-                  <kbd className="px-2 py-1 text-sm font-mono bg-white dark:bg-slate-700 border dark:border-white/10 rounded shadow-sm dark:text-gray-300">
-                    {keys[0]}
-                  </kbd>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          {/* 通用功能 */}
           <section>
             <h3 className="text-lg font-bold mb-3 text-gray-600 dark:text-gray-400">⚙️ 通用功能</h3>
             <div className="space-y-2">
               {[
-                { keys: ['Escape'], desc: '返回上一页 / 关闭弹窗' },
+                { keys: ['Escape'], desc: '返回主页 / 关闭弹窗' },
                 { keys: ['Ctrl + K'], desc: '快速搜索（开发中）' },
                 { keys: ['Ctrl + D'], desc: '切换深色/浅色模式' },
                 { keys: ['Ctrl + /'], desc: '显示此帮助' },
