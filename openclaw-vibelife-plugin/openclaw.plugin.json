@@ -1,0 +1,39 @@
+{
+  "id": "vibelife",
+  "name": "VibeLife Tools",
+  "description": "Manage VibeLife todos, notes, and projects from OpenClaw.",
+  "version": "0.1.0",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "baseUrl": {
+        "type": "string",
+        "description": "Base URL for the VibeLife backend API."
+      },
+      "authToken": {
+        "type": "string",
+        "description": "Bearer token used for authenticated VibeLife API calls."
+      },
+      "timeoutMs": {
+        "type": "integer",
+        "minimum": 1000,
+        "maximum": 120000,
+        "description": "Request timeout for VibeLife API calls."
+      }
+    }
+  },
+  "uiHints": {
+    "baseUrl": {
+      "label": "VibeLife Base URL",
+      "placeholder": "http://127.0.0.1:49174"
+    },
+    "authToken": {
+      "label": "VibeLife Auth Token",
+      "sensitive": true
+    },
+    "timeoutMs": {
+      "label": "VibeLife Timeout (ms)"
+    }
+  }
+}

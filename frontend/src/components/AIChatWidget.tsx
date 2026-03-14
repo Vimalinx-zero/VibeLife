@@ -85,7 +85,7 @@ const AIChatWidget: React.FC = () => {
   }, [isOpen]);
 
   const handleSend = async () => {
-    if (!inputValue.trim()) return;
+    if (!inputValue.trim() || isTyping) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -99,43 +99,53 @@ const AIChatWidget: React.FC = () => {
     setInputValue('');
     setIsTyping(true);
 
-    // 模拟 AI 响应
-    setTimeout(() => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${window.__VIBELIFE_API_ORIGIN__}/api/ai/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          message: userInput,
+          provider: 'openclaw',
+          history: [...messages, userMessage].slice(-10).map((message) => ({
+            role: message.type === 'ai' ? 'assistant' : 'user',
+            content: message.content,
+          })),
+        }),
+      });
+
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.detail || 'AI 请求失败');
+      }
+
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
         type: 'ai',
-        content: getAIResponse(userInput),
+        content:
+          typeof payload?.reply === 'string' && payload.reply.trim()
+            ? payload.reply
+            : '我这次没有拿到可用回复。',
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, aiMessage]);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : '未知错误';
+      setMessages(prev => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          type: 'ai',
+          content: `抱歉，这次没有连上 AI：${errorMessage}`,
+          timestamp: new Date(),
+        },
+      ]);
+    } finally {
       setIsTyping(false);
-    }, 1000 + Math.random() * 1000);
-  };
-
-  const getAIResponse = (input: string): string => {
-    const lowerInput = input.toLowerCase();
-    
-    if (lowerInput.includes('你好') || lowerInput.includes('hi') || lowerInput.includes('hello')) {
-      return '你好！今天想做什么呢？我可以帮你写笔记、查日程，或者聊聊项目进展。';
     }
-    
-    if (lowerInput.includes('日程') || lowerInput.includes('计划')) {
-      return '你今天有 3 个任务：整理笔记、审查代码、处理 VibeLife 的本地配置。要查看详细安排吗？';
-    }
-    
-    if (lowerInput.includes('项目')) {
-      return '你现在有 2 个活跃项目：ResoMate（AI 社区平台）和 VibeLife（个人工作台）。需要我详细介绍吗？';
-    }
-    
-    if (lowerInput.includes('笔记')) {
-      return '你今天还没有写笔记。要不要记录一下今天的工作？';
-    }
-    
-    if (lowerInput.includes('帮助') || lowerInput.includes('help')) {
-      return '我可以帮你：\n1. 管理日程和任务\n2. 写笔记和日志\n3. 查看项目进度\n4. 生成工作报告\n有什么需要的吗？';
-    }
-    
-    return '我明白了。让我想想...如果你需要更详细的帮助，可以告诉我具体想做什么，我会尽力帮你！';
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -298,7 +308,7 @@ const AIChatWidget: React.FC = () => {
                     <button
                       type="button"
                       onClick={handleSend}
-                      disabled={!inputValue.trim()}
+                      disabled={!inputValue.trim() || isTyping}
                       className="px-5 py-2.5 rounded-full bg-indigo-500 hover:bg-indigo-600 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
                     >
                       发送

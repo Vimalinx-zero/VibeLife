@@ -1,13 +1,93 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime
 import time
+import pydantic
 
 from database import get_db
 from auth import get_current_user_id
 import models
 
 router = APIRouter()
+
+
+class ProjectUpdate(pydantic.BaseModel):
+    name: str | None = None
+    category: str | None = None
+    subtitle: str | None = None
+    status: str | None = None
+    nextAction: str | None = None
+
+
+class ProjectStepCreate(pydantic.BaseModel):
+    title: str
+    owner: str = ""
+    due: str = ""
+    done: bool = False
+
+
+class ProjectStepUpdate(pydantic.BaseModel):
+    title: str | None = None
+    owner: str | None = None
+    due: str | None = None
+    done: bool | None = None
+
+
+def _serialize_project(project: models.Project) -> dict:
+    return {
+        "id": project.id,
+        "name": project.name,
+        "category": project.category,
+        "subtitle": project.subtitle,
+        "status": project.status,
+        "nextAction": project.next_action,
+        "createdAt": project.created_at,
+        "updatedAt": project.updated_at,
+    }
+
+
+def _serialize_step(step: models.ProjectStep) -> dict:
+    return {
+        "id": step.id,
+        "projectId": step.project_id,
+        "title": step.title,
+        "owner": step.owner,
+        "due": step.due,
+        "done": step.done,
+    }
+
+
+def _get_project_or_404(
+    db: Session, project_id: str, current_user_id: str
+) -> models.Project:
+    project = (
+        db.query(models.Project)
+        .filter(
+            models.Project.id == project_id,
+            models.Project.user_id == current_user_id,
+        )
+        .first()
+    )
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
+
+
+def _get_project_step_or_404(
+    db: Session, project_id: str, step_id: str, current_user_id: str
+) -> models.ProjectStep:
+    step = (
+        db.query(models.ProjectStep)
+        .filter(
+            models.ProjectStep.id == step_id,
+            models.ProjectStep.project_id == project_id,
+            models.ProjectStep.user_id == current_user_id,
+        )
+        .first()
+    )
+    if not step:
+        raise HTTPException(status_code=404, detail="Project step not found")
+    return step
 
 
 def _seed_projects_if_empty(db: Session, user_id: str):
@@ -253,6 +333,7 @@ async def add_project_email(
     current_user_id: str = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ):
+    _get_project_or_404(db, project_id, current_user_id)
     email_id = f"pe_{int(time.time() * 1000)}"
     record = models.ProjectEmail(
         id=email_id,
@@ -267,3 +348,95 @@ async def add_project_email(
     db.add(record)
     db.commit()
     return {"success": True, "id": email_id}
+
+
+@router.put("/api/projects/{project_id}")
+async def update_project(
+    project_id: str,
+    payload: ProjectUpdate,
+    current_user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    project = _get_project_or_404(db, project_id, current_user_id)
+
+    if payload.name is not None:
+        project.name = payload.name
+    if payload.category is not None:
+        project.category = payload.category
+    if payload.subtitle is not None:
+        project.subtitle = payload.subtitle
+    if payload.status is not None:
+        project.status = payload.status
+    if payload.nextAction is not None:
+        project.next_action = payload.nextAction
+
+    project.updated_at = datetime.utcnow().isoformat()
+    db.commit()
+    db.refresh(project)
+
+    return {"success": True, "project": _serialize_project(project)}
+
+
+@router.post("/api/projects/{project_id}/steps")
+async def create_project_step(
+    project_id: str,
+    payload: ProjectStepCreate,
+    current_user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    project = _get_project_or_404(db, project_id, current_user_id)
+    step_id = f"ps_{int(time.time() * 1000)}"
+
+    step = models.ProjectStep(
+        id=step_id,
+        user_id=current_user_id,
+        project_id=project_id,
+        title=payload.title,
+        owner=payload.owner,
+        due=payload.due,
+        done=payload.done,
+    )
+
+    db.add(step)
+    project.updated_at = datetime.utcnow().isoformat()
+    db.commit()
+    db.refresh(project)
+    db.refresh(step)
+
+    return {
+        "success": True,
+        "project": _serialize_project(project),
+        "step": _serialize_step(step),
+    }
+
+
+@router.put("/api/projects/{project_id}/steps/{step_id}")
+async def update_project_step(
+    project_id: str,
+    step_id: str,
+    payload: ProjectStepUpdate,
+    current_user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    project = _get_project_or_404(db, project_id, current_user_id)
+    step = _get_project_step_or_404(db, project_id, step_id, current_user_id)
+
+    if payload.title is not None:
+        step.title = payload.title
+    if payload.owner is not None:
+        step.owner = payload.owner
+    if payload.due is not None:
+        step.due = payload.due
+    if payload.done is not None:
+        step.done = payload.done
+
+    project.updated_at = datetime.utcnow().isoformat()
+    db.commit()
+    db.refresh(project)
+    db.refresh(step)
+
+    return {
+        "success": True,
+        "project": _serialize_project(project),
+        "step": _serialize_step(step),
+    }

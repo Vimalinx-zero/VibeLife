@@ -1,14 +1,14 @@
 # backend/ai_routes.py
 # AI功能API路由
 
-from fastapi import APIRouter, Depends, HTTPException
+import asyncio
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any, Optional
 from database import get_db
 from auth import get_current_user_id
 import models
 import datetime
-import subprocess
 import json
 from pathlib import Path
 
@@ -17,6 +17,11 @@ from ai.embedding_service import get_embedding_service
 from ai.vector_store import get_vector_store
 from ai.knowledge_graph import get_knowledge_graph
 from ai.explanation_service import get_explanation_service
+from openclaw_bridge import (
+    OpenClawBridgeError,
+    build_vibelife_chat_prompt,
+    run_openclaw_agent,
+)
 
 router = APIRouter()
 
@@ -387,7 +392,11 @@ async def embed_content_batch(
 
 
 @router.post("/api/ai/chat")
-async def chat_with_ai(request: Dict[str, Any]):
+async def chat_with_ai(
+    request: Dict[str, Any],
+    raw_request: Request,
+    current_user_id: str = Depends(get_current_user_id),
+):
     """
     AI对话接口 - 与AI助手进行对话
 
@@ -402,14 +411,63 @@ async def chat_with_ai(request: Dict[str, Any]):
         - reply: AI回复
     """
     try:
-        user_message = request.get("message", "")
+        user_message = str(request.get("message", "")).strip()
         context = request.get("context")
         history = request.get("history", [])
+        provider = str(request.get("provider", "openclaw")).strip().lower()
 
-        # 使用规则引擎生成回复
-        reply = generate_chat_reply(user_message, context, history)
+        if not user_message:
+            raise HTTPException(status_code=400, detail="消息不能为空")
 
-        return {"success": True, "reply": reply}
+        if provider == "auto":
+            configured_provider = str(
+                get_current_ai_config().get("provider", "openclaw")
+            ).strip()
+            provider = configured_provider.lower() if configured_provider else "openclaw"
+
+        prompt = build_vibelife_chat_prompt(
+            user_message,
+            history,
+            context,
+            current_user_id,
+            tools_enabled=provider == "openclaw",
+        )
+
+        if provider == "openclaw":
+            config = get_current_ai_config()
+            openclaw_config = config.get("openclaw", {})
+            authorization = raw_request.headers.get("authorization", "")
+            auth_token = (
+                authorization.split(" ", 1)[1]
+                if authorization.lower().startswith("bearer ")
+                else None
+            )
+
+            try:
+                reply = await asyncio.to_thread(
+                    run_openclaw_agent,
+                    prompt,
+                    model=openclaw_config.get("model", "zai/glm-5"),
+                    thinking=str(openclaw_config.get("thinking", "low")),
+                    agent=str(openclaw_config.get("agent", "main")),
+                    base_url=str(raw_request.base_url).rstrip("/"),
+                    auth_token=auth_token,
+                    current_user_id=current_user_id,
+                )
+            except OpenClawBridgeError as exc:
+                raise HTTPException(status_code=502, detail=str(exc)) from exc
+        elif provider in {"ollama", "deepseek"}:
+            reply = generate_qa_answer_with_model(prompt, provider)
+        elif provider == "local":
+            reply = generate_chat_reply(user_message, context, history)
+        else:
+            raise HTTPException(
+                status_code=400, detail=f"不支持的 AI provider: {provider}"
+            )
+
+        return {"success": True, "reply": reply, "provider": provider}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -592,7 +650,7 @@ async def recommend_related_content(
 
 # 全局AI配置存储
 _ai_config = {
-    "provider": "ollama",
+    "provider": "openclaw",
     "ollama": {"baseURL": "http://localhost:11434", "model": "qwen:7b"},
     "openai": {
         "apiKey": "",
@@ -965,83 +1023,17 @@ async def quick_qa_stream(question: str, model: str = "deepseek"):
                     await client.aclose()
             elif model == "openclaw":
                 openclaw_config = config.get("openclaw", {})
-                openclaw_model = openclaw_config.get("model", "zai/glm-5")
-                openclaw_thinking = openclaw_config.get("thinking", "low")
-                openclaw_agent = openclaw_config.get("agent", "main")
-
-                command = [
-                    "openclaw",
-                    "agent",
-                    "--local",
-                    "--json",
-                    "--agent",
-                    str(openclaw_agent),
-                    "--thinking",
-                    str(openclaw_thinking),
-                    "--message",
-                    question,
-                ]
-
-                env = None
-                if openclaw_model:
-                    import os
-
-                    env = os.environ.copy()
-                    env["OPENCLAW_MODEL"] = str(openclaw_model)
-
-                process = subprocess.run(
-                    command,
-                    capture_output=True,
-                    text=True,
-                    timeout=120,
-                    env=env,
-                )
-
-                if process.returncode != 0:
-                    stderr_text = process.stderr.strip()
-                    if stderr_text:
-                        yield f"❌ OpenClaw 调用失败: {stderr_text[:500]}"
-                    else:
-                        yield "❌ OpenClaw 调用失败"
-                    return
-
-                output = process.stdout.strip()
-                if not output:
-                    yield "❌ OpenClaw 未返回内容"
-                    return
-
                 try:
-                    import json
-
-                    parsed = json.loads(output)
-                    result_obj = (
-                        parsed.get("result") if isinstance(parsed, dict) else None
+                    content = await asyncio.to_thread(
+                        run_openclaw_agent,
+                        question,
+                        model=openclaw_config.get("model", "zai/glm-5"),
+                        thinking=str(openclaw_config.get("thinking", "low")),
+                        agent=str(openclaw_config.get("agent", "main")),
                     )
-                    content = ""
-                    if isinstance(result_obj, dict):
-                        content = result_obj.get("text") or ""
-                        if not content and isinstance(result_obj.get("messages"), list):
-                            for message in result_obj["messages"]:
-                                if not isinstance(message, dict):
-                                    continue
-                                if message.get("role") == "assistant" and message.get(
-                                    "content"
-                                ):
-                                    content = str(message.get("content"))
-                                    break
-
-                    if not content and isinstance(parsed, dict):
-                        content = (
-                            parsed.get("response")
-                            or parsed.get("message")
-                            or parsed.get("text")
-                            or ""
-                        )
-
-                    if not content:
-                        content = output
-                except Exception:
-                    content = output
+                except OpenClawBridgeError as exc:
+                    yield f"❌ {str(exc)[:500]}"
+                    return
 
                 yield content
             else:
@@ -1165,74 +1157,12 @@ def generate_qa_answer_with_model(question: str, model: str = "ollama") -> str:
 
         elif model == "openclaw":
             openclaw_config = config.get("openclaw", {})
-            openclaw_model = openclaw_config.get("model", "zai/glm-5")
-            openclaw_thinking = openclaw_config.get("thinking", "low")
-            openclaw_agent = openclaw_config.get("agent", "main")
-
-            command = [
-                "openclaw",
-                "agent",
-                "--local",
-                "--json",
-                "--agent",
-                str(openclaw_agent),
-                "--thinking",
-                str(openclaw_thinking),
-                "--message",
+            return run_openclaw_agent(
                 question,
-            ]
-
-            env = None
-            if openclaw_model:
-                import os
-
-                env = os.environ.copy()
-                env["OPENCLAW_MODEL"] = str(openclaw_model)
-
-            result = subprocess.run(
-                command,
-                capture_output=True,
-                text=True,
-                timeout=120,
-                env=env,
+                model=openclaw_config.get("model", "zai/glm-5"),
+                thinking=str(openclaw_config.get("thinking", "low")),
+                agent=str(openclaw_config.get("agent", "main")),
             )
-
-            if result.returncode != 0:
-                err_text = result.stderr.strip() or "unknown error"
-                raise Exception(f"OpenClaw 调用失败: {err_text}")
-
-            output = result.stdout.strip()
-            if not output:
-                raise Exception("OpenClaw 未返回内容")
-
-            try:
-                parsed = json.loads(output)
-                result_obj = parsed.get("result") if isinstance(parsed, dict) else None
-                answer = ""
-                if isinstance(result_obj, dict):
-                    answer = result_obj.get("text") or ""
-                    if not answer and isinstance(result_obj.get("messages"), list):
-                        for message in result_obj["messages"]:
-                            if not isinstance(message, dict):
-                                continue
-                            if message.get("role") == "assistant" and message.get(
-                                "content"
-                            ):
-                                answer = str(message.get("content"))
-                                break
-                if not answer and isinstance(parsed, dict):
-                    answer = (
-                        parsed.get("response")
-                        or parsed.get("message")
-                        or parsed.get("text")
-                        or ""
-                    )
-                if answer:
-                    return answer.strip()
-            except Exception:
-                pass
-
-            return output
         else:
             raise Exception(f"不支持的模型: {model}")
 
