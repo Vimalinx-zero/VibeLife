@@ -56,7 +56,7 @@ const MAX_PROMPT_TOOLTIP_LENGTH = 40;
 const createWelcomeMessage = (): Message => ({
   id: 'welcome',
   type: 'ai',
-  content: '你好！我是 Wilson，你的 AI 助手。有什么我可以帮你的吗？',
+  content: '你好！我是你的 AI 助手。有什么我可以帮你的吗？',
   timestamp: new Date(),
 });
 
@@ -620,7 +620,7 @@ const AIChatWidget: React.FC = () => {
       window.dispatchEvent(new Event('workbench-todos-refresh'));
 
       if (!isOpenRef.current) {
-        toast.info(`Wilson 已在后台回复：${promptSummary}`, 4200);
+        toast.info(`AI 已在后台回复：${promptSummary}`, 4200);
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '未知错误';
@@ -978,7 +978,7 @@ const AIChatWidget: React.FC = () => {
                   onClick={openChat}
                   onChange={(e) => setInputValue(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder={isOpen ? '输入消息，回车发送...' : '和 Wilson 聊聊...'}
+                  placeholder={isOpen ? '输入消息，回车发送...' : '和 AI 聊聊...'}
                   className="flex-1 bg-transparent border-none focus:ring-0 focus:outline-none text-base text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
                 />
 
