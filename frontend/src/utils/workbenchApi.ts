@@ -11,14 +11,15 @@ import { apiClient } from './api';
 // ========================
 
 export interface Todo {
-  id: number;
+  id: string;
   text: string;
   completed: boolean;
   priority: number;
   subject: string;
   due_date: string | null;
   created_at: string;
-  updated_at: string;
+  completed_at?: string | null;
+  updated_at?: string;
 }
 
 export interface WorkbenchMistake {
@@ -64,7 +65,7 @@ export async function getTodos(completed: boolean | null = null, subject: string
   }
 
   const response = await apiClient.get<Todo[]>(`/workbench/todos?${params.toString()}`);
-  return response.data; // 后端直接返回数组
+  return response.data.filter((todo) => typeof todo.text === 'string' && todo.text.trim().length > 0);
 }
 
 export async function createTodo(
@@ -83,12 +84,12 @@ export async function createTodo(
   return response.data; // 后端返回创建的todo对象
 }
 
-export async function updateTodo(todoId: number, updates: Partial<Todo>): Promise<Todo> {
+export async function updateTodo(todoId: string | number, updates: Partial<Todo>): Promise<Todo> {
   const response = await apiClient.put<Todo>(`/workbench/todos/${todoId}`, updates);
   return response.data; // 后端返回更新后的todo对象
 }
 
-export async function deleteTodo(todoId: number): Promise<void> {
+export async function deleteTodo(todoId: string | number): Promise<void> {
   await apiClient.delete(`/workbench/todos/${todoId}`);
 }
 

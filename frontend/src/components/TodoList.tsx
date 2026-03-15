@@ -2,24 +2,17 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useToast } from "../context/ToastContext";
 import { playClick } from "../utils/audio";
 import ContextMenu from "./ContextMenu";
+import * as workbenchApi from "../utils/workbenchApi";
 
-type WorkbenchTodo = {
-  id: number;
-  text: string;
-  completed: boolean;
-  priority: number;
-  subject: string;
-  due_date: string | null;
-  created_at: string;
-  updated_at: string;
-};
-const LOCAL_TODO_KEY = 'workbench_todos';
+type WorkbenchTodo = workbenchApi.Todo;
+
+const LOCAL_TODO_KEY = "workbench_todos";
 
 interface Todo {
   id: string;
   text: string;
   completed: boolean;
-  priority: 'high' | 'medium' | 'low';
+  priority: "high" | "medium" | "low";
   created_at: string;
 }
 
@@ -40,126 +33,145 @@ const Icons = {
 };
 
 const PRIORITIES = {
-  high: { label: '高', value: 'high', color: 'text-red-500 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-900/20' },
-  medium: { label: '中', value: 'medium', color: 'text-yellow-500 dark:text-yellow-400', bg: 'bg-yellow-50 dark:bg-yellow-900/20' },
-  low: { label: '低', value: 'low', color: 'text-green-500 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-900/20' }
+  high: { label: "高", value: "high", color: "text-red-500 dark:text-red-400", bg: "bg-red-50 dark:bg-red-900/20" },
+  medium: { label: "中", value: "medium", color: "text-yellow-500 dark:text-yellow-400", bg: "bg-yellow-50 dark:bg-yellow-900/20" },
+  low: { label: "低", value: "low", color: "text-green-500 dark:text-green-400", bg: "bg-green-50 dark:bg-green-900/20" }
 };
+
+const priorityMap = { low: 0, medium: 1, high: 2 };
+
+const convertPriority = (priority: number): "high" | "medium" | "low" => {
+  if (priority >= 2) return "high";
+  if (priority === 1) return "medium";
+  return "low";
+};
+
+const sanitizeTodos = (items: WorkbenchTodo[]): WorkbenchTodo[] =>
+  items.filter((item) => typeof item.text === "string" && item.text.trim().length > 0);
 
 /**
  * TodoList - Microsoft To Do Style (Minimalist & Adaptive)
- * Now with priorities and pomodoro tracking!
+ * Uses the authenticated backend API as the single source of truth.
  */
 const TodoList = ({ onTaskSelect }: TodoListProps) => {
   const toast = useToast();
   const [todos, setTodos] = useState<WorkbenchTodo[]>([]);
-  const [inputValue, setInputValue] = useState<string>("");
-  const [selectedPriority, setSelectedPriority] = useState<'high' | 'medium' | 'low'>('medium');
+  const [inputValue, setInputValue] = useState("");
+  const [selectedPriority, setSelectedPriority] = useState<"high" | "medium" | "low">("medium");
   const [contextMenu, setContextMenu] = useState<ContextMenuPosition | null>(null);
   const [contextMenuTarget, setContextMenuTarget] = useState<WorkbenchTodo | null>(null);
-  const [editingTask, setEditingTask] = useState<number | null>(null);
-  const [editText, setEditText] = useState<string>("");
+  const [editingTask, setEditingTask] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
   const todosRef = useRef<WorkbenchTodo[]>([]);
 
-  const persistTodos = useCallback((updater: WorkbenchTodo[] | ((prev: WorkbenchTodo[]) => WorkbenchTodo[])) => {
-    setTodos((prev) => {
-      const next = typeof updater === 'function'
-        ? (updater as (prev: WorkbenchTodo[]) => WorkbenchTodo[])(prev)
-        : updater;
-      localStorage.setItem(LOCAL_TODO_KEY, JSON.stringify(next));
-      return next;
-    });
-  }, []);
-
-  const createLocalTodo = useCallback((text: string, priority: number = 1): WorkbenchTodo => {
-    const now = new Date().toISOString();
-    const id = Date.now() + Math.floor(Math.random() * 1000);
-    return {
-      id,
-      text,
-      completed: false,
-      priority,
-      subject: 'general',
-      due_date: null,
-      created_at: now,
-      updated_at: now,
-    };
-  }, []);
-
-  // Convert WorkbenchTodo to Todo with priority enum
-  const convertPriority = useCallback((priority: number): 'high' | 'medium' | 'low' => {
-    if (priority >= 2) return 'high';
-    if (priority === 1) return 'medium';
-    return 'low';
-  }, []);
-
-  const priorityMap = { low: 0, medium: 1, high: 2 };
+  const loadTodos = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const data = await workbenchApi.getTodos();
+      setTodos(sanitizeTodos(data));
+    } catch (error) {
+      console.error("Failed to load todos:", error);
+      setTodos([]);
+      toast.error("加载任务失败");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [toast]);
 
   useEffect(() => {
-    const saved = localStorage.getItem(LOCAL_TODO_KEY);
-    if (!saved) return;
+    const legacy = localStorage.getItem(LOCAL_TODO_KEY);
+    if (!legacy) {
+      loadTodos();
+      return;
+    }
+
     try {
-      const parsed = JSON.parse(saved) as WorkbenchTodo[];
+      const parsed = JSON.parse(legacy);
       if (Array.isArray(parsed)) {
-        setTodos(parsed);
+        const blankCount = parsed.filter(
+          (item) => !item || typeof item.text !== "string" || item.text.trim().length === 0
+        ).length;
+        if (parsed.length > 100 || blankCount > 0) {
+          localStorage.removeItem(LOCAL_TODO_KEY);
+          console.info("Dropped legacy local todo cache", {
+            total: parsed.length,
+            blankCount,
+          });
+        }
       }
     } catch (error) {
-      console.error('Failed to parse local todos:', error);
+      console.error("Failed to inspect legacy local todos:", error);
+      localStorage.removeItem(LOCAL_TODO_KEY);
     }
-  }, []);
+
+    loadTodos();
+  }, [loadTodos]);
 
   useEffect(() => {
     todosRef.current = todos;
   }, [todos]);
 
-  // Handle global events from WorkbenchPage context menu
   useEffect(() => {
     const handleClearCompleted = async () => {
-      const completed = todosRef.current.filter(t => t.completed);
+      const completed = todosRef.current.filter((t) => t.completed);
       if (completed.length === 0) {
-        toast.info('没有已完成的任务');
+        toast.info("没有已完成的任务");
         return;
       }
 
-      persistTodos((prev) => prev.filter(t => !t.completed));
-      toast.success(`已清除 ${completed.length} 个已完成任务`);
+      try {
+        await workbenchApi.clearCompletedTodos();
+        await loadTodos();
+        toast.success(`已清除 ${completed.length} 个已完成任务`);
+      } catch (error) {
+        console.error("Failed to clear completed todos:", error);
+        toast.error("清除已完成任务失败");
+      }
     };
 
     const handleClearAll = async () => {
       if (todosRef.current.length === 0) {
-        toast.info('没有可清除的任务');
+        toast.info("没有可清除的任务");
         return;
       }
-      if (confirm('确定要清空所有任务吗？')) {
-        persistTodos([]);
-        toast.success('已清空所有任务');
+      if (!confirm("确定要清空所有任务吗？")) {
+        return;
+      }
+
+      try {
+        await workbenchApi.clearAllTodos();
+        await loadTodos();
+        toast.success("已清空所有任务");
+      } catch (error) {
+        console.error("Failed to clear all todos:", error);
+        toast.error("清空任务失败");
       }
     };
 
     const handleQuickAdd = async () => {
       try {
         const text = await navigator.clipboard.readText();
-        if (!text.trim()) {
-          toast.error('剪贴板为空');
-          return;
-        }
-        const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+        const lines = text.split("\n").map((line) => line.trim()).filter(Boolean);
         if (lines.length === 0) {
-          toast.error('剪贴板为空');
+          toast.error("剪贴板为空");
           return;
         }
 
-        const createdTasks = lines.map((line) => createLocalTodo(line, 0));
-        persistTodos((prev) => [...createdTasks.reverse(), ...prev]);
-        toast.success(`已添加 ${createdTasks.length} 个任务`);
-      } catch (e) {
-        toast.error('无法访问剪贴板');
+        await Promise.all(lines.map((line) => workbenchApi.createTodo(line, 0, "general")));
+        await loadTodos();
+        toast.success(`已添加 ${lines.length} 个任务`);
+      } catch (error) {
+        console.error("Failed to quick add todos:", error);
+        toast.error("无法访问剪贴板或创建任务失败");
       }
     };
 
-    const handleClearEvent = (e: CustomEvent<string>) => {
-      if (e.detail === 'todo') {
+    const handleClearEvent = (event: Event) => {
+      const customEvent = event as CustomEvent<string>;
+      if (customEvent.detail === "todo") {
         handleClearAll();
-      } else if (e.detail === 'todo-completed') {
+      } else if (customEvent.detail === "todo-completed") {
         handleClearCompleted();
       }
     };
@@ -169,138 +181,162 @@ const TodoList = ({ onTaskSelect }: TodoListProps) => {
     };
 
     const handleTodosRefresh = () => {
-      const saved = localStorage.getItem(LOCAL_TODO_KEY);
-      if (!saved) {
-        persistTodos([]);
-        return;
-      }
-      try {
-        const parsed = JSON.parse(saved) as WorkbenchTodo[];
-        if (Array.isArray(parsed)) {
-          persistTodos(parsed);
-        }
-      } catch (error) {
-        console.error('Failed to refresh local todos:', error);
-      }
+      loadTodos();
     };
 
-    const handleDirectAddTodo = (event: Event) => {
+    const handleDirectAddTodo = async (event: Event) => {
       const customEvent = event as CustomEvent<{ text?: string }>;
       const text = customEvent.detail?.text?.trim();
-      if (!text) return;
+      if (!text) {
+        return;
+      }
 
-      const localTodo = createLocalTodo(text, 1);
-      persistTodos((prev) => [localTodo, ...prev]);
+      try {
+        await workbenchApi.createTodo(text, 1, "general");
+        await loadTodos();
+      } catch (error) {
+        console.error("Failed to add direct todo:", error);
+        toast.error("添加任务失败");
+      }
     };
 
-    window.addEventListener('workbench-clear', handleClearEvent as EventListener);
-    window.addEventListener('workbench-quick-add', handleQuickAddEvent as EventListener);
-    window.addEventListener('workbench-todos-refresh', handleTodosRefresh as EventListener);
-    window.addEventListener('workbench-direct-add-todo', handleDirectAddTodo as EventListener);
+    window.addEventListener("workbench-clear", handleClearEvent as EventListener);
+    window.addEventListener("workbench-quick-add", handleQuickAddEvent as EventListener);
+    window.addEventListener("workbench-todos-refresh", handleTodosRefresh as EventListener);
+    window.addEventListener("workbench-direct-add-todo", handleDirectAddTodo as EventListener);
 
     return () => {
-      window.removeEventListener('workbench-clear', handleClearEvent as EventListener);
-      window.removeEventListener('workbench-quick-add', handleQuickAddEvent as EventListener);
-      window.removeEventListener('workbench-todos-refresh', handleTodosRefresh as EventListener);
-      window.removeEventListener('workbench-direct-add-todo', handleDirectAddTodo as EventListener);
+      window.removeEventListener("workbench-clear", handleClearEvent as EventListener);
+      window.removeEventListener("workbench-quick-add", handleQuickAddEvent as EventListener);
+      window.removeEventListener("workbench-todos-refresh", handleTodosRefresh as EventListener);
+      window.removeEventListener("workbench-direct-add-todo", handleDirectAddTodo as EventListener);
     };
-  }, [toast, persistTodos, createLocalTodo]);
+  }, [loadTodos, toast]);
 
-  const addTask = () => {
-    if (!inputValue.trim()) return;
+  const addTask = async () => {
+    const text = inputValue.trim();
+    if (!text) {
+      return;
+    }
+
     playClick();
-    const newTask = createLocalTodo(inputValue.trim(), priorityMap[selectedPriority] || 1);
-    persistTodos((prev) => [newTask, ...prev]);
-    setInputValue("");
-  };
-
-  const toggleTask = (id: number) => {
-    playClick();
-    persistTodos((prev) => prev.map((todo) =>
-      todo.id === id
-        ? { ...todo, completed: !todo.completed, updated_at: new Date().toISOString() }
-        : todo
-    ));
-  };
-
-  const deleteTask = (id: number) => {
-    persistTodos((prev) => prev.filter((todo) => todo.id !== id));
-    toast.info('任务已删除');
-  };
-
-  const selectTask = (task: WorkbenchTodo) => {
-    if (onTaskSelect) {
-      // Convert to Todo format for callback
-      const todo: Todo = {
-        id: task.id.toString(),
-        text: task.text,
-        completed: task.completed,
-        priority: convertPriority(task.priority),
-        created_at: task.created_at
-      };
-      onTaskSelect(todo);
-      toast.info(`已选择任务: ${task.text}`);
+    try {
+      await workbenchApi.createTodo(text, priorityMap[selectedPriority] || 1, "general");
+      await loadTodos();
+      setInputValue("");
+    } catch (error) {
+      console.error("Failed to create todo:", error);
+      toast.error("创建任务失败");
     }
   };
 
-  // Context menu handlers
+  const toggleTask = async (id: string) => {
+    playClick();
+    const todo = todosRef.current.find((item) => item.id === id);
+    if (!todo) {
+      return;
+    }
+
+    try {
+      await workbenchApi.updateTodo(id, { completed: !todo.completed });
+      await loadTodos();
+    } catch (error) {
+      console.error("Failed to update todo:", error);
+      toast.error("更新任务失败");
+    }
+  };
+
+  const deleteTask = async (id: string) => {
+    try {
+      await workbenchApi.deleteTodo(id);
+      await loadTodos();
+      toast.info("任务已删除");
+    } catch (error) {
+      console.error("Failed to delete todo:", error);
+      toast.error("删除任务失败");
+    }
+  };
+
+  const selectTask = (task: WorkbenchTodo) => {
+    if (!onTaskSelect) {
+      return;
+    }
+
+    onTaskSelect({
+      id: task.id,
+      text: task.text,
+      completed: task.completed,
+      priority: convertPriority(task.priority),
+      created_at: task.created_at,
+    });
+    toast.info(`已选择任务: ${task.text}`);
+  };
+
   const closeContextMenu = () => {
     setContextMenu(null);
     setContextMenuTarget(null);
   };
 
-  const handleItemContextMenu = (e: React.MouseEvent, todo: WorkbenchTodo) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setContextMenu({ x: e.clientX, y: e.clientY });
+  const handleItemContextMenu = (event: React.MouseEvent, todo: WorkbenchTodo) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setContextMenu({ x: event.clientX, y: event.clientY });
     setContextMenuTarget(todo);
   };
 
-  const handleContextMenuAction = (action: string) => {
-    if (!contextMenuTarget) return;
-
-    switch (action) {
-      case 'delete':
-        deleteTask(contextMenuTarget.id);
-        break;
-      case 'edit':
-        setEditingTask(contextMenuTarget.id);
-        setEditText(contextMenuTarget.text);
-        break;
-      case 'duplicate': {
-        const newTask: WorkbenchTodo = {
-          ...contextMenuTarget,
-          id: Date.now() + Math.floor(Math.random() * 1000),
-          completed: false,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-        persistTodos(prev => [newTask, ...prev]);
-        toast.success('任务已复制');
-        break;
-      }
-      case 'toggleComplete':
-        toggleTask(contextMenuTarget.id);
-        break;
-    }
-    closeContextMenu();
-  };
-
-  const saveEdit = () => {
-    if (!editText.trim()) {
-      toast.error('任务内容不能为空');
+  const handleContextMenuAction = async (action: string) => {
+    if (!contextMenuTarget) {
       return;
     }
-    if (!editingTask) return;
 
-    persistTodos((prev) => prev.map((todo) =>
-      todo.id === editingTask
-        ? { ...todo, text: editText.trim(), updated_at: new Date().toISOString() }
-        : todo
-    ));
-    setEditingTask(null);
-    setEditText("");
-    toast.success('任务已更新');
+    try {
+      switch (action) {
+        case "delete":
+          await deleteTask(contextMenuTarget.id);
+          break;
+        case "edit":
+          setEditingTask(contextMenuTarget.id);
+          setEditText(contextMenuTarget.text);
+          break;
+        case "duplicate":
+          await workbenchApi.createTodo(
+            contextMenuTarget.text,
+            contextMenuTarget.priority,
+            contextMenuTarget.subject,
+            contextMenuTarget.due_date ?? null
+          );
+          await loadTodos();
+          toast.success("任务已复制");
+          break;
+        case "toggleComplete":
+          await toggleTask(contextMenuTarget.id);
+          break;
+      }
+    } finally {
+      closeContextMenu();
+    }
+  };
+
+  const saveEdit = async () => {
+    const text = editText.trim();
+    if (!text) {
+      toast.error("任务内容不能为空");
+      return;
+    }
+    if (!editingTask) {
+      return;
+    }
+
+    try {
+      await workbenchApi.updateTodo(editingTask, { text });
+      await loadTodos();
+      setEditingTask(null);
+      setEditText("");
+      toast.success("任务已更新");
+    } catch (error) {
+      console.error("Failed to save todo edit:", error);
+      toast.error("更新任务失败");
+    }
   };
 
   const cancelEdit = () => {
@@ -308,41 +344,37 @@ const TodoList = ({ onTaskSelect }: TodoListProps) => {
     setEditText("");
   };
 
-  // Sort: Incomplete first, then by priority
   const sortedTodos = useMemo(() => {
     const priorityWeight = { high: 3, medium: 2, low: 1 };
     return [...todos].sort((a, b) => {
-      if (a.completed !== b.completed) return a.completed ? 1 : -1;
-      const aPriority = convertPriority(a.priority);
-      const bPriority = convertPriority(b.priority);
-      return priorityWeight[bPriority] - priorityWeight[aPriority];
+      if (a.completed !== b.completed) {
+        return a.completed ? 1 : -1;
+      }
+      return priorityWeight[convertPriority(b.priority)] - priorityWeight[convertPriority(a.priority)];
     });
-  }, [todos, convertPriority]);
+  }, [todos]);
 
   return (
     <div className="flex flex-col h-full">
-
-      {/* Header / Input Area (Adaptive Semi-Transparent) */}
       <div className="mb-4">
-        <div className="relative group" onContextMenu={(e) => e.stopPropagation()}>
+        <div className="relative group" onContextMenu={(event) => event.stopPropagation()}>
           <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 group-focus-within:text-indigo-500 dark:group-focus-within:text-indigo-400 transition-colors">
             <Icons.Plus />
           </div>
           <input
             type="text"
             value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && addTask()}
+            onChange={(event) => setInputValue(event.target.value)}
+            onKeyDown={(event) => event.key === "Enter" && addTask()}
             placeholder="添加新任务..."
             className="w-full bg-gray-100/50 dark:bg-[#252525]/50 hover:bg-gray-100/80 dark:hover:bg-[#2a2a2a]/80 focus:bg-white dark:focus:bg-[#2a2a2a] text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 pl-12 pr-24 py-4 rounded-xl outline-none transition-colors border border-transparent focus:border-indigo-500/30 dark:focus:border-white/10"
           />
 
-          {/* Priority Selector */}
           <select
             value={selectedPriority}
-            onChange={(e) => {
-              const value = e.target.value;
-              if (value === 'high' || value === 'medium' || value === 'low') {
+            onChange={(event) => {
+              const value = event.target.value;
+              if (value === "high" || value === "medium" || value === "low") {
                 setSelectedPriority(value);
               }
             }}
@@ -355,82 +387,94 @@ const TodoList = ({ onTaskSelect }: TodoListProps) => {
         </div>
       </div>
 
-      {/* List Area */}
-       <div className="flex-1 overflow-y-auto custom-scrollbar -mr-2 pr-2">
-         <div className="space-y-1">
-           {sortedTodos.map(todo => {
-             const priority = PRIORITIES[convertPriority(todo.priority)] || PRIORITIES.medium;
-             const isEditing = editingTask === todo.id;
-            return (
-              <div
-                key={todo.id}
-                data-todo-item="true"
-                onContextMenu={(e) => handleItemContextMenu(e, todo)}
-                className="group flex items-center gap-3 p-3 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
-              >
-                {/* Checkbox Circle */}
-                <button
-                  onClick={(e) => { e.stopPropagation(); toggleTask(todo.id); }}
-                  className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all flex-shrink-0 ${
+      <div className="flex-1 overflow-y-auto custom-scrollbar -mr-2 pr-2">
+        <div className="space-y-1">
+          {isLoading ? (
+            <div className="text-center text-gray-400 dark:text-gray-600 text-sm mt-10">
+              加载中...
+            </div>
+          ) : (
+            sortedTodos.map((todo) => {
+              const priority = PRIORITIES[convertPriority(todo.priority)] || PRIORITIES.medium;
+              const isEditing = editingTask === todo.id;
+              return (
+                <div
+                  key={todo.id}
+                  data-todo-item="true"
+                  onContextMenu={(event) => handleItemContextMenu(event, todo)}
+                  className="group flex items-center gap-3 p-3 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                >
+                  <button
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      toggleTask(todo.id);
+                    }}
+                    className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all flex-shrink-0 ${
                       todo.completed
-                        ? 'bg-indigo-500 border-indigo-500 text-white'
-                        : 'border-gray-400 dark:border-gray-500 hover:border-indigo-500 dark:hover:border-indigo-400 bg-transparent'
-                  }`}
-                >
-                  {todo.completed && <Icons.Check />}
-                </button>
-
-                {/* Content */}
-                {isEditing ? (
-                  <div className="flex-1 flex items-center gap-2" onContextMenu={(e) => e.stopPropagation()}>
-                    <input
-                      type="text"
-                      value={editText}
-                      onChange={(e) => setEditText(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') saveEdit();
-                        if (e.key === 'Escape') cancelEdit();
-                      }}
-                      autoFocus
-                      className="flex-1 text-sm bg-white dark:bg-[#2a2a2a] text-gray-900 dark:text-white px-2 py-1 rounded outline-none border border-indigo-500/30"
-                    />
-                    <button onClick={(e) => { e.stopPropagation(); saveEdit(); }} className="text-xs text-green-500 hover:text-green-600 dark:text-green-400 px-1">✓</button>
-                    <button onClick={(e) => { e.stopPropagation(); cancelEdit(); }} className="text-xs text-gray-400 hover:text-gray-600 px-1">✕</button>
-                  </div>
-                ) : (
-                  <div
-                    className="flex-1 min-w-0 cursor-pointer"
-                    onClick={(e) => { e.stopPropagation(); !todo.completed && selectTask(todo); }}
+                        ? "bg-indigo-500 border-indigo-500 text-white"
+                        : "border-gray-400 dark:border-gray-500 hover:border-indigo-500 dark:hover:border-indigo-400 bg-transparent"
+                    }`}
                   >
-                    <span className={`text-sm font-medium block ${
+                    {todo.completed && <Icons.Check />}
+                  </button>
+
+                  {isEditing ? (
+                    <div className="flex-1 flex items-center gap-2" onContextMenu={(event) => event.stopPropagation()}>
+                      <input
+                        type="text"
+                        value={editText}
+                        onChange={(event) => setEditText(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") void saveEdit();
+                          if (event.key === "Escape") cancelEdit();
+                        }}
+                        autoFocus
+                        className="flex-1 text-sm bg-white dark:bg-[#2a2a2a] text-gray-900 dark:text-white px-2 py-1 rounded outline-none border border-indigo-500/30"
+                      />
+                      <button onClick={(event) => { event.stopPropagation(); void saveEdit(); }} className="text-xs text-green-500 hover:text-green-600 dark:text-green-400 px-1">✓</button>
+                      <button onClick={(event) => { event.stopPropagation(); cancelEdit(); }} className="text-xs text-gray-400 hover:text-gray-600 px-1">✕</button>
+                    </div>
+                  ) : (
+                    <div
+                      className="flex-1 min-w-0 cursor-pointer"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (!todo.completed) {
+                          selectTask(todo);
+                        }
+                      }}
+                    >
+                      <span className={`text-sm font-medium block ${
                         todo.completed
-                          ? 'text-gray-400 dark:text-gray-500 line-through decoration-gray-400 dark:decoration-gray-600'
-                          : 'text-gray-700 dark:text-gray-200'
-                    }`}>
-                      {todo.text}
-                    </span>
-
-                    {/* Priority Badge */}
-                    {!todo.completed && (
-                      <span className={`inline-block mt-1 text-[10px] px-1.5 py-0.5 rounded ${priority.bg} ${priority.color}`}>
-                        {priority.label}
+                          ? "text-gray-400 dark:text-gray-500 line-through decoration-gray-400 dark:decoration-gray-600"
+                          : "text-gray-700 dark:text-gray-200"
+                      }`}>
+                        {todo.text}
                       </span>
-                    )}
-                  </div>
-                )}
 
-                {/* Actions */}
-                <button
-                  onClick={(e) => { e.stopPropagation(); deleteTask(todo.id); }}
-                  className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 transition-opacity px-2 flex-shrink-0"
-                >
-                  <Icons.Trash />
-                </button>
-              </div>
-            );
-          })}
+                      {!todo.completed && (
+                        <span className={`inline-block mt-1 text-[10px] px-1.5 py-0.5 rounded ${priority.bg} ${priority.color}`}>
+                          {priority.label}
+                        </span>
+                      )}
+                    </div>
+                  )}
 
-          {todos.length === 0 && (
+                  <button
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void deleteTask(todo.id);
+                    }}
+                    className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 transition-opacity px-2 flex-shrink-0"
+                  >
+                    <Icons.Trash />
+                  </button>
+                </div>
+              );
+            })
+          )}
+
+          {!isLoading && todos.length === 0 && (
             <div className="text-center text-gray-400 dark:text-gray-600 text-sm mt-10">
               还没有任务，享受美好的一天！
             </div>
@@ -438,38 +482,36 @@ const TodoList = ({ onTaskSelect }: TodoListProps) => {
         </div>
       </div>
 
-      {/* Context Menu for individual tasks */}
       <ContextMenu position={contextMenu} onClose={closeContextMenu}>
         <button
-          onClick={() => handleContextMenuAction('edit')}
+          onClick={() => void handleContextMenuAction("edit")}
           className="w-full text-left px-4 py-3 text-sm hover:bg-gray-100 dark:hover:bg-white/5 transition-colors flex items-center gap-3 text-gray-700 dark:text-gray-300"
         >
           <Icons.Edit />
           <span>编辑任务</span>
         </button>
         <button
-          onClick={() => handleContextMenuAction('duplicate')}
+          onClick={() => void handleContextMenuAction("duplicate")}
           className="w-full text-left px-4 py-3 text-sm hover:bg-gray-100 dark:hover:bg-white/5 transition-colors flex items-center gap-3 text-gray-700 dark:text-gray-300"
         >
           <Icons.Plus />
           <span>复制任务</span>
         </button>
         <button
-          onClick={() => handleContextMenuAction('toggleComplete')}
+          onClick={() => void handleContextMenuAction("toggleComplete")}
           className="w-full text-left px-4 py-3 text-sm hover:bg-gray-100 dark:hover:bg-white/5 transition-colors flex items-center gap-3 text-gray-700 dark:text-gray-300"
         >
           <Icons.Check />
-          <span>{contextMenuTarget?.completed ? '标记为未完成' : '标记为已完成'}</span>
+          <span>{contextMenuTarget?.completed ? "标记为未完成" : "标记为已完成"}</span>
         </button>
         <button
-          onClick={() => handleContextMenuAction('delete')}
+          onClick={() => void handleContextMenuAction("delete")}
           className="w-full text-left px-4 py-3 text-sm hover:bg-gray-100 dark:hover:bg-white/5 transition-colors flex items-center gap-3 text-red-600 dark:text-red-400"
         >
           <Icons.Trash />
           <span>删除任务</span>
         </button>
       </ContextMenu>
-
     </div>
   );
 };

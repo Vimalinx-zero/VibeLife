@@ -15,6 +15,12 @@ const PRIORITIES = {
   low: { label: '低', value: 'low', color: 'text-green-500 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-900/20' }
 };
 
+const convertPriority = (priority: number): keyof typeof PRIORITIES => {
+  if (priority >= 2) return 'high';
+  if (priority === 1) return 'medium';
+  return 'low';
+};
+
 /**
  * TodayTodos - 今日待办（精简版，用于Dashboard）
  */
@@ -23,30 +29,37 @@ const TodayTodos = () => {
   const [todos, setTodos] = useState<Todo[]>([]);
   const [completedCount, setCompletedCount] = useState(0);
   const [inputValue, setInputValue] = useState("");
-  const [selectedPriority, setSelectedPriority] = useState('medium');
+  const [selectedPriority, setSelectedPriority] = useState<keyof typeof PRIORITIES>('medium');
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load todos from API
-  useEffect(() => {
-    const loadTodos = async () => {
-      try {
-        setIsLoading(true);
-        const data = await workbenchApi.getTodos(false); // 只获取未完成的
-        setTodos(data.slice(0, 5)); // 只显示前5个
+  const loadTodos = async () => {
+    try {
+      setIsLoading(true);
+      const data = await workbenchApi.getTodos(false);
+      setTodos(data.slice(0, 5));
 
-        // Load completed count
-        const completed = await workbenchApi.getTodos(true);
-        setCompletedCount(completed.length);
-      } catch (error) {
-        console.error('Failed to load todos:', error);
-        setTodos([]);
-        setCompletedCount(0);
-      } finally {
-        setIsLoading(false);
-      }
+      const completed = await workbenchApi.getTodos(true);
+      setCompletedCount(completed.length);
+    } catch (error) {
+      console.error('Failed to load todos:', error);
+      setTodos([]);
+      setCompletedCount(0);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadTodos();
+
+    const handleRefresh = () => {
+      loadTodos();
     };
 
-    loadTodos();
+    window.addEventListener('workbench-todos-refresh', handleRefresh);
+    return () => {
+      window.removeEventListener('workbench-todos-refresh', handleRefresh);
+    };
   }, []);
 
   const addTask = async () => {
@@ -54,15 +67,14 @@ const TodayTodos = () => {
 
     try {
       const priorityMap = { low: 0, medium: 1, high: 2 };
-      const newTask = await workbenchApi.createTodo(
+      await workbenchApi.createTodo(
         inputValue.trim(),
         priorityMap[selectedPriority] || 1,
         'today'
       );
 
       // Reload todos from server
-      const updated = await workbenchApi.getTodos(false);
-      setTodos(updated.slice(0, 5));
+      await loadTodos();
       setInputValue("");
       toast.success('已添加任务');
     } catch (error) {
@@ -71,29 +83,23 @@ const TodayTodos = () => {
     }
   };
 
-  const toggleTask = async (id) => {
+  const toggleTask = async (id: string) => {
     try {
       const todo = todos.find(t => t.id === id);
       if (!todo) return;
 
       await workbenchApi.updateTodo(id, { completed: !todo.completed });
-
-      // Reload todos from server
-      const updated = await workbenchApi.getTodos(false);
-      setTodos(updated.slice(0, 5));
+      await loadTodos();
     } catch (error) {
       console.error('Failed to toggle task:', error);
       toast.error('更新任务失败');
     }
   };
 
-  const deleteTask = async (id) => {
+  const deleteTask = async (id: string) => {
     try {
       await workbenchApi.deleteTodo(id);
-
-      // Reload todos from server
-      const updated = await workbenchApi.getTodos(false);
-      setTodos(updated.slice(0, 5));
+      await loadTodos();
       toast.info('任务已删除');
     } catch (error) {
       console.error('Failed to delete task:', error);
@@ -104,7 +110,7 @@ const TodayTodos = () => {
   // Sort: By priority first, then by time
   const sortedTodos = [...todos].sort((a, b) => {
     const priorityWeight = { high: 3, medium: 2, low: 1 };
-    return priorityWeight[b.priority] - priorityWeight[a.priority];
+    return priorityWeight[convertPriority(b.priority)] - priorityWeight[convertPriority(a.priority)];
   });
 
   return (
@@ -134,7 +140,7 @@ const TodayTodos = () => {
           {/* Priority Selector */}
           <select
             value={selectedPriority}
-            onChange={(e) => setSelectedPriority(e.target.value)}
+            onChange={(e) => setSelectedPriority(e.target.value as keyof typeof PRIORITIES)}
             className="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 text-xs rounded-lg bg-white/50 dark:bg-[#252525]/50 border border-gray-200 dark:border-white/10 text-gray-600 dark:text-gray-400 outline-none cursor-pointer hover:bg-white dark:hover:bg-[#2a2a2a] transition-colors"
           >
             <option value="high">高</option>
@@ -156,7 +162,7 @@ const TodayTodos = () => {
           </div>
         ) : (
           sortedTodos.map(todo => {
-            const priority = PRIORITIES[todo.priority] || PRIORITIES.medium;
+            const priority = PRIORITIES[convertPriority(todo.priority)] || PRIORITIES.medium;
             return (
               <div
                 key={todo.id}

@@ -9,25 +9,94 @@ interface Message {
   timestamp: Date;
 }
 
+interface StoredMessage {
+  id: string;
+  type: 'user' | 'ai';
+  content: string;
+  timestamp: string;
+}
+
+const MAX_HISTORY_MESSAGES = 50;
+
+const createWelcomeMessage = (): Message => ({
+  id: 'welcome',
+  type: 'ai',
+  content: '你好！我是 Wilson，你的 AI 助手。有什么我可以帮你的吗？',
+  timestamp: new Date(),
+});
+
+const getHistoryStorageKey = (userId: string | undefined) =>
+  userId ? `vibelife_ai_chat_history:${userId}` : null;
+
+const parseStoredMessages = (raw: string | null): Message[] => {
+  if (!raw) {
+    return [createWelcomeMessage()];
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as StoredMessage[];
+    const messages = parsed
+      .filter(
+        (message) =>
+          message &&
+          (message.type === 'user' || message.type === 'ai') &&
+          typeof message.content === 'string' &&
+          message.content.trim().length > 0 &&
+          typeof message.timestamp === 'string'
+      )
+      .map((message) => ({
+        ...message,
+        timestamp: new Date(message.timestamp),
+      }))
+      .filter((message) => !Number.isNaN(message.timestamp.getTime()));
+
+    return messages.length > 0 ? messages.slice(-MAX_HISTORY_MESSAGES) : [createWelcomeMessage()];
+  } catch (error) {
+    console.error('Failed to parse AI chat history:', error);
+    return [createWelcomeMessage()];
+  }
+};
+
 const AIChatWidget: React.FC = () => {
-  const { token, loading, logout } = useAuth();
+  const { token, user, loading, logout } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [isDockHovered, setIsDockHovered] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      type: 'ai',
-      content: '你好！我是 Wilson，你的 AI 助手。有什么我可以帮你的吗？',
-      timestamp: new Date(),
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>(() => [createWelcomeMessage()]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [hasLoadedHistory, setHasLoadedHistory] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dockRef = useRef<HTMLDivElement>(null);
   const chatCanvasRef = useRef<HTMLDivElement>(null);
+  const loadedHistoryKeyRef = useRef<string | null>(null);
   const shouldShowDock = isDockHovered || isOpen;
+  const historyStorageKey = getHistoryStorageKey(user?.id);
+
+  useEffect(() => {
+    if (!historyStorageKey) {
+      setMessages([createWelcomeMessage()]);
+      setHasLoadedHistory(false);
+      loadedHistoryKeyRef.current = null;
+      return;
+    }
+
+    setMessages(parseStoredMessages(localStorage.getItem(historyStorageKey)));
+    loadedHistoryKeyRef.current = historyStorageKey;
+    setHasLoadedHistory(true);
+  }, [historyStorageKey]);
+
+  useEffect(() => {
+    if (!historyStorageKey || !hasLoadedHistory || loadedHistoryKeyRef.current !== historyStorageKey) {
+      return;
+    }
+
+    const serialized: StoredMessage[] = messages.slice(-MAX_HISTORY_MESSAGES).map((message) => ({
+      ...message,
+      timestamp: message.timestamp.toISOString(),
+    }));
+    localStorage.setItem(historyStorageKey, JSON.stringify(serialized));
+  }, [hasLoadedHistory, historyStorageKey, messages]);
 
   useEffect(() => {
     if (messages.length === 0) {
@@ -94,15 +163,15 @@ const AIChatWidget: React.FC = () => {
       return;
     }
 
+    const userInput = inputValue.trim();
     const userMessage: Message = {
       id: Date.now().toString(),
       type: 'user',
-      content: inputValue,
+      content: userInput,
       timestamp: new Date(),
     };
 
-    setMessages(prev => [...prev, userMessage]);
-    const userInput = inputValue;
+    setMessages(prev => [...prev, userMessage].slice(-MAX_HISTORY_MESSAGES));
     setInputValue('');
     setIsTyping(true);
 
@@ -141,18 +210,20 @@ const AIChatWidget: React.FC = () => {
             : '我这次没有拿到可用回复。',
         timestamp: new Date(),
       };
-      setMessages(prev => [...prev, aiMessage]);
+      setMessages(prev => [...prev, aiMessage].slice(-MAX_HISTORY_MESSAGES));
+      window.dispatchEvent(new Event('workbench-todos-refresh'));
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '未知错误';
+      const failureMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        type: 'ai',
+        content: `抱歉，这次没有连上 AI：${errorMessage}`,
+        timestamp: new Date(),
+      };
       setMessages(prev => [
         ...prev,
-        {
-          id: (Date.now() + 1).toString(),
-          type: 'ai',
-          content: `抱歉，这次没有连上 AI：${errorMessage}`,
-          timestamp: new Date(),
-        },
-      ]);
+        failureMessage,
+      ].slice(-MAX_HISTORY_MESSAGES));
     } finally {
       setIsTyping(false);
     }

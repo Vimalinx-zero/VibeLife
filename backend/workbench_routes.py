@@ -23,12 +23,30 @@ class TodoItemCreate(pydantic.BaseModel):
     subject: str = "general"
     due_date: Optional[str] = None
 
+    @pydantic.field_validator("text")
+    @classmethod
+    def validate_text(cls, value: str) -> str:
+        text = value.strip()
+        if not text:
+            raise ValueError("Todo text cannot be empty")
+        return text
+
 class TodoItemUpdate(pydantic.BaseModel):
     text: Optional[str] = None
     completed: Optional[bool] = None
     priority: Optional[int] = None
     subject: Optional[str] = None
     due_date: Optional[str] = None
+
+    @pydantic.field_validator("text")
+    @classmethod
+    def validate_text(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        text = value.strip()
+        if not text:
+            raise ValueError("Todo text cannot be empty")
+        return text
 
 class WorkbenchMistakeCreate(pydantic.BaseModel):
     content: str  # 格式：P12T3 注释内容
@@ -72,7 +90,7 @@ async def get_todos(
         "created_at": t.created_at,
         "completed_at": t.completed_at,
         "due_date": t.due_date
-    } for t in todos]
+    } for t in todos if isinstance(t.text, str) and t.text.strip()]
 
 @router.post("/api/workbench/todos")
 async def create_todo(
@@ -175,6 +193,7 @@ async def delete_todo(
     return {"success": True, "message": "Todo deleted"}
 
 @router.delete("/api/workbench/todos")
+@router.delete("/api/workbench/todos/completed")
 async def clear_completed_todos(
     current_user_id: str = Depends(get_current_user_id),
     db: Session = Depends(get_db)
