@@ -117,12 +117,6 @@ const ProjectsPage = () => {
   }, [activeCategory, categoryOrder]);
 
   useEffect(() => {
-    if (selectedProject && selectedProject.category !== activeCategory) {
-      setActiveCategory(selectedProject.category);
-    }
-  }, [activeCategory, selectedProject]);
-
-  useEffect(() => {
     if (!selectedProjectKey || !selectedProjectName) {
       setProjectNotes([]);
       return;
@@ -202,8 +196,9 @@ const ProjectsPage = () => {
     }));
   }, [selectedProject]);
 
-  const openProject = (projectId: string) => {
-    setSelectedProjectId(projectId);
+  const openProject = (project: ProjectRecord) => {
+    setSelectedProjectId(project.id);
+    setActiveCategory(project.category);
     setActiveTab("mindmap");
   };
 
@@ -257,7 +252,7 @@ const ProjectsPage = () => {
                 <button
                   key={project.id}
                   type="button"
-                  onClick={() => openProject(project.id)}
+                  onClick={() => openProject(project)}
                   className={`w-full text-left rounded-xl border px-3 py-2 transition-colors ${
                     selectedProject?.id === project.id
                       ? "border-indigo-400 bg-indigo-500/10"
