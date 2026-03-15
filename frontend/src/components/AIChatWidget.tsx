@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useAuth } from '../context/AuthContext';
 
 interface Message {
   id: string;
@@ -9,6 +10,7 @@ interface Message {
 }
 
 const AIChatWidget: React.FC = () => {
+  const { token, loading, logout } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [isDockHovered, setIsDockHovered] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
@@ -85,7 +87,12 @@ const AIChatWidget: React.FC = () => {
   }, [isOpen]);
 
   const handleSend = async () => {
-    if (!inputValue.trim() || isTyping) return;
+    if (!inputValue.trim() || isTyping || loading) return;
+
+    if (!token) {
+      logout();
+      return;
+    }
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -100,12 +107,11 @@ const AIChatWidget: React.FC = () => {
     setIsTyping(true);
 
     try {
-      const token = localStorage.getItem('token');
       const response = await fetch(`${window.__VIBELIFE_API_ORIGIN__}/api/ai/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           message: userInput,
@@ -119,6 +125,10 @@ const AIChatWidget: React.FC = () => {
 
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
+        if (response.status === 401) {
+          logout();
+          return;
+        }
         throw new Error(payload?.detail || 'AI 请求失败');
       }
 
@@ -308,7 +318,7 @@ const AIChatWidget: React.FC = () => {
                     <button
                       type="button"
                       onClick={handleSend}
-                      disabled={!inputValue.trim() || isTyping}
+                      disabled={!inputValue.trim() || isTyping || loading}
                       className="px-5 py-2.5 rounded-full bg-indigo-500 hover:bg-indigo-600 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
                     >
                       发送

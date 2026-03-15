@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
 import { lazy, Suspense } from "react";
 import TopBar from "./components/TopBar";
 import SettingsModal from "./components/SettingsModal";
@@ -7,9 +7,11 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider, useTheme } from "./context/ThemeContext";
 import { ToastProvider } from "./context/ToastContext";
 import { MediaProvider } from "./context/MediaContext";
-import { AuthProvider } from "./context/AuthContext";
+import { AuthProvider, useAuth } from "./context/AuthContext";
 import LoadingScreen from "./components/LoadingScreen";
 import AIChatWidget from "./components/AIChatWidget";
+import LoginPage from "./pages/LoginPage";
+import RegisterPage from "./pages/RegisterPage";
 
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const NotesPage = lazy(() => import("./pages/NotesPage"));
@@ -17,6 +19,47 @@ const WorkbenchPage = lazy(() => import("./pages/WorkbenchPage"));
 const ProjectsPage = lazy(() => import("./pages/ProjectsPage"));
 const QuickCapturePage = lazy(() => import("./pages/QuickCapturePage"));
 const SchedulePage = lazy(() => import("./pages/SchedulePage"));
+
+const RequireAuth = () => {
+  const { loading, isAuthenticated } = useAuth();
+  const location = useLocation();
+
+  if (loading) {
+    return <LoadingScreen />;
+  }
+
+  if (!isAuthenticated()) {
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
+
+  return <Outlet />;
+};
+
+const RequireGuest = () => {
+  const { loading, isAuthenticated } = useAuth();
+
+  if (loading) {
+    return <LoadingScreen />;
+  }
+
+  if (isAuthenticated()) {
+    return <Navigate to="/" replace />;
+  }
+
+  return <Outlet />;
+};
+
+const AuthenticatedLayout = () => (
+  <>
+    <GlobalShortcuts />
+    <SettingsModal />
+    <TopBar />
+    <Suspense fallback={<LoadingScreen />}>
+      <Outlet />
+    </Suspense>
+    <AIChatWidget />
+  </>
+);
 
 const AppContent = () => {
   const { background, isDark } = useTheme();
@@ -34,35 +77,35 @@ const AppContent = () => {
           ${isDark ? 'bg-black/50' : 'bg-white/30 mix-blend-overlay'}`}
       />
 
-      {/* ✅ 新增：在这里挂载 SettingsModal，它会悬浮在所有内容之上 */}
-      <SettingsModal />
-
       {/* 内容层 */}
       <div className="relative z-10">
         <BrowserRouter>
-            <GlobalShortcuts />
-            <TopBar />
-            <Suspense fallback={<LoadingScreen />}>
-                <Routes>
-                    <Route path="/" element={<Dashboard />} />
-                    <Route path="/notes" element={<NotesPage />} />
-                    <Route path="/workbench" element={<WorkbenchPage />} />
-                    <Route path="/projects" element={<ProjectsPage />} />
-                    <Route path="/quick-capture" element={<QuickCapturePage />} />
-                    <Route path="/schedule" element={<SchedulePage />} />
-                    <Route path="/quiz" element={<Navigate to="/" replace />} />
-                    <Route path="/mistakes" element={<Navigate to="/" replace />} />
-                    <Route path="/anki" element={<Navigate to="/" replace />} />
-                    <Route path="/anki/*" element={<Navigate to="/" replace />} />
-                    <Route path="/ai-import" element={<Navigate to="/" replace />} />
-                    <Route path="/data-management" element={<Navigate to="/" replace />} />
-                    <Route path="*" element={<Navigate to="/" replace />} />
-                </Routes>
-            </Suspense>
-        </BrowserRouter>
+          <Routes>
+            <Route element={<RequireGuest />}>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/register" element={<RegisterPage />} />
+            </Route>
 
-        {/* 全局 AI 对话组件 */}
-        <AIChatWidget />
+            <Route element={<RequireAuth />}>
+              <Route element={<AuthenticatedLayout />}>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/notes" element={<NotesPage />} />
+                <Route path="/workbench" element={<WorkbenchPage />} />
+                <Route path="/projects" element={<ProjectsPage />} />
+                <Route path="/quick-capture" element={<QuickCapturePage />} />
+                <Route path="/schedule" element={<SchedulePage />} />
+                <Route path="/quiz" element={<Navigate to="/" replace />} />
+                <Route path="/mistakes" element={<Navigate to="/" replace />} />
+                <Route path="/anki" element={<Navigate to="/" replace />} />
+                <Route path="/anki/*" element={<Navigate to="/" replace />} />
+                <Route path="/ai-import" element={<Navigate to="/" replace />} />
+                <Route path="/data-management" element={<Navigate to="/" replace />} />
+              </Route>
+            </Route>
+
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </BrowserRouter>
       </div>
     </div>
   );
