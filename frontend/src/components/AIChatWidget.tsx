@@ -384,17 +384,6 @@ const AIChatWidget: React.FC = () => {
     });
   };
 
-  const handleMessagesWheel = (event: React.WheelEvent<HTMLDivElement>) => {
-    const viewport = messagesViewportRef.current;
-    if (!viewport) {
-      return;
-    }
-
-    event.preventDefault();
-    viewport.scrollTop += event.deltaY;
-    syncPagerState();
-  };
-
   return (
     <>
       <AnimatePresence>
@@ -422,7 +411,6 @@ const AIChatWidget: React.FC = () => {
             <div
               ref={chatCanvasRef}
               className="relative h-full w-full max-w-5xl pointer-events-auto"
-              onWheel={handleMessagesWheel}
             >
               <div
                 data-chat-control="true"
