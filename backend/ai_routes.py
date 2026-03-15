@@ -25,6 +25,143 @@ from openclaw_bridge import (
 
 router = APIRouter()
 
+
+def _is_daily_planning_request(message: str) -> bool:
+    normalized = " ".join(str(message).split()).lower()
+    if not normalized:
+        return False
+
+    keywords = [
+        "今天的日程",
+        "今日安排",
+        "今日计划",
+        "今天计划",
+        "今天要干嘛",
+        "今天都要干嘛",
+        "规划一下今天",
+        "安排一下今天",
+        "今日规划",
+    ]
+    return any(keyword in normalized for keyword in keywords)
+
+
+def _build_daily_plan_reply(db: Session, current_user_id: str) -> str:
+    today = datetime.date.today().isoformat()
+    yesterday = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
+    week_ago = (datetime.date.today() - datetime.timedelta(days=7)).isoformat()
+
+    pending_todos = (
+        db.query(models.TodoItem)
+        .filter(
+            models.TodoItem.user_id == current_user_id,
+            models.TodoItem.completed == False,
+        )
+        .order_by(
+            models.TodoItem.priority.desc(),
+            models.TodoItem.due_date.asc(),
+            models.TodoItem.created_at.asc(),
+        )
+        .limit(5)
+        .all()
+    )
+
+    today_events = (
+        db.query(models.ScheduleEvent)
+        .filter(
+            models.ScheduleEvent.user_id == current_user_id,
+            models.ScheduleEvent.event_date == today,
+        )
+        .order_by(
+            models.ScheduleEvent.time.asc(),
+            models.ScheduleEvent.created_at.asc(),
+        )
+        .limit(5)
+        .all()
+    )
+
+    active_projects = (
+        db.query(models.Project)
+        .filter(models.Project.user_id == current_user_id)
+        .order_by(models.Project.updated_at.desc())
+        .limit(3)
+        .all()
+    )
+
+    recent_journals = (
+        db.query(models.JournalEntry)
+        .filter(
+            models.JournalEntry.user_id == current_user_id,
+            models.JournalEntry.entry_date >= week_ago,
+        )
+        .order_by(
+            models.JournalEntry.entry_date.desc(),
+            models.JournalEntry.updated_at.desc(),
+        )
+        .limit(3)
+        .all()
+    )
+
+    today_sessions = (
+        db.query(models.StudySession)
+        .filter(
+            models.StudySession.user_id == current_user_id,
+            models.StudySession.created_at >= f"{today}T00:00:00",
+        )
+        .all()
+    )
+    today_focus_minutes = sum(session.duration_minutes for session in today_sessions)
+
+    sections: List[str] = []
+    sections.append("我先按你现在 VibeLife 里的真实数据给你排今天。")
+
+    if today_events:
+        event_lines = []
+        for event in today_events[:3]:
+            time_prefix = f"{event.time} " if event.time else ""
+            event_lines.append(f"- {time_prefix}{event.title}")
+        sections.append("今天已排进日程的事：\n" + "\n".join(event_lines))
+    else:
+        sections.append("今天日程里还没有固定时间块，说明你今天的安排弹性比较大。")
+
+    if pending_todos:
+        todo_lines = []
+        for index, todo in enumerate(pending_todos[:3], start=1):
+            suffix = f"（截止 {todo.due_date}）" if todo.due_date else ""
+            todo_lines.append(f"{index}. {todo.text}{suffix}")
+        sections.append("今天优先先做这 3 件：\n" + "\n".join(todo_lines))
+    else:
+        sections.append("当前没有未完成待办，今天可以优先补一轮规划和项目推进。")
+
+    project_lines = []
+    for project in active_projects:
+        next_action = (project.next_action or "").strip()
+        if not next_action:
+            continue
+        project_lines.append(f"- {project.name}：{next_action}")
+    if project_lines:
+        sections.append("项目推进建议：\n" + "\n".join(project_lines[:2]))
+
+    journal_lines = []
+    for entry in recent_journals:
+        preview = (entry.content or "").strip().replace("\n", " ")
+        if not preview:
+            continue
+        prefix = "今天" if entry.entry_date == today else ("昨天" if entry.entry_date == yesterday else entry.entry_date)
+        journal_lines.append(f"- {prefix}：{preview[:36]}")
+    if journal_lines:
+        sections.append("你最近在推进的脉络：\n" + "\n".join(journal_lines[:2]))
+
+    if today_focus_minutes > 0:
+        sections.append(f"你今天已经累计投入 {today_focus_minutes} 分钟，后面建议再留 1 到 2 个专注块收尾。")
+    else:
+        sections.append("你今天还没有记录专注时长，建议先开一个 25 到 45 分钟的启动块。")
+
+    if pending_todos:
+        first_todo = pending_todos[0].text
+        sections.append(f"如果你现在马上开工，就先从“{first_todo}”开始。")
+
+    return "\n\n".join(sections)
+
 # ============================
 # 🧠 知识图谱 API
 # ============================
@@ -396,6 +533,7 @@ async def chat_with_ai(
     request: Dict[str, Any],
     raw_request: Request,
     current_user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
 ):
     """
     AI对话接口 - 与AI助手进行对话
@@ -424,6 +562,10 @@ async def chat_with_ai(
                 get_current_ai_config().get("provider", "openclaw")
             ).strip()
             provider = configured_provider.lower() if configured_provider else "openclaw"
+
+        if provider == "openclaw" and _is_daily_planning_request(user_message):
+            reply = _build_daily_plan_reply(db, current_user_id)
+            return {"success": True, "reply": reply, "provider": "local-planner"}
 
         prompt = build_vibelife_chat_prompt(
             user_message,
@@ -455,6 +597,9 @@ async def chat_with_ai(
                     current_user_id=current_user_id,
                 )
             except OpenClawBridgeError as exc:
+                if _is_daily_planning_request(user_message):
+                    reply = _build_daily_plan_reply(db, current_user_id)
+                    return {"success": True, "reply": reply, "provider": "local-planner"}
                 raise HTTPException(status_code=502, detail=str(exc)) from exc
         elif provider in {"ollama", "deepseek"}:
             reply = generate_qa_answer_with_model(prompt, provider)
