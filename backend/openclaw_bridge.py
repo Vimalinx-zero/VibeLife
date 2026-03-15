@@ -166,6 +166,38 @@ def _parse_openclaw_output(output: str) -> Any:
     return None
 
 
+def _build_openclaw_fallback(parsed: Any) -> str:
+    if not isinstance(parsed, dict):
+        return ""
+
+    error_text = _normalize_text(
+        parsed.get("error")
+        or parsed.get("errorMessage")
+        or parsed.get("detail")
+    )
+    if error_text:
+        return f"OpenClaw 未返回正常内容：{error_text}"
+
+    meta = parsed.get("meta")
+    meta_stop_reason = ""
+    if isinstance(meta, dict):
+        meta_stop_reason = str(meta.get("stopReason", "")).strip().lower()
+
+    aborted = bool(parsed.get("aborted"))
+    stop_reason = str(parsed.get("stopReason", "")).strip().lower() or meta_stop_reason
+
+    if aborted or stop_reason == "error":
+        return "OpenClaw 本次执行异常中断，未返回可展示内容。"
+
+    if "payloads" in parsed:
+        return (
+            "OpenClaw 本次没有返回可展示内容，已忽略底层日志。"
+            "如果这次涉及写入，请先刷新页面确认是否已落库，再决定是否重试。"
+        )
+
+    return ""
+
+
 def run_openclaw_agent(
     message: str,
     *,
@@ -231,4 +263,11 @@ def run_openclaw_agent(
 
     parsed = _parse_openclaw_output(stdout)
     text = _extract_assistant_text(parsed)
-    return text or stdout
+    if text:
+        return text
+
+    fallback = _build_openclaw_fallback(parsed)
+    if fallback:
+        return fallback
+
+    return stdout
