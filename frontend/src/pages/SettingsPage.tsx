@@ -42,9 +42,9 @@ const SettingsPage = () => {
       model: "deepseek-chat"
     },
     openclaw: {
-      model: "zai/glm-5",
+      model: "rightcodes/gpt-5.4",
       thinking: "low",
-      agent: "main"
+      agent: "vibelife"
     },
     custom: {
       apiKey: "",
@@ -342,7 +342,7 @@ const SettingsPage = () => {
                         type="text"
                         value={aiConfig.openclaw.agent}
                         onChange={(e) => setAiConfig(prev => ({ ...prev, openclaw: { ...prev.openclaw, agent: e.target.value } }))}
-                        placeholder="main"
+                        placeholder="vibelife"
                         className="w-full px-4 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-white/10 rounded-lg text-gray-800 dark:text-white text-sm"
                       />
                     </div>

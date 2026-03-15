@@ -33,6 +33,10 @@ class ProjectStepUpdate(pydantic.BaseModel):
     done: bool | None = None
 
 
+def _seed_id(user_id: str, suffix: str) -> str:
+    return f"{user_id}_{suffix}"
+
+
 def _serialize_project(project: models.Project) -> dict:
     return {
         "id": project.id,
@@ -98,9 +102,12 @@ def _seed_projects_if_empty(db: Session, user_id: str):
         return
 
     now = datetime.utcnow().isoformat()
+    work_project_id = _seed_id(user_id, "project_work_tracker")
+    life_project_id = _seed_id(user_id, "project_life_trip")
+    study_project_id = _seed_id(user_id, "project_study_english")
     projects = [
         models.Project(
-            id="project_work_tracker",
+            id=work_project_id,
             user_id=user_id,
             name="项目跟踪界面改版",
             category="work",
@@ -111,7 +118,7 @@ def _seed_projects_if_empty(db: Session, user_id: str):
             updated_at=now,
         ),
         models.Project(
-            id="project_life_trip",
+            id=life_project_id,
             user_id=user_id,
             name="家庭春游计划",
             category="life",
@@ -122,7 +129,7 @@ def _seed_projects_if_empty(db: Session, user_id: str):
             updated_at=now,
         ),
         models.Project(
-            id="project_study_english",
+            id=study_project_id,
             user_id=user_id,
             name="英语口语冲刺",
             category="study",
@@ -136,36 +143,36 @@ def _seed_projects_if_empty(db: Session, user_id: str):
 
     steps = [
         models.ProjectStep(
-            id="ps_1",
+            id=_seed_id(user_id, "ps_1"),
             user_id=user_id,
-            project_id="project_work_tracker",
+            project_id=work_project_id,
             title="整理交互需求",
-            owner="Wilson",
+            owner="AI",
             due="03-08",
             done=True,
         ),
         models.ProjectStep(
-            id="ps_2",
+            id=_seed_id(user_id, "ps_2"),
             user_id=user_id,
-            project_id="project_work_tracker",
+            project_id=work_project_id,
             title="实现项目三标签",
-            owner="Wilson",
+            owner="AI",
             due="03-10",
             done=False,
         ),
         models.ProjectStep(
-            id="ps_3",
+            id=_seed_id(user_id, "ps_3"),
             user_id=user_id,
-            project_id="project_life_trip",
+            project_id=life_project_id,
             title="筛选酒店方案",
             owner="我",
             due="03-12",
             done=False,
         ),
         models.ProjectStep(
-            id="ps_4",
+            id=_seed_id(user_id, "ps_4"),
             user_id=user_id,
-            project_id="project_study_english",
+            project_id=study_project_id,
             title="每日跟读20分钟",
             owner="我",
             due="每天",
@@ -175,25 +182,25 @@ def _seed_projects_if_empty(db: Session, user_id: str):
 
     resources = [
         models.ProjectResource(
-            id="pr_1",
+            id=_seed_id(user_id, "pr_1"),
             user_id=user_id,
-            project_id="project_work_tracker",
+            project_id=work_project_id,
             name="交互清单",
             kind="文档",
             note="记录页面结构与交互细节",
         ),
         models.ProjectResource(
-            id="pr_2",
+            id=_seed_id(user_id, "pr_2"),
             user_id=user_id,
-            project_id="project_life_trip",
+            project_id=life_project_id,
             name="酒店候选表",
             kind="链接",
             note="按预算排序",
         ),
         models.ProjectResource(
-            id="pr_3",
+            id=_seed_id(user_id, "pr_3"),
             user_id=user_id,
-            project_id="project_study_english",
+            project_id=study_project_id,
             name="跟读素材",
             kind="文件",
             note="按难度分层",
@@ -202,9 +209,9 @@ def _seed_projects_if_empty(db: Session, user_id: str):
 
     emails = [
         models.ProjectEmail(
-            id="pe_1",
+            id=_seed_id(user_id, "pe_1"),
             user_id=user_id,
-            project_id="project_work_tracker",
+            project_id=work_project_id,
             from_addr="design@team.ai",
             subject="UI反馈：保持简洁结构",
             summary="建议降低视觉干扰，突出项目内容。",
@@ -212,9 +219,9 @@ def _seed_projects_if_empty(db: Session, user_id: str):
             time="今天 09:18",
         ),
         models.ProjectEmail(
-            id="pe_2",
+            id=_seed_id(user_id, "pe_2"),
             user_id=user_id,
-            project_id="project_life_trip",
+            project_id=life_project_id,
             from_addr="travel@offer.com",
             subject="周末酒店优惠提醒",
             summary="亲子房有折扣，建议尽快确认。",

@@ -15,9 +15,9 @@
     "model": "deepseek-chat"
   },
   "openclaw": {
-    "model": "zai/glm-5",
+    "model": "rightcodes/gpt-5.4",
     "thinking": "low",
-    "agent": "main"
+    "agent": "vibelife"
   },
   "custom": {
     "apiKey": "",

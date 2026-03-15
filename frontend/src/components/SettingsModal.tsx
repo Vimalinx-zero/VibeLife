@@ -14,7 +14,7 @@ const AISettingsContent = ({ toast }: { toast: { success: (msg: string) => void;
     ollama: { baseURL: "http://localhost:11434", model: "qwen:7b" },
     openai: { apiKey: "", baseURL: "https://api.openai.com/v1", model: "gpt-4o-mini" },
     deepseek: { apiKey: "", baseURL: "https://api.deepseek.com/v1", model: "deepseek-chat" },
-    openclaw: { model: "zai/glm-5", thinking: "low", agent: "main" },
+    openclaw: { model: "rightcodes/gpt-5.4", thinking: "low", agent: "vibelife" },
     custom: { apiKey: "", baseURL: "", model: "" }
   });
   const [saving, setSaving] = useState(false);
@@ -25,7 +25,7 @@ const AISettingsContent = ({ toast }: { toast: { success: (msg: string) => void;
     // 先从后端加载配置
     const loadConfig = async () => {
       try {
-        const response = await axios.get("http://localhost:8000/api/ai/config");
+        const response = await axios.get(`${window.__VIBELIFE_API_ORIGIN__}/api/ai/config`);
         if (response.data.success) {
           setAiConfig(response.data.config);
         }
@@ -45,7 +45,7 @@ const AISettingsContent = ({ toast }: { toast: { success: (msg: string) => void;
     try {
       setSaving(true);
       localStorage.setItem("ai_config", JSON.stringify(aiConfig));
-      await axios.post("http://localhost:8000/api/ai/config", aiConfig);
+      await axios.post(`${window.__VIBELIFE_API_ORIGIN__}/api/ai/config`, aiConfig);
       toast.success("✅ 配置已保存");
     } catch (error) {
       const err = error as any;
@@ -59,7 +59,7 @@ const AISettingsContent = ({ toast }: { toast: { success: (msg: string) => void;
     try {
       setTesting(true);
       setTestResult(null);
-      const response = await axios.post("http://localhost:8000/api/ai/test", {
+      const response = await axios.post(`${window.__VIBELIFE_API_ORIGIN__}/api/ai/test`, {
         provider: aiConfig.provider,
         config: aiConfig[aiConfig.provider]
       });
@@ -169,7 +169,7 @@ const AISettingsContent = ({ toast }: { toast: { success: (msg: string) => void;
                   type="text"
                   value={aiConfig.openclaw.agent}
                   onChange={(e) => setAiConfig(prev => ({ ...prev, openclaw: { ...prev.openclaw, agent: e.target.value } }))}
-                  placeholder="main"
+                  placeholder="vibelife"
                   className="w-full px-4 py-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-white/10 rounded-lg text-sm"
                 />
               </div>
