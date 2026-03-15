@@ -1,5 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import ReactMarkdown from 'react-markdown';
+import type { Components } from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
 import { useAuth } from '../context/AuthContext';
 
 interface Message {
@@ -57,6 +62,86 @@ const parseStoredMessages = (raw: string | null): Message[] => {
   }
 };
 
+const buildMarkdownComponents = (isUser: boolean): Components => {
+  const heading = isUser ? 'text-white' : 'text-gray-900 dark:text-white';
+  const body = isUser ? 'text-white/95' : 'text-gray-800 dark:text-gray-100';
+  const muted = isUser ? 'text-white/80' : 'text-gray-600 dark:text-gray-300';
+  const border = isUser ? 'border-white/15' : 'border-gray-200/80 dark:border-white/10';
+  const inlineCode = isUser
+    ? 'bg-black/20 text-white'
+    : 'bg-gray-100 dark:bg-white/10 text-indigo-700 dark:text-indigo-200';
+  const blockCode = isUser
+    ? 'bg-black/25 text-white'
+    : 'bg-[#111827] text-gray-100 dark:bg-black/40 dark:text-gray-100';
+  const link = isUser ? 'text-white underline decoration-white/40' : 'text-indigo-600 dark:text-indigo-300 underline';
+
+  return {
+    h1: ({ node, ...props }) => <h1 className={`mb-3 text-xl font-semibold ${heading}`} {...props} />,
+    h2: ({ node, ...props }) => <h2 className={`mb-3 text-lg font-semibold ${heading}`} {...props} />,
+    h3: ({ node, ...props }) => <h3 className={`mb-2 text-base font-semibold ${heading}`} {...props} />,
+    p: ({ node, ...props }) => <p className={`mb-3 last:mb-0 leading-7 ${body}`} {...props} />,
+    ul: ({ node, ...props }) => <ul className={`mb-3 list-disc space-y-1 pl-5 ${body}`} {...props} />,
+    ol: ({ node, ...props }) => <ol className={`mb-3 list-decimal space-y-1 pl-5 ${body}`} {...props} />,
+    li: ({ node, ...props }) => <li className="pl-1" {...props} />,
+    strong: ({ node, ...props }) => <strong className={`font-semibold ${heading}`} {...props} />,
+    em: ({ node, ...props }) => <em className={`italic ${muted}`} {...props} />,
+    a: ({ node, ...props }) => <a className={link} target="_blank" rel="noreferrer" {...props} />,
+    blockquote: ({ node, ...props }) => (
+      <blockquote className={`mb-3 border-l-2 ${border} pl-4 italic ${muted}`} {...props} />
+    ),
+    hr: ({ node, ...props }) => <hr className={`my-4 ${border}`} {...props} />,
+    img: ({ node, ...props }) => (
+      <img className={`my-3 max-h-72 rounded-2xl border ${border} object-contain`} {...props} />
+    ),
+    pre: ({ node, ...props }) => <pre className="mb-3 overflow-x-auto" {...props} />,
+    code: ({ node, className, children, ...props }) => {
+      const isBlock = typeof className === 'string' && className.length > 0;
+      return isBlock ? (
+        <code className={`block overflow-x-auto rounded-2xl px-4 py-3 text-sm leading-6 ${blockCode}`} {...props}>
+          {children}
+        </code>
+      ) : (
+        <code className={`rounded px-1.5 py-0.5 text-[0.92em] ${inlineCode}`} {...props}>
+          {children}
+        </code>
+      );
+    },
+    table: ({ node, ...props }) => (
+      <div className={`mb-3 overflow-x-auto rounded-2xl border ${border}`}>
+        <table className="min-w-full text-sm" {...props} />
+      </div>
+    ),
+    thead: ({ node, ...props }) => <thead className={isUser ? 'bg-black/10' : 'bg-black/5 dark:bg-white/5'} {...props} />,
+    th: ({ node, ...props }) => <th className={`px-3 py-2 text-left font-semibold ${heading}`} {...props} />,
+    td: ({ node, ...props }) => <td className={`px-3 py-2 align-top ${body}`} {...props} />,
+  };
+};
+
+const MarkdownBubble = ({ content, isUser }: { content: string; isUser: boolean }) => (
+  <div className="text-sm">
+    <ReactMarkdown
+      remarkPlugins={[remarkMath, remarkGfm]}
+      rehypePlugins={[rehypeKatex]}
+      components={buildMarkdownComponents(isUser)}
+    >
+      {content}
+    </ReactMarkdown>
+  </div>
+);
+
+const PagingIcons = {
+  Up: () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+      <path d="M6 15l6-6 6 6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
+  Down: () => (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+      <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
+};
+
 const AIChatWidget: React.FC = () => {
   const { token, user, loading, logout } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
@@ -66,12 +151,27 @@ const AIChatWidget: React.FC = () => {
   const [isTyping, setIsTyping] = useState(false);
   const [hasLoadedHistory, setHasLoadedHistory] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesViewportRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dockRef = useRef<HTMLDivElement>(null);
   const chatCanvasRef = useRef<HTMLDivElement>(null);
   const loadedHistoryKeyRef = useRef<string | null>(null);
+  const [canPageUp, setCanPageUp] = useState(false);
+  const [canPageDown, setCanPageDown] = useState(false);
   const shouldShowDock = isDockHovered || isOpen;
   const historyStorageKey = getHistoryStorageKey(user?.id);
+
+  const syncPagerState = () => {
+    const viewport = messagesViewportRef.current;
+    if (!viewport) {
+      setCanPageUp(false);
+      setCanPageDown(false);
+      return;
+    }
+
+    setCanPageUp(viewport.scrollTop > 8);
+    setCanPageDown(viewport.scrollTop + viewport.clientHeight < viewport.scrollHeight - 8);
+  };
 
   useEffect(() => {
     if (!historyStorageKey) {
@@ -103,7 +203,32 @@ const AIChatWidget: React.FC = () => {
       return;
     }
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    requestAnimationFrame(syncPagerState);
   }, [messages]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    const viewport = messagesViewportRef.current;
+    if (!viewport) {
+      return;
+    }
+
+    const handleScroll = () => {
+      syncPagerState();
+    };
+
+    syncPagerState();
+    viewport.addEventListener('scroll', handleScroll);
+    window.addEventListener('resize', handleScroll);
+
+    return () => {
+      viewport.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', handleScroll);
+    };
+  }, [isOpen, messages.length]);
 
   useEffect(() => {
     if (isOpen && inputRef.current) {
@@ -141,7 +266,7 @@ const AIChatWidget: React.FC = () => {
       }
 
       const elementTarget = target instanceof Element ? target : null;
-      if (elementTarget?.closest('[data-chat-item="true"]')) {
+      if (elementTarget?.closest('[data-chat-item="true"]') || elementTarget?.closest('[data-chat-control="true"]')) {
         return;
       }
 
@@ -246,6 +371,19 @@ const AIChatWidget: React.FC = () => {
     setIsDockHovered(true);
   };
 
+  const scrollMessagesPage = (direction: 'up' | 'down') => {
+    const viewport = messagesViewportRef.current;
+    if (!viewport) {
+      return;
+    }
+
+    const delta = viewport.clientHeight * 0.82;
+    viewport.scrollBy({
+      top: direction === 'up' ? -delta : delta,
+      behavior: 'smooth',
+    });
+  };
+
   return (
     <>
       <AnimatePresence>
@@ -268,12 +406,36 @@ const AIChatWidget: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 16 }}
             transition={{ duration: 0.25, ease: 'easeOut' }}
-            className="fixed bottom-36 z-[93] w-[min(92vw,840px)] h-[min(58vh,620px)] pointer-events-none"
-            style={{ left: 'calc((100vw - min(92vw, 840px)) / 2 - 8px)' }}
+            className="fixed inset-x-0 top-3 bottom-28 z-[93] flex justify-center px-3 md:top-4 md:bottom-32 md:px-6 pointer-events-none"
           >
-            <div ref={chatCanvasRef} className="h-full flex flex-col pointer-events-auto">
-              <div className="flex-1 overflow-y-auto pr-1 flex flex-col justify-end">
-                <div className="space-y-3">
+            <div ref={chatCanvasRef} className="relative h-full w-full max-w-5xl pointer-events-auto">
+              <div
+                data-chat-control="true"
+                className="absolute right-0 top-4 z-10 flex flex-col gap-2 pr-1 md:right-2"
+              >
+                <button
+                  type="button"
+                  onClick={() => scrollMessagesPage('up')}
+                  disabled={!canPageUp}
+                  className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-black/45 text-white shadow-lg backdrop-blur disabled:cursor-not-allowed disabled:opacity-35"
+                >
+                  <PagingIcons.Up />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => scrollMessagesPage('down')}
+                  disabled={!canPageDown}
+                  className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-black/45 text-white shadow-lg backdrop-blur disabled:cursor-not-allowed disabled:opacity-35"
+                >
+                  <PagingIcons.Down />
+                </button>
+              </div>
+
+              <div
+                ref={messagesViewportRef}
+                className="flex h-full overflow-y-auto px-1 pb-5 pr-14 pt-2 md:px-3 md:pb-6 md:pr-16 md:pt-3"
+              >
+                <div className="flex min-h-full w-full flex-col justify-end gap-3">
                   <AnimatePresence initial={false}>
                     {messages.map((message) => (
                       <motion.div
@@ -287,13 +449,13 @@ const AIChatWidget: React.FC = () => {
                       >
                         <div
                           data-chat-item="true"
-                          className={`max-w-[80%] rounded-2xl px-4 py-3 shadow-lg ${
+                          className={`max-w-[min(84vw,760px)] rounded-[28px] px-4 py-3 shadow-2xl md:px-5 md:py-4 ${
                             message.type === 'user'
                               ? 'bg-indigo-500 text-white'
-                              : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white'
+                              : 'bg-white/96 dark:bg-gray-800/96 text-gray-900 dark:text-white'
                           }`}
                         >
-                          <p className="whitespace-pre-wrap">{message.content}</p>
+                          <MarkdownBubble content={message.content} isUser={message.type === 'user'} />
                           <p
                             className={`text-xs mt-1 ${
                               message.type === 'user' ? 'text-white/70' : 'text-gray-500 dark:text-gray-400'
@@ -312,7 +474,7 @@ const AIChatWidget: React.FC = () => {
                         exit={{ opacity: 0 }}
                         className="flex justify-start"
                       >
-                        <div data-chat-item="true" className="bg-white dark:bg-gray-800 rounded-2xl px-4 py-3 shadow-lg">
+                        <div data-chat-item="true" className="rounded-[28px] bg-white/96 px-4 py-3 shadow-2xl dark:bg-gray-800/96">
                           <div className="flex gap-1">
                             <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
                             <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
