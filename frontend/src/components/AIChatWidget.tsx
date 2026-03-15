@@ -6,6 +6,7 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 
 interface Message {
   id: string;
@@ -292,6 +293,7 @@ const PagingIcons = {
 
 const AIChatWidget: React.FC = () => {
   const { token, user, loading, logout } = useAuth();
+  const toast = useToast();
   const [chatState, setChatState] = useState<ChatState>(() => createDefaultChatState());
   const [isOpen, setIsOpen] = useState(false);
   const [isDockHovered, setIsDockHovered] = useState(false);
@@ -303,6 +305,7 @@ const AIChatWidget: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesViewportRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const isOpenRef = useRef(isOpen);
   const dockRef = useRef<HTMLDivElement>(null);
   const chatCanvasRef = useRef<HTMLDivElement>(null);
   const promptMessageRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -521,6 +524,10 @@ const AIChatWidget: React.FC = () => {
   }, [isOpen, activeSessionId, messages.length]);
 
   useEffect(() => {
+    isOpenRef.current = isOpen;
+  }, [isOpen]);
+
+  useEffect(() => {
     if (isOpen && inputRef.current) {
       inputRef.current.focus();
     }
@@ -561,6 +568,7 @@ const AIChatWidget: React.FC = () => {
 
     const sessionId = activeSession.id;
     const userInput = inputValue.trim();
+    const promptSummary = summarizeText(userInput, 20);
     const userMessage: Message = {
       id: createChatId('msg'),
       type: 'user',
@@ -610,6 +618,10 @@ const AIChatWidget: React.FC = () => {
       };
       updateSessionMessages(sessionId, [...nextMessages, aiMessage].slice(-MAX_HISTORY_MESSAGES), aiMessage.timestamp);
       window.dispatchEvent(new Event('workbench-todos-refresh'));
+
+      if (!isOpenRef.current) {
+        toast.info(`Wilson 已在后台回复：${promptSummary}`, 4200);
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '未知错误';
       const failureMessage: Message = {
@@ -619,6 +631,10 @@ const AIChatWidget: React.FC = () => {
         timestamp: new Date(),
       };
       updateSessionMessages(sessionId, [...nextMessages, failureMessage].slice(-MAX_HISTORY_MESSAGES), failureMessage.timestamp);
+
+      if (!isOpenRef.current) {
+        toast.error(`后台回复失败：${promptSummary}`, 4500);
+      }
     } finally {
       setTypingSessionId((currentSessionId) => (currentSessionId === sessionId ? null : currentSessionId));
     }
