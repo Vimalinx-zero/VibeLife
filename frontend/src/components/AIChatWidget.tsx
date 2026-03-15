@@ -314,6 +314,7 @@ const AIChatWidget: React.FC = () => {
   const activeSessionId = activeSession?.id ?? chatState.activeSessionId;
   const messages = activeSession?.messages ?? [createWelcomeMessage()];
   const activePromptMessages = activeSession ? getPromptMessages(activeSession) : [];
+  const activePromptId = activePromptMessages[activePromptMessages.length - 1]?.id ?? null;
   const isTypingCurrentSession = typingSessionId === activeSessionId;
   const orderedSessions = [...chatState.sessions].sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime());
 
@@ -661,12 +662,12 @@ const AIChatWidget: React.FC = () => {
             onMouseLeave={scheduleSessionRailHide}
           >
             <div data-chat-action="true" className="flex h-full flex-col text-white">
-              <div className="flex items-center justify-between pb-4">
+              <div className="flex flex-col items-start gap-1.5 pb-4">
                 <div className="text-[11px] uppercase tracking-[0.32em] text-white/55">会话</div>
                 <button
                   type="button"
                   onClick={handleCreateSession}
-                  className="text-xs font-medium text-white/72 transition hover:text-white"
+                  className="-ml-1 text-xs font-medium text-white/72 transition hover:text-white"
                 >
                   + 新会话
                 </button>
@@ -742,18 +743,24 @@ const AIChatWidget: React.FC = () => {
               {activePromptMessages.length > 0 && (
                 <div
                   data-chat-action="true"
-                  className="absolute right-0 top-32 bottom-6 z-10 flex w-12 pointer-events-auto flex-col items-center gap-2 overflow-y-auto pr-1 md:right-2"
+                  className="absolute -right-7 top-5 bottom-6 z-10 flex w-6 pointer-events-auto flex-col items-center gap-3.5 overflow-y-auto md:-right-9"
                 >
-                  {activePromptMessages.map((prompt, index) => {
+                  {activePromptMessages.map((prompt) => {
                     const promptSummary = summarizeText(prompt.content, MAX_PROMPT_TOOLTIP_LENGTH);
+                    const isActivePrompt = prompt.id === activePromptId;
 
                     return (
-                      <div key={prompt.id} className="group relative flex items-center justify-center">
+                      <div
+                        key={prompt.id}
+                        className={`group relative flex items-center justify-center ${isActivePrompt ? 'my-1.5' : ''}`}
+                      >
                         <div
                           aria-label={promptSummary}
                           title={promptSummary}
-                          className={`h-2.5 w-2.5 rounded-full bg-white/55 transition group-hover:scale-125 group-hover:bg-white ${
-                            index === activePromptMessages.length - 1 ? 'bg-white/95' : ''
+                          className={`rounded-full transition group-hover:scale-125 group-hover:bg-white ${
+                            isActivePrompt
+                              ? 'h-3.5 w-3.5 bg-white shadow-[0_0_14px_rgba(255,255,255,0.38)]'
+                              : 'h-2.5 w-2.5 bg-white/55'
                           }`}
                         />
                         <div className="pointer-events-none absolute right-full top-1/2 hidden -translate-y-1/2 pr-3 group-hover:block">
