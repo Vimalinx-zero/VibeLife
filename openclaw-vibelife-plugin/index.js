@@ -188,16 +188,6 @@ function resolveCurrentUserId(api) {
   return typeof userId === "string" ? userId.trim() : ""
 }
 
-function requireCurrentUserId(api) {
-  const userId = resolveCurrentUserId(api)
-  if (!userId) {
-    throw new Error(
-      "VibeLife current user id missing. Set VIBELIFE_CURRENT_USER_ID before using user-scoped study tools."
-    )
-  }
-  return userId
-}
-
 function resolveOpenClawAgentId(api) {
   const pluginConfig = api?.pluginConfig ?? {}
   const explicitAgentId =
@@ -1054,6 +1044,42 @@ function defineTools(api) {
     ),
     createTool(
       {
+        name: "vibelife_project_create",
+        label: "VibeLife Project Create",
+        description: "Create a VibeLife project.",
+        parameters: {
+          type: "object",
+          additionalProperties: false,
+          required: ["name"],
+          properties: {
+            name: { type: "string" },
+            category: { type: "string" },
+            subtitle: { type: "string" },
+            status: { type: "string" },
+            nextAction: { type: "string" },
+          },
+        },
+        handler: (params) =>
+          requestJson(api, "/api/projects", {
+            method: "POST",
+            body: cleanObject({
+              name: params.name,
+              category:
+                typeof params.category === "string" ? params.category : undefined,
+              subtitle:
+                typeof params.subtitle === "string" ? params.subtitle : undefined,
+              status: typeof params.status === "string" ? params.status : undefined,
+              nextAction:
+                typeof params.nextAction === "string"
+                  ? params.nextAction
+                  : undefined,
+            }),
+          }),
+      },
+      api
+    ),
+    createTool(
+      {
         name: "vibelife_project_list",
         label: "VibeLife Project List",
         description: "List VibeLife projects with steps and resources.",
@@ -1295,203 +1321,6 @@ function defineTools(api) {
               top_k: Number.isInteger(params.topK) ? params.topK : undefined,
             }),
           }),
-      },
-      api
-    ),
-    createTool(
-      {
-        name: "vibelife_study_start",
-        label: "VibeLife Study Start",
-        description: "Start a study session for the current user.",
-        parameters: {
-          type: "object",
-          additionalProperties: false,
-          required: ["type"],
-          properties: {
-            type: { type: "string" },
-            focusItemId: { type: "string" },
-          },
-        },
-        handler: (params) => {
-          const userId = requireCurrentUserId(api)
-          return requestJson(api, "/api/study/start", {
-            method: "POST",
-            body: cleanObject({
-              user_id: userId,
-              type: params.type,
-              focus_item_id:
-                typeof params.focusItemId === "string"
-                  ? params.focusItemId
-                  : undefined,
-            }),
-          })
-        },
-      },
-      api
-    ),
-    createTool(
-      {
-        name: "vibelife_study_end",
-        label: "VibeLife Study End",
-        description: "End a study session by session id.",
-        parameters: {
-          type: "object",
-          additionalProperties: false,
-          required: ["sessionId"],
-          properties: {
-            sessionId: { type: "integer" },
-          },
-        },
-        handler: (params) =>
-          requestJson(api, "/api/study/end", {
-            method: "POST",
-            body: {
-              session_id: params.sessionId,
-            },
-          }),
-      },
-      api
-    ),
-    createTool(
-      {
-        name: "vibelife_study_sessions",
-        label: "VibeLife Study Sessions",
-        description: "List study sessions for the current user.",
-        parameters: {
-          type: "object",
-          additionalProperties: false,
-          properties: {
-            limit: { type: "integer" },
-          },
-        },
-        handler: (params) => {
-          const userId = requireCurrentUserId(api)
-          return requestJson(
-            api,
-            `/api/study/sessions/${encodeURIComponent(userId)}`,
-            {
-              query: cleanObject({
-                limit: Number.isInteger(params.limit) ? params.limit : undefined,
-              }),
-            }
-          )
-        },
-      },
-      api
-    ),
-    createTool(
-      {
-        name: "vibelife_study_today",
-        label: "VibeLife Study Today",
-        description: "Read today's study stats for the current user.",
-        parameters: {
-          type: "object",
-          additionalProperties: false,
-          properties: {},
-        },
-        handler: () => {
-          const userId = requireCurrentUserId(api)
-          return requestJson(api, `/api/study/today/${encodeURIComponent(userId)}`)
-        },
-      },
-      api
-    ),
-    createTool(
-      {
-        name: "vibelife_study_weekly",
-        label: "VibeLife Study Weekly",
-        description: "Read weekly study stats for the current user.",
-        parameters: {
-          type: "object",
-          additionalProperties: false,
-          properties: {},
-        },
-        handler: () => {
-          const userId = requireCurrentUserId(api)
-          return requestJson(api, `/api/study/weekly/${encodeURIComponent(userId)}`)
-        },
-      },
-      api
-    ),
-    createTool(
-      {
-        name: "vibelife_study_report",
-        label: "VibeLife Study Report",
-        description: "Read the combined study report for the current user.",
-        parameters: {
-          type: "object",
-          additionalProperties: false,
-          properties: {},
-        },
-        handler: () => {
-          const userId = requireCurrentUserId(api)
-          return requestJson(api, `/api/study/report/${encodeURIComponent(userId)}`)
-        },
-      },
-      api
-    ),
-    createTool(
-      {
-        name: "vibelife_pomodoro_complete",
-        label: "VibeLife Pomodoro Complete",
-        description: "Record a completed pomodoro for the current user.",
-        parameters: {
-          type: "object",
-          additionalProperties: false,
-          properties: {
-            learningSessionId: { type: "integer" },
-            focusDuration: { type: "integer" },
-            breakDuration: { type: "integer" },
-          },
-        },
-        handler: (params) => {
-          const userId = requireCurrentUserId(api)
-          return requestJson(api, "/api/pomodoro/complete", {
-            method: "POST",
-            body: cleanObject({
-              user_id: userId,
-              learning_session_id:
-                Number.isInteger(params.learningSessionId)
-                  ? params.learningSessionId
-                  : undefined,
-              focus_duration:
-                Number.isInteger(params.focusDuration)
-                  ? params.focusDuration
-                  : undefined,
-              break_duration:
-                Number.isInteger(params.breakDuration)
-                  ? params.breakDuration
-                  : undefined,
-            }),
-          })
-        },
-      },
-      api
-    ),
-    createTool(
-      {
-        name: "vibelife_pomodoro_stats",
-        label: "VibeLife Pomodoro Stats",
-        description: "Read pomodoro stats for the current user.",
-        parameters: {
-          type: "object",
-          additionalProperties: false,
-          properties: {
-            days: { type: "integer" },
-          },
-        },
-        handler: (params) => {
-          const userId = requireCurrentUserId(api)
-          return requestJson(
-            api,
-            `/api/pomodoro/stats/${encodeURIComponent(userId)}`,
-            {
-              query: cleanObject({
-                days: Number.isInteger(params.days) ? params.days : undefined,
-              }),
-            }
-          )
-        },
       },
       api
     ),

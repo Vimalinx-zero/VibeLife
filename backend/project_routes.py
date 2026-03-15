@@ -11,6 +11,14 @@ import models
 router = APIRouter()
 
 
+class ProjectCreate(pydantic.BaseModel):
+    name: str
+    category: str = "work"
+    subtitle: str = ""
+    status: str = "正常推进"
+    nextAction: str = ""
+
+
 class ProjectUpdate(pydantic.BaseModel):
     name: str | None = None
     category: str | None = None
@@ -232,6 +240,32 @@ def _seed_projects_if_empty(db: Session, user_id: str):
 
     db.add_all(projects + steps + resources + emails)
     db.commit()
+
+
+@router.post("/api/projects", status_code=201)
+async def create_project(
+    payload: ProjectCreate,
+    current_user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    now = datetime.utcnow().isoformat()
+    project = models.Project(
+        id=f"project_{int(time.time() * 1000)}",
+        user_id=current_user_id,
+        name=payload.name,
+        category=payload.category,
+        subtitle=payload.subtitle,
+        status=payload.status,
+        next_action=payload.nextAction,
+        created_at=now,
+        updated_at=now,
+    )
+
+    db.add(project)
+    db.commit()
+    db.refresh(project)
+
+    return {"success": True, "project": _serialize_project(project)}
 
 
 @router.get("/api/projects")
