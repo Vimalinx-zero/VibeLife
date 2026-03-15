@@ -299,11 +299,13 @@ const AIChatWidget: React.FC = () => {
   const [typingSessionId, setTypingSessionId] = useState<string | null>(null);
   const [hasLoadedHistory, setHasLoadedHistory] = useState(false);
   const [isSessionRailVisible, setIsSessionRailVisible] = useState(false);
+  const [activePromptId, setActivePromptId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesViewportRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dockRef = useRef<HTMLDivElement>(null);
   const chatCanvasRef = useRef<HTMLDivElement>(null);
+  const promptMessageRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const loadedHistoryKeyRef = useRef<string | null>(null);
   const hideSessionRailTimeoutRef = useRef<number | null>(null);
   const [canPageUp, setCanPageUp] = useState(false);
@@ -314,7 +316,6 @@ const AIChatWidget: React.FC = () => {
   const activeSessionId = activeSession?.id ?? chatState.activeSessionId;
   const messages = activeSession?.messages ?? [createWelcomeMessage()];
   const activePromptMessages = activeSession ? getPromptMessages(activeSession) : [];
-  const activePromptId = activePromptMessages[activePromptMessages.length - 1]?.id ?? null;
   const isTypingCurrentSession = typingSessionId === activeSessionId;
   const orderedSessions = [...chatState.sessions].sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime());
 
@@ -364,6 +365,59 @@ const AIChatWidget: React.FC = () => {
           : session
       ),
     }));
+  };
+
+  const setPromptMessageRef = (messageId: string, element: HTMLDivElement | null) => {
+    if (element) {
+      promptMessageRefs.current[messageId] = element;
+      return;
+    }
+
+    delete promptMessageRefs.current[messageId];
+  };
+
+  const syncActivePromptFromViewport = () => {
+    const viewport = messagesViewportRef.current;
+    if (!viewport || activePromptMessages.length === 0) {
+      setActivePromptId(null);
+      return;
+    }
+
+    const viewportRect = viewport.getBoundingClientRect();
+    const viewportCenter = viewportRect.top + viewportRect.height / 2;
+    let nextActivePromptId = activePromptMessages[activePromptMessages.length - 1]?.id ?? null;
+    let bestDistance = Number.POSITIVE_INFINITY;
+
+    activePromptMessages.forEach((prompt) => {
+      const element = promptMessageRefs.current[prompt.id];
+      if (!element) {
+        return;
+      }
+
+      const rect = element.getBoundingClientRect();
+      const messageCenter = rect.top + rect.height / 2;
+      const distance = Math.abs(messageCenter - viewportCenter);
+
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        nextActivePromptId = prompt.id;
+      }
+    });
+
+    setActivePromptId((currentPromptId) => (currentPromptId === nextActivePromptId ? currentPromptId : nextActivePromptId));
+  };
+
+  const scrollToPrompt = (promptId: string) => {
+    const element = promptMessageRefs.current[promptId];
+    if (!element) {
+      return;
+    }
+
+    setActivePromptId(promptId);
+    element.scrollIntoView({
+      behavior: 'smooth',
+      block: 'center',
+    });
   };
 
   useEffect(() => {
@@ -417,8 +471,28 @@ const AIChatWidget: React.FC = () => {
       return;
     }
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    requestAnimationFrame(syncPagerState);
+    requestAnimationFrame(() => {
+      syncPagerState();
+      syncActivePromptFromViewport();
+    });
   }, [messages]);
+
+  useEffect(() => {
+    const validPromptIds = new Set(activePromptMessages.map((message) => message.id));
+
+    Object.keys(promptMessageRefs.current).forEach((messageId) => {
+      if (!validPromptIds.has(messageId)) {
+        delete promptMessageRefs.current[messageId];
+      }
+    });
+
+    if (validPromptIds.size === 0) {
+      setActivePromptId(null);
+      return;
+    }
+
+    requestAnimationFrame(syncActivePromptFromViewport);
+  }, [activeSessionId, isOpen, messages.length]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -432,9 +506,11 @@ const AIChatWidget: React.FC = () => {
 
     const handleScroll = () => {
       syncPagerState();
+      syncActivePromptFromViewport();
     };
 
     syncPagerState();
+    syncActivePromptFromViewport();
     viewport.addEventListener('scroll', handleScroll);
     window.addEventListener('resize', handleScroll);
 
@@ -743,7 +819,7 @@ const AIChatWidget: React.FC = () => {
               {activePromptMessages.length > 0 && (
                 <div
                   data-chat-action="true"
-                  className="absolute -right-7 top-5 bottom-6 z-10 flex w-6 pointer-events-auto flex-col items-center gap-3.5 overflow-y-auto md:-right-9"
+                  className="absolute -right-8 top-1/2 z-10 flex max-h-[calc(100%-4rem)] w-8 -translate-y-1/2 pointer-events-auto flex-col items-center gap-4 overflow-y-auto py-3 md:-right-10"
                 >
                   {activePromptMessages.map((prompt) => {
                     const promptSummary = summarizeText(prompt.content, MAX_PROMPT_TOOLTIP_LENGTH);
@@ -754,12 +830,14 @@ const AIChatWidget: React.FC = () => {
                         key={prompt.id}
                         className={`group relative flex items-center justify-center ${isActivePrompt ? 'my-1.5' : ''}`}
                       >
-                        <div
+                        <button
+                          type="button"
+                          onClick={() => scrollToPrompt(prompt.id)}
                           aria-label={promptSummary}
                           title={promptSummary}
                           className={`rounded-full transition group-hover:scale-125 group-hover:bg-white ${
                             isActivePrompt
-                              ? 'h-3.5 w-3.5 bg-white shadow-[0_0_14px_rgba(255,255,255,0.38)]'
+                              ? 'h-4 w-4 bg-white shadow-[0_0_16px_rgba(255,255,255,0.48)]'
                               : 'h-2.5 w-2.5 bg-white/55'
                           }`}
                         />
@@ -784,6 +862,11 @@ const AIChatWidget: React.FC = () => {
                     {messages.map((message) => (
                       <motion.div
                         key={message.id}
+                        ref={(element) => {
+                          if (message.type === 'user') {
+                            setPromptMessageRef(message.id, element);
+                          }
+                        }}
                         layout
                         initial={{ opacity: 0, y: 26, scale: 0.98 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
