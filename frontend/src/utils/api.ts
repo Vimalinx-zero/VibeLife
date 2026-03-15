@@ -16,17 +16,26 @@ import {
  * ✨ 新增：自动添加 JWT token 到请求头
  */
 
-const API_BASE_URL = "http://localhost:8000/api";
+const getApiOrigin = (): string => {
+  const configuredOrigin = window.__VIBELIFE_API_ORIGIN__;
+  if (configuredOrigin && configuredOrigin.trim()) {
+    return configuredOrigin.replace(/\/+$/, "");
+  }
+
+  return window.location.port === "49173"
+    ? "http://127.0.0.1:49174"
+    : "http://localhost:8000";
+};
 
 // ✨ 新增：创建 axios 实例
 const apiClient: AxiosInstance = axios.create({
-  baseURL: API_BASE_URL,
   timeout: 10000,
 });
 
 // ✨ 新增：请求拦截器 - 自动添加 JWT token
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
+    config.baseURL = `${getApiOrigin()}/api`;
     const token = localStorage.getItem("token");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
