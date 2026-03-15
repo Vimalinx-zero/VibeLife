@@ -1,6 +1,6 @@
-# FlowStudy UI Extract (UI-only)
+# VibeLife UI Extract (UI-only)
 
-This folder extracts FlowStudy's UI look & feel (glassmorphism, typography, layout, motion) into reusable, content-agnostic components.
+This folder extracts VibeLife's UI look and feel into reusable, content-agnostic components.
 
 Goal: you can build a new tool system on top of this UI without copying business logic.
 
@@ -12,7 +12,7 @@ Goal: you can build a new tool system on top of this UI without copying business
 
 ## Tailwind / global CSS assumptions
 
-FlowStudy uses:
+VibeLife currently uses:
 
 - `darkMode: 'class'`
 - Inter font
@@ -34,6 +34,6 @@ FlowStudy uses:
 
 ## Optional CSS helpers
 
-`custom-scrollbar` is used across the app. If you want to reuse it outside FlowStudy, see:
+`custom-scrollbar` is used across the app. If you want to reuse it outside VibeLife, see:
 
-- `frontend/src/ui/flowstudy/flowstudy-ui.css`
+- `frontend/src/ui/vibelife/vibelife-ui.css`

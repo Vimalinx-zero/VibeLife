@@ -1,147 +1,48 @@
-# FlowStudy 快速启动指南
+# VibeLife 快速启动指南
 
-## 🚀 启动应用
+## 启动
 
-### 1. 启动后端
+### 一键启动
+
+```bash
+./start.sh start
+```
+
+### 分别启动
+
 ```bash
 cd backend
-python main.py
+python start_server.py
 ```
-后端将运行在 http://localhost:8000
 
-### 2. 启动前端
 ```bash
 cd frontend
 npm run dev
 ```
-前端将运行在 http://localhost:5173
 
----
+默认地址：
 
-## 🔐 登录应用
+- 前端：http://localhost:5173
+- 后端：http://localhost:8000
+- API 文档：http://localhost:8000/docs
 
-**重要：首次访问必须先登录！**
+## 常见操作
 
-### 方式1：手动访问登录页
-1. 打开浏览器访问：http://localhost:5173/login
-2. 输入测试账号：
-   - **用户名**: `test_user`
-   - **密码**: `test123`
-3. 点击"登录"按钮
-4. 登录成功后会自动跳转到首页
-
-### 方式2：直接访问首页（会自动跳转）
-1. 访问：http://localhost:5173/
-2. 系统检测到未登录，自动跳转到登录页
-3. 按照上面的步骤登录
-
----
-
-## 📊 测试数据说明
-
-系统已经准备好了完整的测试数据：
-
-### 测试账号
-- **test_user** / test123 - 普通测试用户
-- **admin_user** / test123 - 管理员账号
-
-### 测试数据内容
-- ✅ 10道题目（单选、多选、填空、证明题）
-- ✅ 8个笔记文件
-- ✅ 3条错题记录
-- ✅ 5张Anki记忆卡
-- ✅ 2条学习会话
-- ✅ 3个待办事项
-
-这些数据可以用来测试所有功能模块！
-
----
-
-## 🎯 主要功能模块
-
-登录后，你可以测试以下功能：
-
-### 1. Dashboard (首页)
-- 📈 今日学习统计
-- 🔥 学习热力图（最近30天）
-- ⏱️ 番茄钟
-- 🎵 音乐播放器
-- 📚 快速访问刷题/笔记/错题本/记忆卡
-
-### 2. 智能刷题
-- 📝 按学科/题型/难度筛选
-- 🎯 智能推荐错题
-- 💾 收藏喜欢的题目
-- 📊 实时更新熟练度
-
-### 3. 错题本
-- 📕 错题统计和历史
-- 🔄 错题重做
-- 📝 关联笔记
-- 💡 AI解析
-
-### 4. 笔记系统
-- 📁 文件夹组织
-- 🏷️ Markdown编辑
-- 🏷️ 双向链接 [[笔记名]]
-- 🏷️ 标签系统
-- 🔍 全文搜索
-
-### 5. Anki记忆卡
-- 🃏 创建正面/背面卡片
-- 📊 SM-2算法调度复习
-- 📚 牌组管理
-- 📈 复习统计
-
-### 6. 数据管理
-- 📤 导出题库/错题/笔记
-- 📥 导入备份数据
-- 📊 数据统计
-
----
-
-## ❓ 常见问题
-
-### Q: 看到 401 Unauthorized 错误？
-A: 这说明没有登录或登录过期。请访问 /login 页面重新登录。
-
-### Q: 忘记测试账号密码？
-A:
-- 用户名: `test_user` 或 `admin_user`
-- 密码: `test123`
-
-### Q: 如何重置测试数据？
-A:
 ```bash
-cd backend
-python test_data_sample.py  # 重新生成测试数据
+./start.sh stop
+./start.sh restart
+./start.sh status
+./start.sh logs backend
+./start.sh logs frontend
 ```
 
-### Q: 前端页面空白？
-A:
-1. 检查后端是否运行（http://localhost:8000）
-2. 检查浏览器控制台是否有错误
-3. 尝试清除 localStorage 并刷新页面
+## 数据
 
----
+- 默认数据库：`backend/vibelife.db`
+- 如果仓库里已有历史 SQLite 文件，后端会自动兼容使用
+- 也可以通过 `VIBELIFE_DB_PATH` 指定数据库路径
 
-## 📝 开发者备注
+## AI
 
-### 后端API测试
-```bash
-cd backend
-python test_api.py  # 运行自动化API测试
-```
-测试结果：**12/12 通过 (100%)**
-
-### 前端功能测试
-详细的前端测试清单请查看：`FRONTEND_TEST_GUIDE.md`
-
-### 测试报告
-完整的测试报告请查看：`TEST_REPORT.md`
-
----
-
-**祝测试愉快！** 🎉
-
-如有问题，请查看浏览器控制台或后端日志。
+- 站内 AI 配置入口：设置面板
+- OpenClaw 集成入口：`/api/ai/chat`、`/api/ai/quick-qa-stream`

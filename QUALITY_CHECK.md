@@ -1,8 +1,8 @@
-# FlowStudy 质量检测流程
+# VibeLife 质量检测流程
 
 ## 检测流程概述
 
-本文档定义了 FlowStudy 项目的完整质量检测流程，包括：
+本文档定义了 VibeLife 项目的完整质量检测流程，包括：
 - 自动化检测命令
 - 检测项清单
 - 问题记录和追踪机制
@@ -320,7 +320,7 @@ npx tsc --noEmit 2>&1 | grep "NotesPage.tsx" | wc -l
 ### 日常检测报告
 
 ```
-=== FlowStudy 日常检测报告 ===
+=== VibeLife 日常检测报告 ===
 
 检测时间: YYYY-MM-DD HH:MM:SS
 检测人: [姓名/Agent]
@@ -360,11 +360,11 @@ API 测试: ✅ 通过 (12/12) / ❌ 失败 (X/12)
 ```bash
 #!/bin/bash
 
-# FlowStudy 质量检测脚本
+# VibeLife 质量检测脚本
 
 set -e
 
-echo "=== FlowStudy 质量检测 ==="
+echo "=== VibeLife 质量检测 ==="
 echo ""
 
 # 前端检测

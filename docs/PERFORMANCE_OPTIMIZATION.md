@@ -1,4 +1,4 @@
-# FlowStudy 性能优化文档
+# VibeLife 性能优化文档
 
 ## 📊 优化概览
 

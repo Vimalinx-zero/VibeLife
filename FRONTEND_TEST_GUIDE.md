@@ -1,4 +1,4 @@
-# FlowStudy 前端功能测试指南
+# VibeLife 前端功能测试指南
 
 ## 测试准备
 
