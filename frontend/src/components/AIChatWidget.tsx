@@ -21,7 +21,36 @@ interface StoredMessage {
   timestamp: string;
 }
 
+interface ChatSession {
+  id: string;
+  title: string;
+  createdAt: Date;
+  updatedAt: Date;
+  messages: Message[];
+}
+
+interface StoredChatSession {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  messages: StoredMessage[];
+}
+
+interface StoredChatState {
+  version: 2;
+  activeSessionId: string;
+  sessions: StoredChatSession[];
+}
+
+interface ChatState {
+  sessions: ChatSession[];
+  activeSessionId: string;
+}
+
 const MAX_HISTORY_MESSAGES = 50;
+const MAX_SESSION_TITLE_LENGTH = 18;
+const MAX_PROMPT_TOOLTIP_LENGTH = 40;
 
 const createWelcomeMessage = (): Message => ({
   id: 'welcome',
@@ -33,32 +62,151 @@ const createWelcomeMessage = (): Message => ({
 const getHistoryStorageKey = (userId: string | undefined) =>
   userId ? `vibelife_ai_chat_history:${userId}` : null;
 
-const parseStoredMessages = (raw: string | null): Message[] => {
-  if (!raw) {
+const createChatId = (prefix: string) =>
+  `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+
+const summarizeText = (value: string, maxLength: number) => {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  if (!normalized) {
+    return '空白问题';
+  }
+
+  return normalized.length > maxLength ? `${normalized.slice(0, maxLength)}...` : normalized;
+};
+
+const formatSessionFallbackTitle = (index: number) => `新会话 ${String(index).padStart(2, '0')}`;
+
+const getPromptMessages = (session: ChatSession) =>
+  session.messages.filter((message) => message.type === 'user' && message.content.trim().length > 0);
+
+const formatSessionUpdatedAt = (timestamp: Date) =>
+  timestamp.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+
+const parseStoredMessages = (value: unknown): Message[] => {
+  if (!Array.isArray(value)) {
     return [createWelcomeMessage()];
   }
 
-  try {
-    const parsed = JSON.parse(raw) as StoredMessage[];
-    const messages = parsed
-      .filter(
-        (message) =>
-          message &&
-          (message.type === 'user' || message.type === 'ai') &&
-          typeof message.content === 'string' &&
-          message.content.trim().length > 0 &&
-          typeof message.timestamp === 'string'
-      )
-      .map((message) => ({
-        ...message,
-        timestamp: new Date(message.timestamp),
-      }))
-      .filter((message) => !Number.isNaN(message.timestamp.getTime()));
+  const messages = value
+    .filter(
+      (message): message is StoredMessage =>
+        !!message &&
+        typeof message === 'object' &&
+        'type' in message &&
+        'content' in message &&
+        'timestamp' in message &&
+        (message.type === 'user' || message.type === 'ai') &&
+        typeof message.content === 'string' &&
+        message.content.trim().length > 0 &&
+        typeof message.timestamp === 'string'
+    )
+    .map((message) => ({
+      id: typeof message.id === 'string' && message.id ? message.id : createChatId('msg'),
+      type: message.type,
+      content: message.content,
+      timestamp: new Date(message.timestamp),
+    }))
+    .filter((message) => !Number.isNaN(message.timestamp.getTime()));
 
-    return messages.length > 0 ? messages.slice(-MAX_HISTORY_MESSAGES) : [createWelcomeMessage()];
+  return messages.length > 0 ? messages.slice(-MAX_HISTORY_MESSAGES) : [createWelcomeMessage()];
+};
+
+const buildSessionTitle = (messages: Message[], fallbackTitle: string) => {
+  const firstUserMessage = messages.find((message) => message.type === 'user' && message.content.trim().length > 0);
+  return firstUserMessage ? summarizeText(firstUserMessage.content, MAX_SESSION_TITLE_LENGTH) : fallbackTitle;
+};
+
+const createSession = (
+  index: number,
+  overrides: Partial<Pick<ChatSession, 'id' | 'title' | 'createdAt' | 'updatedAt' | 'messages'>> = {}
+): ChatSession => {
+  const createdAt = overrides.createdAt ?? new Date();
+  const messages =
+    overrides.messages && overrides.messages.length > 0
+      ? overrides.messages.slice(-MAX_HISTORY_MESSAGES)
+      : [createWelcomeMessage()];
+  const updatedAt = overrides.updatedAt ?? messages[messages.length - 1]?.timestamp ?? createdAt;
+  const fallbackTitle = overrides.title?.trim() || formatSessionFallbackTitle(index);
+
+  return {
+    id: overrides.id ?? createChatId('session'),
+    title: buildSessionTitle(messages, fallbackTitle),
+    createdAt,
+    updatedAt,
+    messages,
+  };
+};
+
+const createDefaultChatState = (): ChatState => {
+  const initialSession = createSession(1);
+  return {
+    sessions: [initialSession],
+    activeSessionId: initialSession.id,
+  };
+};
+
+const parseStoredChatState = (raw: string | null): ChatState => {
+  if (!raw) {
+    return createDefaultChatState();
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as StoredChatState | StoredMessage[];
+
+    if (Array.isArray(parsed)) {
+      const messages = parseStoredMessages(parsed);
+      const migratedSession = createSession(1, {
+        messages,
+        createdAt: messages[0]?.timestamp ?? new Date(),
+        updatedAt: messages[messages.length - 1]?.timestamp ?? new Date(),
+      });
+
+      return {
+        sessions: [migratedSession],
+        activeSessionId: migratedSession.id,
+      };
+    }
+
+    if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.sessions)) {
+      return createDefaultChatState();
+    }
+
+    const sessions = parsed.sessions
+      .map((session, index) => {
+        if (!session || typeof session !== 'object') {
+          return null;
+        }
+
+        const messages = parseStoredMessages(session.messages);
+        const createdAt = new Date(session.createdAt);
+        const updatedAt = new Date(session.updatedAt);
+
+        return createSession(index + 1, {
+          id: typeof session.id === 'string' && session.id ? session.id : createChatId('session'),
+          title: typeof session.title === 'string' ? session.title : '',
+          createdAt: Number.isNaN(createdAt.getTime()) ? messages[0]?.timestamp ?? new Date() : createdAt,
+          updatedAt: Number.isNaN(updatedAt.getTime()) ? messages[messages.length - 1]?.timestamp ?? new Date() : updatedAt,
+          messages,
+        });
+      })
+      .filter((session): session is ChatSession => session !== null);
+
+    if (sessions.length === 0) {
+      return createDefaultChatState();
+    }
+
+    const activeSessionId =
+      typeof parsed.activeSessionId === 'string' && sessions.some((session) => session.id === parsed.activeSessionId)
+        ? parsed.activeSessionId
+        : sessions[0].id;
+
+    return {
+      sessions,
+      activeSessionId,
+    };
   } catch (error) {
     console.error('Failed to parse AI chat history:', error);
-    return [createWelcomeMessage()];
+    return createDefaultChatState();
   }
 };
 
@@ -144,22 +292,29 @@ const PagingIcons = {
 
 const AIChatWidget: React.FC = () => {
   const { token, user, loading, logout } = useAuth();
+  const [chatState, setChatState] = useState<ChatState>(() => createDefaultChatState());
   const [isOpen, setIsOpen] = useState(false);
   const [isDockHovered, setIsDockHovered] = useState(false);
-  const [messages, setMessages] = useState<Message[]>(() => [createWelcomeMessage()]);
   const [inputValue, setInputValue] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
+  const [typingSessionId, setTypingSessionId] = useState<string | null>(null);
   const [hasLoadedHistory, setHasLoadedHistory] = useState(false);
+  const [isSessionRailVisible, setIsSessionRailVisible] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesViewportRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dockRef = useRef<HTMLDivElement>(null);
   const chatCanvasRef = useRef<HTMLDivElement>(null);
   const loadedHistoryKeyRef = useRef<string | null>(null);
+  const hideSessionRailTimeoutRef = useRef<number | null>(null);
   const [canPageUp, setCanPageUp] = useState(false);
   const [canPageDown, setCanPageDown] = useState(false);
   const shouldShowDock = isDockHovered || isOpen;
   const historyStorageKey = getHistoryStorageKey(user?.id);
+  const activeSession = chatState.sessions.find((session) => session.id === chatState.activeSessionId) ?? chatState.sessions[0];
+  const activeSessionId = activeSession?.id ?? chatState.activeSessionId;
+  const messages = activeSession?.messages ?? [createWelcomeMessage()];
+  const isTypingCurrentSession = typingSessionId === activeSessionId;
+  const orderedSessions = [...chatState.sessions].sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime());
 
   const syncPagerState = () => {
     const viewport = messagesViewportRef.current;
@@ -173,16 +328,62 @@ const AIChatWidget: React.FC = () => {
     setCanPageDown(viewport.scrollTop + viewport.clientHeight < viewport.scrollHeight - 8);
   };
 
+  const clearSessionRailHideTimeout = () => {
+    if (hideSessionRailTimeoutRef.current !== null) {
+      window.clearTimeout(hideSessionRailTimeoutRef.current);
+      hideSessionRailTimeoutRef.current = null;
+    }
+  };
+
+  const showSessionRail = () => {
+    clearSessionRailHideTimeout();
+    setIsSessionRailVisible(true);
+  };
+
+  const scheduleSessionRailHide = () => {
+    clearSessionRailHideTimeout();
+    hideSessionRailTimeoutRef.current = window.setTimeout(() => {
+      setIsSessionRailVisible(false);
+      hideSessionRailTimeoutRef.current = null;
+    }, 140);
+  };
+
+  const updateSessionMessages = (sessionId: string, nextMessages: Message[], updatedAt: Date) => {
+    setChatState((previousState) => ({
+      ...previousState,
+      sessions: previousState.sessions.map((session, index) =>
+        session.id === sessionId
+          ? {
+              ...session,
+              title: buildSessionTitle(nextMessages, formatSessionFallbackTitle(index + 1)),
+              updatedAt,
+              messages: nextMessages,
+            }
+          : session
+      ),
+    }));
+  };
+
+  useEffect(() => {
+    return () => {
+      clearSessionRailHideTimeout();
+    };
+  }, []);
+
   useEffect(() => {
     if (!historyStorageKey) {
-      setMessages([createWelcomeMessage()]);
+      setChatState(createDefaultChatState());
       setHasLoadedHistory(false);
+      setTypingSessionId(null);
+      setIsSessionRailVisible(false);
       loadedHistoryKeyRef.current = null;
       return;
     }
 
-    setMessages(parseStoredMessages(localStorage.getItem(historyStorageKey)));
+    setChatState(parseStoredChatState(localStorage.getItem(historyStorageKey)));
     loadedHistoryKeyRef.current = historyStorageKey;
+    setTypingSessionId(null);
+    setIsSessionRailVisible(false);
     setHasLoadedHistory(true);
   }, [historyStorageKey]);
 
@@ -191,12 +392,23 @@ const AIChatWidget: React.FC = () => {
       return;
     }
 
-    const serialized: StoredMessage[] = messages.slice(-MAX_HISTORY_MESSAGES).map((message) => ({
-      ...message,
-      timestamp: message.timestamp.toISOString(),
-    }));
+    const serialized: StoredChatState = {
+      version: 2,
+      activeSessionId,
+      sessions: chatState.sessions.map((session) => ({
+        id: session.id,
+        title: session.title,
+        createdAt: session.createdAt.toISOString(),
+        updatedAt: session.updatedAt.toISOString(),
+        messages: session.messages.slice(-MAX_HISTORY_MESSAGES).map((message) => ({
+          ...message,
+          timestamp: message.timestamp.toISOString(),
+        })),
+      })),
+    };
+
     localStorage.setItem(historyStorageKey, JSON.stringify(serialized));
-  }, [hasLoadedHistory, historyStorageKey, messages]);
+  }, [activeSessionId, chatState.sessions, hasLoadedHistory, historyStorageKey]);
 
   useEffect(() => {
     if (messages.length === 0) {
@@ -228,11 +440,18 @@ const AIChatWidget: React.FC = () => {
       viewport.removeEventListener('scroll', handleScroll);
       window.removeEventListener('resize', handleScroll);
     };
-  }, [isOpen, messages.length]);
+  }, [isOpen, activeSessionId, messages.length]);
 
   useEffect(() => {
     if (isOpen && inputRef.current) {
       inputRef.current.focus();
+    }
+  }, [activeSessionId, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      clearSessionRailHideTimeout();
+      setIsSessionRailVisible(false);
     }
   }, [isOpen]);
 
@@ -255,24 +474,26 @@ const AIChatWidget: React.FC = () => {
   }, [shouldShowDock, isOpen]);
 
   const handleSend = async () => {
-    if (!inputValue.trim() || isTyping || loading) return;
+    if (!inputValue.trim() || typingSessionId || loading || !activeSession) return;
 
     if (!token) {
       logout();
       return;
     }
 
+    const sessionId = activeSession.id;
     const userInput = inputValue.trim();
     const userMessage: Message = {
-      id: Date.now().toString(),
+      id: createChatId('msg'),
       type: 'user',
       content: userInput,
       timestamp: new Date(),
     };
+    const nextMessages = [...messages, userMessage].slice(-MAX_HISTORY_MESSAGES);
 
-    setMessages(prev => [...prev, userMessage].slice(-MAX_HISTORY_MESSAGES));
+    updateSessionMessages(sessionId, nextMessages, userMessage.timestamp);
     setInputValue('');
-    setIsTyping(true);
+    setTypingSessionId(sessionId);
 
     try {
       const response = await fetch(`${window.__VIBELIFE_API_ORIGIN__}/api/ai/chat`, {
@@ -284,7 +505,7 @@ const AIChatWidget: React.FC = () => {
         body: JSON.stringify({
           message: userInput,
           provider: 'openclaw',
-          history: [...messages, userMessage].slice(-10).map((message) => ({
+          history: nextMessages.slice(-10).map((message) => ({
             role: message.type === 'ai' ? 'assistant' : 'user',
             content: message.content,
           })),
@@ -301,7 +522,7 @@ const AIChatWidget: React.FC = () => {
       }
 
       const aiMessage: Message = {
-        id: (Date.now() + 1).toString(),
+        id: createChatId('msg'),
         type: 'ai',
         content:
           typeof payload?.reply === 'string' && payload.reply.trim()
@@ -309,22 +530,19 @@ const AIChatWidget: React.FC = () => {
             : '我这次没有拿到可用回复。',
         timestamp: new Date(),
       };
-      setMessages(prev => [...prev, aiMessage].slice(-MAX_HISTORY_MESSAGES));
+      updateSessionMessages(sessionId, [...nextMessages, aiMessage].slice(-MAX_HISTORY_MESSAGES), aiMessage.timestamp);
       window.dispatchEvent(new Event('workbench-todos-refresh'));
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '未知错误';
       const failureMessage: Message = {
-        id: (Date.now() + 1).toString(),
+        id: createChatId('msg'),
         type: 'ai',
         content: `抱歉，这次没有连上 AI：${errorMessage}`,
         timestamp: new Date(),
       };
-      setMessages(prev => [
-        ...prev,
-        failureMessage,
-      ].slice(-MAX_HISTORY_MESSAGES));
+      updateSessionMessages(sessionId, [...nextMessages, failureMessage].slice(-MAX_HISTORY_MESSAGES), failureMessage.timestamp);
     } finally {
-      setIsTyping(false);
+      setTypingSessionId((currentSessionId) => (currentSessionId === sessionId ? null : currentSessionId));
     }
   };
 
@@ -336,13 +554,43 @@ const AIChatWidget: React.FC = () => {
   };
 
   const handleClose = () => {
+    clearSessionRailHideTimeout();
     setIsOpen(false);
     setIsDockHovered(false);
+    setIsSessionRailVisible(false);
   };
 
   const openChat = () => {
     setIsOpen(true);
     setIsDockHovered(true);
+  };
+
+  const handleCreateSession = () => {
+    clearSessionRailHideTimeout();
+    setChatState((previousState) => {
+      const newSession = createSession(previousState.sessions.length + 1);
+      return {
+        sessions: [newSession, ...previousState.sessions],
+        activeSessionId: newSession.id,
+      };
+    });
+    setInputValue('');
+    setIsSessionRailVisible(true);
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
+  };
+
+  const handleSelectSession = (sessionId: string) => {
+    clearSessionRailHideTimeout();
+    setChatState((previousState) =>
+      previousState.activeSessionId === sessionId
+        ? previousState
+        : {
+            ...previousState,
+            activeSessionId: sessionId,
+          }
+    );
   };
 
   const handleCanvasPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -389,6 +637,92 @@ const AIChatWidget: React.FC = () => {
               handleClose();
             }}
           />
+        )}
+      </AnimatePresence>
+
+      {isOpen && (
+        <div
+          className="fixed inset-y-0 left-0 z-[94] w-8 pointer-events-auto"
+          onMouseEnter={showSessionRail}
+          onMouseLeave={scheduleSessionRailHide}
+        />
+      )}
+
+      <AnimatePresence>
+        {isOpen && isSessionRailVisible && (
+          <motion.aside
+            initial={{ opacity: 0, x: -28 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -28 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            className="fixed left-0 top-6 bottom-32 z-[94] w-[min(32rem,42vw)] max-w-sm px-4 pointer-events-auto"
+            onMouseEnter={showSessionRail}
+            onMouseLeave={scheduleSessionRailHide}
+          >
+            <div data-chat-action="true" className="flex h-full flex-col text-white">
+              <div className="flex items-center justify-between pb-4">
+                <div className="text-[11px] uppercase tracking-[0.32em] text-white/55">会话</div>
+                <button
+                  type="button"
+                  onClick={handleCreateSession}
+                  className="text-xs font-medium text-white/72 transition hover:text-white"
+                >
+                  + 新会话
+                </button>
+              </div>
+
+              <div className="flex-1 space-y-2 overflow-y-auto pr-2">
+                {orderedSessions.map((session) => {
+                  const promptMessages = getPromptMessages(session);
+                  const isActiveSession = session.id === activeSessionId;
+
+                  return (
+                    <div key={session.id} className="flex items-start gap-3">
+                      <button
+                        type="button"
+                        onClick={() => handleSelectSession(session.id)}
+                        className={`min-w-0 flex-1 border-l pl-3 text-left transition ${
+                          isActiveSession
+                            ? 'border-white/70 text-white'
+                            : 'border-white/10 text-white/58 hover:border-white/30 hover:text-white'
+                        }`}
+                      >
+                        <div className="truncate text-sm font-medium">{session.title}</div>
+                        <div className="mt-1 text-[11px] text-white/32">
+                          {promptMessages.length === 0 ? '空会话' : `${promptMessages.length} 次提问`} · {formatSessionUpdatedAt(session.updatedAt)}
+                        </div>
+                      </button>
+
+                      <div className="flex max-w-[112px] flex-wrap justify-end gap-1.5 pt-1">
+                        {promptMessages.map((prompt) => {
+                          const promptSummary = summarizeText(prompt.content, MAX_PROMPT_TOOLTIP_LENGTH);
+
+                          return (
+                            <div key={prompt.id} className="group relative flex items-center">
+                              <button
+                                type="button"
+                                title={promptSummary}
+                                aria-label={promptSummary}
+                                onClick={() => handleSelectSession(session.id)}
+                                className={`h-2.5 w-2.5 rounded-full transition group-hover:scale-125 group-hover:bg-white ${
+                                  isActiveSession ? 'bg-white/95' : 'bg-white/45'
+                                }`}
+                              />
+                              <div className="pointer-events-none absolute left-1/2 top-full z-10 hidden w-44 -translate-x-1/2 pt-2 group-hover:block">
+                                <div className="rounded-2xl border border-white/10 bg-black/72 px-3 py-2 text-[11px] leading-4 text-white shadow-2xl backdrop-blur-md">
+                                  {promptSummary}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </motion.aside>
         )}
       </AnimatePresence>
 
@@ -466,7 +800,7 @@ const AIChatWidget: React.FC = () => {
                       </motion.div>
                     ))}
 
-                    {isTyping && (
+                    {isTypingCurrentSession && (
                       <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -550,7 +884,7 @@ const AIChatWidget: React.FC = () => {
                     <button
                       type="button"
                       onClick={handleSend}
-                      disabled={!inputValue.trim() || isTyping || loading}
+                      disabled={!inputValue.trim() || !!typingSessionId || loading}
                       className="px-5 py-2.5 rounded-full bg-indigo-500 hover:bg-indigo-600 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
                     >
                       发送
