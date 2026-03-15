@@ -1,16 +1,36 @@
 # backend/auth.py
 # 认证相关工具函数
 
-from datetime import datetime, timedelta
-from typing import Optional
-from jose import JWTError, jwt
-from fastapi import Header, HTTPException, status
-import bcrypt
-import secrets
 import os
+import secrets
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Optional
+
+import bcrypt
+from fastapi import Header, HTTPException, status
+from jose import JWTError, jwt
 
 # ✅ 安全修复：JWT 配置从环境变量读取
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", secrets.token_urlsafe(32))  # 如果未设置，生成随机密钥
+JWT_KEY_FILE = Path(__file__).with_name("jwt_key.txt")
+
+
+def _load_secret_key() -> str:
+    env_secret = os.getenv("JWT_SECRET_KEY")
+    if env_secret:
+        return env_secret
+
+    if JWT_KEY_FILE.exists():
+        file_secret = JWT_KEY_FILE.read_text(encoding="utf-8").strip()
+        if file_secret:
+            return file_secret
+
+    secret = secrets.token_urlsafe(32)
+    JWT_KEY_FILE.write_text(secret, encoding="utf-8")
+    return secret
+
+
+SECRET_KEY = _load_secret_key()
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "10080"))  # 默认7天
 
