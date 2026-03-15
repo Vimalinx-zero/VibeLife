@@ -345,6 +345,21 @@ const AIChatWidget: React.FC = () => {
     setIsDockHovered(true);
   };
 
+  const handleCanvasPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement | null;
+    if (!target) {
+      return;
+    }
+
+    if (target.closest('[data-chat-item="true"]') || target.closest('[data-chat-action="true"]')) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    handleClose();
+  };
+
   const scrollMessagesPage = (direction: 'up' | 'down') => {
     const viewport = messagesViewportRef.current;
     if (!viewport) {
@@ -368,7 +383,11 @@ const AIChatWidget: React.FC = () => {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             className="fixed inset-0 z-[92] bg-black/15 backdrop-blur-[2px]"
-            onClick={handleClose}
+            onPointerDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              handleClose();
+            }}
           />
         )}
       </AnimatePresence>
@@ -386,9 +405,10 @@ const AIChatWidget: React.FC = () => {
               ref={chatCanvasRef}
               data-chat-control="true"
               className="relative h-full w-full max-w-5xl"
+              onPointerDownCapture={handleCanvasPointerDown}
             >
               <div
-                data-chat-control="true"
+                data-chat-action="true"
                 className="absolute right-0 top-4 z-10 flex pointer-events-auto flex-col gap-2 pr-1 md:right-2"
               >
                 <button
