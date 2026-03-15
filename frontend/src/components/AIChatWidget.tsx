@@ -313,6 +313,7 @@ const AIChatWidget: React.FC = () => {
   const activeSession = chatState.sessions.find((session) => session.id === chatState.activeSessionId) ?? chatState.sessions[0];
   const activeSessionId = activeSession?.id ?? chatState.activeSessionId;
   const messages = activeSession?.messages ?? [createWelcomeMessage()];
+  const activePromptMessages = activeSession ? getPromptMessages(activeSession) : [];
   const isTypingCurrentSession = typingSessionId === activeSessionId;
   const orderedSessions = [...chatState.sessions].sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime());
 
@@ -345,7 +346,7 @@ const AIChatWidget: React.FC = () => {
     hideSessionRailTimeoutRef.current = window.setTimeout(() => {
       setIsSessionRailVisible(false);
       hideSessionRailTimeoutRef.current = null;
-    }, 140);
+    }, 70);
   };
 
   const updateSessionMessages = (sessionId: string, nextMessages: Message[], updatedAt: Date) => {
@@ -642,7 +643,7 @@ const AIChatWidget: React.FC = () => {
 
       {isOpen && (
         <div
-          className="fixed inset-y-0 left-0 z-[94] w-8 pointer-events-auto"
+          className="fixed inset-y-0 left-0 z-[94] w-16 md:w-24 pointer-events-auto"
           onMouseEnter={showSessionRail}
           onMouseLeave={scheduleSessionRailHide}
         />
@@ -655,7 +656,7 @@ const AIChatWidget: React.FC = () => {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -28 }}
             transition={{ duration: 0.22, ease: 'easeOut' }}
-            className="fixed left-0 top-6 bottom-32 z-[94] w-[min(32rem,42vw)] max-w-sm px-4 pointer-events-auto"
+            className="fixed left-0 top-14 bottom-32 z-[94] w-[min(32rem,42vw)] max-w-sm px-4 pointer-events-auto md:top-16"
             onMouseEnter={showSessionRail}
             onMouseLeave={scheduleSessionRailHide}
           >
@@ -677,11 +678,11 @@ const AIChatWidget: React.FC = () => {
                   const isActiveSession = session.id === activeSessionId;
 
                   return (
-                    <div key={session.id} className="flex items-start gap-3">
+                    <div key={session.id} className="flex items-start">
                       <button
                         type="button"
                         onClick={() => handleSelectSession(session.id)}
-                        className={`min-w-0 flex-1 border-l pl-3 text-left transition ${
+                        className={`min-w-0 flex-1 border-l pl-3 pr-2 text-left transition ${
                           isActiveSession
                             ? 'border-white/70 text-white'
                             : 'border-white/10 text-white/58 hover:border-white/30 hover:text-white'
@@ -692,31 +693,6 @@ const AIChatWidget: React.FC = () => {
                           {promptMessages.length === 0 ? '空会话' : `${promptMessages.length} 次提问`} · {formatSessionUpdatedAt(session.updatedAt)}
                         </div>
                       </button>
-
-                      <div className="flex max-w-[112px] flex-wrap justify-end gap-1.5 pt-1">
-                        {promptMessages.map((prompt) => {
-                          const promptSummary = summarizeText(prompt.content, MAX_PROMPT_TOOLTIP_LENGTH);
-
-                          return (
-                            <div key={prompt.id} className="group relative flex items-center">
-                              <button
-                                type="button"
-                                title={promptSummary}
-                                aria-label={promptSummary}
-                                onClick={() => handleSelectSession(session.id)}
-                                className={`h-2.5 w-2.5 rounded-full transition group-hover:scale-125 group-hover:bg-white ${
-                                  isActiveSession ? 'bg-white/95' : 'bg-white/45'
-                                }`}
-                              />
-                              <div className="pointer-events-none absolute left-1/2 top-full z-10 hidden w-44 -translate-x-1/2 pt-2 group-hover:block">
-                                <div className="rounded-2xl border border-white/10 bg-black/72 px-3 py-2 text-[11px] leading-4 text-white shadow-2xl backdrop-blur-md">
-                                  {promptSummary}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
                     </div>
                   );
                 })}
@@ -762,6 +738,34 @@ const AIChatWidget: React.FC = () => {
                   <PagingIcons.Down />
                 </button>
               </div>
+
+              {activePromptMessages.length > 0 && (
+                <div
+                  data-chat-action="true"
+                  className="absolute right-0 top-32 bottom-6 z-10 flex w-12 pointer-events-auto flex-col items-center gap-2 overflow-y-auto pr-1 md:right-2"
+                >
+                  {activePromptMessages.map((prompt, index) => {
+                    const promptSummary = summarizeText(prompt.content, MAX_PROMPT_TOOLTIP_LENGTH);
+
+                    return (
+                      <div key={prompt.id} className="group relative flex items-center justify-center">
+                        <div
+                          aria-label={promptSummary}
+                          title={promptSummary}
+                          className={`h-2.5 w-2.5 rounded-full bg-white/55 transition group-hover:scale-125 group-hover:bg-white ${
+                            index === activePromptMessages.length - 1 ? 'bg-white/95' : ''
+                          }`}
+                        />
+                        <div className="pointer-events-none absolute right-full top-1/2 hidden -translate-y-1/2 pr-3 group-hover:block">
+                          <div className="w-44 rounded-2xl border border-white/10 bg-black/72 px-3 py-2 text-[11px] leading-4 text-white shadow-2xl backdrop-blur-md">
+                            {promptSummary}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
 
               <div
                 ref={messagesViewportRef}
