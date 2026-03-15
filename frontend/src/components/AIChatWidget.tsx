@@ -384,6 +384,17 @@ const AIChatWidget: React.FC = () => {
     });
   };
 
+  const handleMessagesWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    const viewport = messagesViewportRef.current;
+    if (!viewport) {
+      return;
+    }
+
+    event.preventDefault();
+    viewport.scrollTop += event.deltaY;
+    syncPagerState();
+  };
+
   return (
     <>
       <AnimatePresence>
@@ -408,7 +419,11 @@ const AIChatWidget: React.FC = () => {
             transition={{ duration: 0.25, ease: 'easeOut' }}
             className="fixed inset-x-0 top-3 bottom-28 z-[93] flex justify-center px-3 md:top-4 md:bottom-32 md:px-6 pointer-events-none"
           >
-            <div ref={chatCanvasRef} className="relative h-full w-full max-w-5xl pointer-events-auto">
+            <div
+              ref={chatCanvasRef}
+              className="relative h-full w-full max-w-5xl pointer-events-auto"
+              onWheel={handleMessagesWheel}
+            >
               <div
                 data-chat-control="true"
                 className="absolute right-0 top-4 z-10 flex flex-col gap-2 pr-1 md:right-2"
@@ -433,7 +448,7 @@ const AIChatWidget: React.FC = () => {
 
               <div
                 ref={messagesViewportRef}
-                className="flex h-full overflow-y-auto px-1 pb-5 pr-14 pt-2 md:px-3 md:pb-6 md:pr-16 md:pt-3"
+                className="flex h-full overflow-y-auto overscroll-contain px-1 pb-5 pr-14 pt-2 md:px-3 md:pb-6 md:pr-16 md:pt-3"
               >
                 <div className="flex min-h-full w-full flex-col justify-end gap-3">
                   <AnimatePresence initial={false}>
@@ -451,8 +466,8 @@ const AIChatWidget: React.FC = () => {
                           data-chat-item="true"
                           className={`max-w-[min(84vw,760px)] rounded-[28px] px-4 py-3 shadow-2xl md:px-5 md:py-4 ${
                             message.type === 'user'
-                              ? 'bg-indigo-500 text-white'
-                              : 'bg-white/96 dark:bg-gray-800/96 text-gray-900 dark:text-white'
+                              ? 'bg-indigo-600 text-white'
+                              : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white'
                           }`}
                         >
                           <MarkdownBubble content={message.content} isUser={message.type === 'user'} />
@@ -474,7 +489,7 @@ const AIChatWidget: React.FC = () => {
                         exit={{ opacity: 0 }}
                         className="flex justify-start"
                       >
-                        <div data-chat-item="true" className="rounded-[28px] bg-white/96 px-4 py-3 shadow-2xl dark:bg-gray-800/96">
+                        <div data-chat-item="true" className="rounded-[28px] bg-white px-4 py-3 shadow-2xl dark:bg-gray-800">
                           <div className="flex gap-1">
                             <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
                             <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
