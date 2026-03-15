@@ -6,7 +6,7 @@ export interface LoadingScreenUIProps {
   logoText?: string;
 }
 
-export function LoadingScreenUI({ title = "FlowStudy", subtitle = "加载中...", logoText = "F" }: LoadingScreenUIProps) {
+export function LoadingScreenUI({ title = "VibeLife", subtitle = "加载中...", logoText = "V" }: LoadingScreenUIProps) {
   return (
     <div className="min-h-screen flex items-center justify-center relative z-50">
       <div className="absolute inset-0 overflow-hidden">

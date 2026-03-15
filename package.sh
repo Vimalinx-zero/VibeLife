@@ -1,8 +1,12 @@
 #!/bin/bash
-# FlowStudy 打包脚本
-# 用于打包成 Windows 和 Linux 可执行文件
+# VibeLife 打包脚本
+# 用于构建前端并执行 PyInstaller 打包
 
 set -e
+
+PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
+APP_NAME="VibeLife"
+SPEC_FILE="$PROJECT_DIR/vibelife.spec"
 
 # 颜色输出
 RED='\033[0;31m'
@@ -11,7 +15,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN}  FlowStudy 打包脚本${NC}"
+echo -e "${GREEN}  VibeLife 打包脚本${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
 
@@ -32,9 +36,16 @@ if ! python3 -c "import PyInstaller" 2>/dev/null; then
     pip3 install pyinstaller
 fi
 
+# 检查打包配置
+if [ ! -f "$SPEC_FILE" ]; then
+    echo -e "${RED}错误: 未找到打包配置 $SPEC_FILE${NC}"
+    echo -e "${YELLOW}提示: 旧的打包配置已失效，需要重新生成 VibeLife 的 PyInstaller spec。${NC}"
+    exit 1
+fi
+
 # 步骤 1: 构建前端
 echo -e "${YELLOW}步骤 1/4: 构建前端...${NC}"
-cd "$(dirname "$0")/frontend"
+cd "$PROJECT_DIR/frontend"
 npm install
 npm run build
 cd ..
@@ -45,29 +56,20 @@ cd backend
 python3 -c "
 from database import engine
 from models import Base
-from sqlalchemy import text
 
 # 创建所有表
 Base.metadata.create_all(bind=engine)
-
-# 插入种子数据
-from database import SessionLocal
-from crud import init_seed_data
-db = SessionLocal()
-init_seed_data(db)
-db.commit()
-db.close()
 
 print('数据库初始化完成')
 "
 
 # 步骤 3: 打包 Windows 版本
 echo -e "${YELLOW}步骤 3/4: 打包 Windows 版本...${NC}"
-pyinstaller flowstudy.spec --onefile --clean --noconfirm
+pyinstaller "$SPEC_FILE" --onefile --clean --noconfirm
 
 # 步骤 4: 打包 Linux 版本
 echo -e "${YELLOW}步骤 4/4: 打包 Linux 版本...${NC}"
-pyinstaller flowstudy.spec --onefile --clean --noconfirm
+pyinstaller "$SPEC_FILE" --onefile --clean --noconfirm
 
 # 清理临时文件
 rm -rf build/
@@ -80,18 +82,18 @@ echo -e "${GREEN}========================================${NC}"
 echo ""
 
 echo -e "${GREEN}输出目录:${NC}"
-echo "  Windows: dist/FlowStudy.exe"
-echo "  Linux:   dist/FlowStudy"
+echo "  Windows: dist/${APP_NAME}.exe"
+echo "  Linux:   dist/${APP_NAME}"
 echo ""
 
 # 复制到发布目录
 mkdir -p release
-cp dist/FlowStudy.exe release/
-cp dist/FlowStudy release/
+cp "dist/${APP_NAME}.exe" release/ 2>/dev/null || true
+cp "dist/${APP_NAME}" release/ 2>/dev/null || true
 
 echo -e "${GREEN}已复制到 release/ 目录${NC}"
 echo ""
 echo -e "${YELLOW}使用方法:${NC}"
-echo "  Windows: 双击 FlowStudy.exe"
-echo "  Linux:   ./FlowStudy"
+echo "  Windows: 双击 ${APP_NAME}.exe"
+echo "  Linux:   ./${APP_NAME}"
 echo ""

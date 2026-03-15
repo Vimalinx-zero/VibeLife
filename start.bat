@@ -1,10 +1,10 @@
 @echo off
 chcp 65001 >nul
-title FlowStudy
+title VibeLife
 
 echo.
 echo ========================================
-echo   FlowStudy v1.0.0
+echo   VibeLife v1.0.0
 echo ========================================
 echo.
 echo [1] 启动后端服务...

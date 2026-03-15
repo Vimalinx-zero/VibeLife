@@ -1,25 +1,42 @@
-#(注释) backend/database.py 
-#(注释) 数据库连接配置。使用 SQLite，数据会存在 backend/flowstudy.db 文件中。 
+#(注释) backend/database.py
+#(注释) 数据库连接配置。默认使用 backend/vibelife.db，若检测到旧库则自动兼容。
 
-from sqlalchemy import create_engine 
-from sqlalchemy.ext.declarative import declarative_base 
-from sqlalchemy.orm import sessionmaker 
+import os
+from pathlib import Path
 
-# SQLite 数据库文件路径 
-SQLALCHEMY_DATABASE_URL = "sqlite:///./flowstudy.db" 
-# 如果未来要换 PostgreSQL，只需改上面这一行为： 
-# SQLALCHEMY_DATABASE_URL = "postgresql://user:password@localhost/dbname" 
+from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
 
-# check_same_thread=False 是 SQLite 专用的，允许在多线程中使用连接 
-engine = create_engine( 
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False} 
-) 
+BASE_DIR = Path(__file__).resolve().parent
+DEFAULT_DB_PATH = BASE_DIR / "vibelife.db"
+LEGACY_DB_PATH = BASE_DIR / "flowstudy.db"
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine) 
 
-Base = declarative_base() 
+def _resolve_db_path() -> Path:
+    env_path = os.getenv("VIBELIFE_DB_PATH")
+    if env_path:
+        return Path(env_path).expanduser().resolve()
+    if DEFAULT_DB_PATH.exists() or not LEGACY_DB_PATH.exists():
+        return DEFAULT_DB_PATH
+    return LEGACY_DB_PATH
 
-# 依赖项：每个请求创建一个独立的 DB 会话 
+
+DB_PATH = _resolve_db_path()
+SQLALCHEMY_DATABASE_URL = f"sqlite:///{DB_PATH.as_posix()}"
+# 如果未来要换 PostgreSQL，只需改上面这一行为：
+# SQLALCHEMY_DATABASE_URL = "postgresql://user:password@localhost/dbname"
+
+# check_same_thread=False 是 SQLite 专用的，允许在多线程中使用连接
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
+)
+
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+Base = declarative_base()
+
+# 依赖项：每个请求创建一个独立的 DB 会话
 def get_db(): 
     db = SessionLocal() 
     try: 

@@ -1,4 +1,4 @@
-# FlowStudy Backend Requirements
+# VibeLife Backend Requirements
 
 # Web Framework
 fastapi>=0.104.0

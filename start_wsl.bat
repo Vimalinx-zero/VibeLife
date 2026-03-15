@@ -1,11 +1,11 @@
 @echo off
-REM FlowStudy WSL2 快捷启动脚本
+REM VibeLife WSL2 快捷启动脚本
 REM 从 Windows 直接启动 WSL2 中的开发环境
 
-title FlowStudy WSL2 Launcher
+title VibeLife WSL2 Launcher
 
 echo ========================================
-echo    FlowStudy WSL2 启动中...
+echo    VibeLife WSL2 启动中...
 echo ========================================
 echo.
 
@@ -19,7 +19,7 @@ if %errorlevel% neq 0 (
 )
 
 REM 启动服务
-wsl bash -c "cd ~/Programs/flowstudy && ./start.sh start"
+wsl bash -lc "cd \"$(wslpath '%~dp0')\" && ./start.sh start"
 
 if %errorlevel% equ 0 (
     echo.

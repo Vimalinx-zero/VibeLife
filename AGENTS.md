@@ -1,17 +1,17 @@
-# FlowStudy - Agent Guidelines
+# VibeLife - Agent Guidelines
 
-This document provides guidelines for agentic coding assistants working on the FlowStudy repository.
+This document provides guidelines for agentic coding assistants working on the VibeLife repository.
 
 ---
 
 ## Project Overview
 
-**FlowStudy** is an intelligent learning management platform with:
-- Smart Quiz System: Personalized recommendations
+**VibeLife** is a personal growth and solo-operator workspace with:
+- Workbench: todos, daily planning, focus sessions
 - Note Management: Markdown editor with bidirectional links (`[[note:id]]`)
-- Mistake Vault: Error collection and mastery tracking
-- Anki Flashcards: SM-2 spaced repetition algorithm
-- Knowledge Integration: Cross-linking questions, notes, mistakes, cards
+- Project Tracking: projects, steps, resources, follow-ups
+- Journal & Schedule: daily reflection and planning timeline
+- AI Workbench: VibeLife chat and OpenClaw integration
 
 **Tech Stack**:
 - Frontend: React 19.2.0 + Vite 7.2.4 + TypeScript 5.9.3 + Tailwind CSS

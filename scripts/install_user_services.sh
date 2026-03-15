@@ -4,9 +4,9 @@ set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SYSTEMD_USER_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
-STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/flowstudy-local"
-BACKEND_SERVICE_NAME="flowstudy-local-backend.service"
-FRONTEND_SERVICE_NAME="flowstudy-local-frontend.service"
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/vibelife-local"
+BACKEND_SERVICE_NAME="vibelife-local-backend.service"
+FRONTEND_SERVICE_NAME="vibelife-local-frontend.service"
 NPM_BIN="$(command -v npm)"
 NODE_BIN="$(command -v node)"
 NODE_BIN_DIR="$(dirname "$NODE_BIN")"
@@ -16,7 +16,7 @@ mkdir -p "$SYSTEMD_USER_DIR" "$STATE_DIR"
 
 cat > "$SYSTEMD_USER_DIR/$BACKEND_SERVICE_NAME" <<EOF
 [Unit]
-Description=FlowStudy Local Backend
+Description=VibeLife Local Backend
 After=network.target
 
 [Service]
@@ -35,7 +35,7 @@ EOF
 
 cat > "$SYSTEMD_USER_DIR/$FRONTEND_SERVICE_NAME" <<EOF
 [Unit]
-Description=FlowStudy Local Frontend
+Description=VibeLife Local Frontend
 After=$BACKEND_SERVICE_NAME
 Requires=$BACKEND_SERVICE_NAME
 

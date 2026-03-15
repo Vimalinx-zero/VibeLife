@@ -96,7 +96,7 @@ const MOCK_PROGRESS_ITEMS: ProgressItem[] = [
   },
   {
     id: "opc-3",
-    title: "FlowStudy × OpenClaw 联动看板",
+    title: "VibeLife × OpenClaw 联动看板",
     detail: "统一查看学习任务与代理项目推进节奏，定义关键里程碑和验收节点。",
     progress: 27,
     status: "untouched",

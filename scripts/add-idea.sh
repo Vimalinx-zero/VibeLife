@@ -1,8 +1,12 @@
 #!/bin/bash
-# FlowStudy 快速添加想法脚本
+# VibeLife 快速添加想法脚本
 # 用法: ./scripts/add-idea.sh
 
 set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+IDEAS_FILE="$PROJECT_DIR/IDEAS.md"
 
 # 颜色定义
 RED='\033[0;31m'
@@ -11,7 +15,7 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-echo -e "${BLUE}=== FlowStudy 添加新想法 ===${NC}"
+echo -e "${BLUE}=== VibeLife 添加新想法 ===${NC}"
 echo ""
 
 # 输入想法定义
@@ -56,7 +60,7 @@ fi
 # 生成想法定义
 date=$(date +%Y-%m-%d)
 
-cat >> /home/chesten/Programs/flowstudy/IDEAS.md << EOF
+cat >> "$IDEAS_FILE" << EOF
 
 ### [IDEA-$id] $title
 

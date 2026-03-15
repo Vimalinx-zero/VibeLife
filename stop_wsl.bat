@@ -1,14 +1,14 @@
 @echo off
-REM FlowStudy WSL2 停止服务脚本
+REM VibeLife WSL2 停止服务脚本
 
-title FlowStudy WSL2 Stop
+title VibeLife WSL2 Stop
 
 echo ========================================
-echo    停止 FlowStudy 服务...
+echo    停止 VibeLife 服务...
 echo ========================================
 echo.
 
-wsl bash -c "cd ~/Programs/flowstudy && ./start.sh stop"
+wsl bash -lc "cd \"$(wslpath '%~dp0')\" && ./start.sh stop"
 
 echo.
 echo ========================================

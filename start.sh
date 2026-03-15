@@ -1,5 +1,5 @@
 #!/bin/bash
-# FlowStudy 一键启动脚本 (WSL2)
+# VibeLife 一键启动脚本 (WSL2)
 # 功能：环境检查、依赖安装、启动服务
 
 set -e
@@ -14,7 +14,7 @@ MAGENTA='\033[0;35m'
 NC='\033[0m' # No Color
 
 # 项目路径
-PROJECT_DIR="/home/chesten/Programs/flowstudy"
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="$PROJECT_DIR/backend"
 FRONTEND_DIR="$PROJECT_DIR/frontend"
 
@@ -75,7 +75,7 @@ check_port() {
     if lsof -Pi :$port -sTCP:LISTEN -t >/dev/null 2>&1; then
         return 0
     else
-        return return 1
+        return 1
     fi
 }
 
@@ -298,7 +298,7 @@ check_status() {
 # ==================== 服务启动 ====================
 
 start_services() {
-    print_header "FlowStudy 开发环境启动"
+    print_header "VibeLife 开发环境启动"
 
     # 1. 环境检查
     print_info "第 1 步：环境检查"
@@ -450,7 +450,7 @@ clean_all() {
 
 show_help() {
     cat << EOF
-${MAGENTA}FlowStudy 开发环境管理脚本${NC}
+${MAGENTA}VibeLife 开发环境管理脚本${NC}
 
 ${YELLOW}用法:${NC} $0 [命令]
 
@@ -483,7 +483,7 @@ EOF
 
 # 仅设置环境
 setup_only() {
-    print_header "FlowStudy 环境配置"
+    print_header "VibeLife 环境配置"
 
     print_info "第 1 步：环境检查"
     check_python

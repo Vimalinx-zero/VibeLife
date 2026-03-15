@@ -7,8 +7,10 @@ Run: python backend/migrate_add_tags.py
 import sqlite3
 import os
 
+from database import DB_PATH
+
 def migrate():
-    db_path = os.path.join(os.path.dirname(__file__), 'flowstudy.db')
+    db_path = str(DB_PATH)
 
     print(f"📂 数据库路径: {db_path}")
 
