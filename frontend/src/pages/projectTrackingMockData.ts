@@ -186,15 +186,15 @@ export const mockProjects: ProjectRecord[] = [
     id: "study-exam",
     name: "算法面试准备",
     category: "study",
-    subtitle: "高频题与系统设计复习",
+    subtitle: "高频题与系统设计整理",
     status: "有阻塞",
-    nextAction: "把错题按知识点重新分组",
+    nextAction: "把薄弱点按主题重新分组",
     steps: [
       { id: "s13", title: "完成两道中等题", owner: "我", due: "今天", done: false },
       { id: "s14", title: "整理系统设计模板", owner: "我", due: "03-11", done: false },
     ],
     resources: [
-      { id: "r8", name: "面试知识图谱", kind: "文档", note: "需要补充缓存章节" },
+      { id: "r8", name: "面试知识网络", kind: "文档", note: "需要补充缓存章节" },
     ],
     emails: [
       {

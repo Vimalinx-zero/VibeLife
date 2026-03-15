@@ -150,7 +150,7 @@ const HotkeysSettings = () => {
           <div className="flex-1">
             <h4 className="font-bold text-blue-900 dark:text-blue-200 mb-1">自定义快捷键</h4>
             <p className="text-sm text-blue-700 dark:text-blue-300">
-              这里只保留当前 VibeLife 还在使用的页面和操作，不再展示旧的题库、错题本、Anki 快捷键。
+              这里只保留当前 VibeLife 还在使用的页面和操作，历史学习模块的旧快捷键已经全部移除。
             </p>
           </div>
         </div>

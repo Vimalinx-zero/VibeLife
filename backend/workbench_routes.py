@@ -1,5 +1,5 @@
 # backend/workbench_routes.py
-# 工作台专用 API：任务管理、错题备忘录、学习统计
+# 工作台专用 API：任务管理、专注记录、日志与日程
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -468,7 +468,6 @@ async def create_study_session(
         duration_minutes=session.duration_minutes,
         mode=session.mode,
         tasks_completed=session.tasks_completed,
-        mistakes_collected=0,
         user_id=current_user_id  # ✅ 关联到当前用户
     )
 
