@@ -469,6 +469,7 @@ def run_openclaw_agent(
         env["VIBELIFE_API_AUTH_TOKEN"] = auth_token
     if current_user_id:
         env["VIBELIFE_CURRENT_USER_ID"] = current_user_id
+    env["VIBELIFE_OPENCLAW_AGENT_ID"] = target_agent
 
     try:
         process = subprocess.Popen(
