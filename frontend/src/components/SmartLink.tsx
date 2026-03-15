@@ -24,7 +24,7 @@ const SmartLink = ({ type, id, originalText, cachedData, onCacheUpdate }) => {
                     throw new Error(`Unsupported smart link type: ${type}`);
                 }
 
-                const res = await apiClient.get(`/card/preview?type=${type}&id=${encodeURIComponent(id)}`);
+                const res = await apiClient.get(`/notes/preview?type=${type}&id=${encodeURIComponent(id)}`);
                 if (isMounted) {
                     if (res.data.found) {
                         const fetchedData = res.data;

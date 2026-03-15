@@ -11,6 +11,13 @@ import models
 router = APIRouter()
 
 
+def _normalize_project_category(value: str | None) -> str:
+    text = (value or "work").strip().lower() or "work"
+    if text == "study":
+        return "growth"
+    return text
+
+
 class ProjectCreate(pydantic.BaseModel):
     name: str
     category: str = "work"
@@ -49,7 +56,7 @@ def _serialize_project(project: models.Project) -> dict:
     return {
         "id": project.id,
         "name": project.name,
-        "category": project.category,
+        "category": _normalize_project_category(project.category),
         "subtitle": project.subtitle,
         "status": project.status,
         "nextAction": project.next_action,
@@ -112,7 +119,7 @@ def _seed_projects_if_empty(db: Session, user_id: str):
     now = datetime.utcnow().isoformat()
     work_project_id = _seed_id(user_id, "project_work_tracker")
     life_project_id = _seed_id(user_id, "project_life_trip")
-    study_project_id = _seed_id(user_id, "project_study_english")
+    growth_project_id = _seed_id(user_id, "project_growth_expression")
     projects = [
         models.Project(
             id=work_project_id,
@@ -137,13 +144,13 @@ def _seed_projects_if_empty(db: Session, user_id: str):
             updated_at=now,
         ),
         models.Project(
-            id=study_project_id,
+            id=growth_project_id,
             user_id=user_id,
-            name="英语口语冲刺",
-            category="study",
-            subtitle="30天口语练习",
+            name="表达力训练计划",
+            category="growth",
+            subtitle="30天输出与复盘",
             status="正常推进",
-            next_action="今日完成20分钟跟读",
+            next_action="今日输出一段 5 分钟复盘",
             created_at=now,
             updated_at=now,
         ),
@@ -180,8 +187,8 @@ def _seed_projects_if_empty(db: Session, user_id: str):
         models.ProjectStep(
             id=_seed_id(user_id, "ps_4"),
             user_id=user_id,
-            project_id=study_project_id,
-            title="每日跟读20分钟",
+            project_id=growth_project_id,
+            title="每天做一次公开表达复盘",
             owner="我",
             due="每天",
             done=False,
@@ -208,10 +215,10 @@ def _seed_projects_if_empty(db: Session, user_id: str):
         models.ProjectResource(
             id=_seed_id(user_id, "pr_3"),
             user_id=user_id,
-            project_id=study_project_id,
-            name="跟读素材",
+            project_id=growth_project_id,
+            name="表达练习清单",
             kind="文件",
-            note="按难度分层",
+            note="记录输出主题与复盘反馈",
         ),
     ]
 
@@ -253,7 +260,7 @@ async def create_project(
         id=f"project_{int(time.time() * 1000)}",
         user_id=current_user_id,
         name=payload.name,
-        category=payload.category,
+        category=_normalize_project_category(payload.category),
         subtitle=payload.subtitle,
         status=payload.status,
         next_action=payload.nextAction,
@@ -278,7 +285,9 @@ async def get_projects(
 
     query = db.query(models.Project).filter(models.Project.user_id == current_user_id)
     if category and category != "all":
-        query = query.filter(models.Project.category == category)
+        query = query.filter(
+            models.Project.category == _normalize_project_category(category)
+        )
     projects = query.order_by(models.Project.updated_at.desc()).all()
 
     project_ids = [p.id for p in projects]
@@ -353,7 +362,7 @@ async def get_projects(
         {
             "id": p.id,
             "name": p.name,
-            "category": p.category,
+            "category": _normalize_project_category(p.category),
             "subtitle": p.subtitle,
             "status": p.status,
             "nextAction": p.next_action,
@@ -403,7 +412,7 @@ async def update_project(
     if payload.name is not None:
         project.name = payload.name
     if payload.category is not None:
-        project.category = payload.category
+        project.category = _normalize_project_category(payload.category)
     if payload.subtitle is not None:
         project.subtitle = payload.subtitle
     if payload.status is not None:

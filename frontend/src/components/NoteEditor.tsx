@@ -471,7 +471,7 @@ const NoteEditor = ({
                   <TagInput
                     tags={tags}
                     onChange={setTags}
-                    placeholder="添加标签（如：数学、重要、待复习）..."
+                    placeholder="添加标签（如：表达、重要、待处理）..."
                     autoMode={autoTag}
                   />
                 </div>

@@ -62,7 +62,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
   const tracks: Track[] = [
     {
       id: 1,
-      title: "Lofi Study",
+      title: "Deep Focus",
       artist: "FASSounds",
       url: "https://cdn.pixabay.com/audio/2022/05/27/audio_1808fbf07a.mp3",
       duration: "3:19",
@@ -94,7 +94,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
     },
     {
       id: 5,
-      title: "Study Session",
+      title: "Long Session",
       artist: "AmbientMusic",
       url: "https://cdn.pixabay.com/audio/2022/05/27/audio_1808fbf07a.mp3",
       duration: "3:45",
@@ -176,7 +176,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
       console.error('Failed to play completion chime:', error);
     }
 
-    // Calculate study duration
+    // Calculate focus duration
     let durationMinutes = 0;
     if (timerMode === 'classic') {
       durationMinutes = Math.round((customMinutes * 60 - timerSeconds) / 60);
@@ -189,16 +189,16 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
       setTimerSeconds(0);
     }
 
-    // Record study session to database
+    // Record focus session to database
     try {
-      await workbenchApi.createStudySession(
+      await workbenchApi.createFocusSession(
         durationMinutes,
         timerMode,
         0
       );
-      console.log(`Study session recorded: ${durationMinutes} minutes in ${timerMode} mode`);
+      console.log(`Focus session recorded: ${durationMinutes} minutes in ${timerMode} mode`);
     } catch (error) {
-      console.error('Failed to record study session:', error);
+      console.error('Failed to record focus session:', error);
     }
   }, [timerMode, customMinutes, timerSeconds, flowDuration]);
 

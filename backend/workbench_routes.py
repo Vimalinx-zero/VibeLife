@@ -131,7 +131,7 @@ class TodoItemUpdate(pydantic.BaseModel):
             raise ValueError("Todo text cannot be empty")
         return text
 
-class WorkbenchSessionCreate(pydantic.BaseModel):
+class FocusSessionCreate(pydantic.BaseModel):
     duration_minutes: int
     mode: str  # 'classic' | 'flow'
     tasks_completed: int = 0
@@ -450,20 +450,20 @@ async def clear_all_todos(
     return {"success": True, "deleted_count": count}
 
 # ========================
-# Study Session API
+# Focus Session API
 # ========================
 
 @router.post("/api/workbench/sessions")
-async def create_study_session(
-    session: WorkbenchSessionCreate,
+async def create_focus_session(
+    session: FocusSessionCreate,
     current_user_id: str = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
-    """记录学习会话（番茄钟使用）（带用户隔离）"""
+    """记录专注会话（带用户隔离）"""
     import time
     session_id = f"session_{int(time.time() * 1000)}"
 
-    new_session = models.StudySession(
+    new_session = models.FocusSession(
         id=session_id,
         duration_minutes=session.duration_minutes,
         mode=session.mode,
@@ -473,27 +473,31 @@ async def create_study_session(
 
     db.add(new_session)
     db.commit()
+    db.refresh(new_session)
 
     return {
-        "success": True,
-        "session_id": session_id
+        "id": new_session.id,
+        "duration_minutes": new_session.duration_minutes,
+        "mode": new_session.mode,
+        "tasks_completed": new_session.tasks_completed,
+        "created_at": new_session.created_at,
     }
 
 @router.get("/api/workbench/sessions")
-async def get_study_sessions(
+async def get_focus_sessions(
     days: int = 7,
     current_user_id: str = Depends(get_current_user_id),
     db: Session = Depends(get_db)
 ):
-    """获取最近的学习会话（带用户隔离）"""
+    """获取最近的专注会话（带用户隔离）"""
     from datetime import timedelta
 
     start_date = datetime.utcnow() - timedelta(days=days)
 
-    sessions = db.query(models.StudySession).filter(
-        models.StudySession.user_id == current_user_id,  # ✅ 用户隔离
-        models.StudySession.created_at >= start_date.isoformat()
-    ).order_by(models.StudySession.created_at.desc()).all()
+    sessions = db.query(models.FocusSession).filter(
+        models.FocusSession.user_id == current_user_id,  # ✅ 用户隔离
+        models.FocusSession.created_at >= start_date.isoformat()
+    ).order_by(models.FocusSession.created_at.desc()).all()
 
     return [{
         "id": s.id,
@@ -776,10 +780,10 @@ async def get_workbench_stats(
         models.TodoItem.completed == True
     ).count()
 
-    # Study sessions stats
-    today_sessions = db.query(models.StudySession).filter(
-        models.StudySession.user_id == current_user_id,
-        models.StudySession.created_at >= today_start.isoformat()
+    # Focus sessions stats
+    today_sessions = db.query(models.FocusSession).filter(
+        models.FocusSession.user_id == current_user_id,
+        models.FocusSession.created_at >= today_start.isoformat()
     ).all()
     today_focus_minutes = sum(s.duration_minutes for s in today_sessions)
 
@@ -804,7 +808,7 @@ async def get_workbench_stats(
             "completed": completed_todos,
             "pending": total_todos - completed_todos
         },
-        "study_time": {
+        "focus_time": {
             "today_minutes": today_focus_minutes,
             "today_sessions": len(today_sessions)
         },

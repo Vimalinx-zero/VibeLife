@@ -135,7 +135,7 @@ const TagInput = ({ tags = [], onChange, placeholder = "添加标签...", autoMo
         >
           {TAG_COLORS.slice(0, 5).map((_, i) => {
             const suggestions = [
-              "重要", "待复习", "已完成",
+              "重要", "待处理", "已完成",
               "数学", "物理", "化学", "生物",
               "概念", "公式", "例题"
             ];

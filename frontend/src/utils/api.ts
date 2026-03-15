@@ -80,7 +80,7 @@ export interface ProjectEmailDTO {
 export interface ProjectRecordDTO {
   id: string;
   name: string;
-  category: 'life' | 'work' | 'study' | string;
+  category: 'life' | 'work' | 'growth' | string;
   subtitle: string;
   status: '正常推进' | '需关注' | '有阻塞' | string;
   nextAction: string;

@@ -36,8 +36,8 @@ class FileItem(Base):
     children = relationship("FileItem", backref="parent", remote_side=[id])
 
 
-class StudySession(Base):
-    __tablename__ = "study_sessions"
+class FocusSession(Base):
+    __tablename__ = "focus_sessions"
 
     id = Column(String, primary_key=True, index=True)
     user_id = Column(String, index=True, nullable=False)
@@ -61,8 +61,8 @@ class TodoItem(Base):
     due_date = Column(String, nullable=True)
 
 
-class LearningSession(Base):
-    __tablename__ = "learning_sessions"
+class ActivityCheckpoint(Base):
+    __tablename__ = "activity_checkpoints"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     user_id = Column(String, index=True, nullable=False)

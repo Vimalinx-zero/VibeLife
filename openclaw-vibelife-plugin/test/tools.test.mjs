@@ -17,6 +17,7 @@ function collectTools(pluginConfig = {}) {
 test("registers project creation and removes dead study tools", () => {
   const tools = collectTools()
   const toolNames = new Set(tools.map((tool) => tool.name))
+  const heatmapTool = tools.find((tool) => tool.name === "vibelife_dashboard_heatmap")
 
   assert.ok(toolNames.has("vibelife_project_create"))
   assert.ok(!toolNames.has("vibelife_study_start"))
@@ -27,6 +28,8 @@ test("registers project creation and removes dead study tools", () => {
   assert.ok(!toolNames.has("vibelife_study_report"))
   assert.ok(!toolNames.has("vibelife_pomodoro_complete"))
   assert.ok(!toolNames.has("vibelife_pomodoro_stats"))
+  assert.ok(heatmapTool)
+  assert.equal(heatmapTool.description, "Read recent focus heatmap data from the dashboard.")
 })
 
 test("project creation tool posts to the project create endpoint", async () => {

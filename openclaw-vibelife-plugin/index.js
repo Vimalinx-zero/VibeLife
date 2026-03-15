@@ -1342,7 +1342,7 @@ function defineTools(api) {
       {
         name: "vibelife_dashboard_heatmap",
         label: "VibeLife Dashboard Heatmap",
-        description: "Read recent study heatmap data from the dashboard.",
+        description: "Read recent focus heatmap data from the dashboard.",
         parameters: {
           type: "object",
           additionalProperties: false,

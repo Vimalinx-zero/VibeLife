@@ -34,11 +34,6 @@ interface TodayStats {
   completed_todos: number;
 }
 
-interface LastActivity {
-  type: string;
-  description?: string;
-}
-
 interface CoachSuggestion {
   id: string;
   title: string;
@@ -51,9 +46,9 @@ interface CoachSuggestion {
 
 interface CoachSnapshot {
   pending_todos: number;
-  today_study_minutes: number;
+  today_focus_minutes: number;
   recent_7d_completion_rate: number;
-  recent_7d_avg_study_minutes: number;
+  recent_7d_avg_focus_minutes: number;
 }
 
 interface CoachAdaptive {
@@ -61,7 +56,7 @@ interface CoachAdaptive {
   label: string;
   focus: string;
   completion_rate: number;
-  avg_daily_study_minutes: number;
+  avg_daily_focus_minutes: number;
   recommended_plan_items: number;
 }
 
@@ -82,16 +77,16 @@ const normalizeCoachData = (raw: any): CoachData => {
   return ({
   snapshot: {
     pending_todos: raw?.snapshot?.pending_todos || 0,
-    today_study_minutes: raw?.snapshot?.today_study_minutes || 0,
+    today_focus_minutes: raw?.snapshot?.today_focus_minutes ?? raw?.snapshot?.today_study_minutes ?? 0,
     recent_7d_completion_rate: raw?.snapshot?.recent_7d_completion_rate || 0,
-    recent_7d_avg_study_minutes: raw?.snapshot?.recent_7d_avg_study_minutes || 0,
+    recent_7d_avg_focus_minutes: raw?.snapshot?.recent_7d_avg_focus_minutes ?? raw?.snapshot?.recent_7d_avg_study_minutes ?? 0,
   },
   adaptive: {
     level: adaptiveLevel,
     label: raw?.adaptive?.label || '稳步推进',
     focus: raw?.adaptive?.focus || '按优先级完成关键任务',
     completion_rate: raw?.adaptive?.completion_rate || 0,
-    avg_daily_study_minutes: raw?.adaptive?.avg_daily_study_minutes || 0,
+    avg_daily_focus_minutes: raw?.adaptive?.avg_daily_focus_minutes ?? raw?.adaptive?.avg_daily_study_minutes ?? 0,
     recommended_plan_items: raw?.adaptive?.recommended_plan_items || 3,
   },
   suggestions: raw?.suggestions || [],
@@ -139,13 +134,12 @@ function Dashboard() {
     pending_todos: 0,
     today_focus_minutes: 0
   });
-  const [studyStats, setStudyStats] = useState<TodayStats>({
+  const [todayStats, setTodayStats] = useState<TodayStats>({
     focus_minutes: 0,
     notes_created: 0,
     journal_entries: 0,
     completed_todos: 0
   });
-  const [lastActivity, setLastActivity] = useState<LastActivity | null>(null);
   const [coachData, setCoachData] = useState<CoachData | null>(null);
   const [coachLoading, setCoachLoading] = useState<boolean>(true);
   const [coachGenerating, setCoachGenerating] = useState<boolean>(false);
@@ -156,16 +150,16 @@ function Dashboard() {
   const fallbackCoachData = useCallback((): CoachData => ({
     snapshot: {
       pending_todos: 0,
-      today_study_minutes: 0,
+      today_focus_minutes: 0,
       recent_7d_completion_rate: 0,
-      recent_7d_avg_study_minutes: 0,
+      recent_7d_avg_focus_minutes: 0,
     },
     adaptive: {
       level: 'balanced',
       label: '稳步推进',
       focus: '先完成关键任务，再推进项目和记录',
       completion_rate: 0,
-      avg_daily_study_minutes: 0,
+      avg_daily_focus_minutes: 0,
       recommended_plan_items: 3,
     },
     suggestions: [
@@ -233,13 +227,9 @@ function Dashboard() {
         const statsRes = await apiClient.get("/dashboard");
         if(statsRes.data) setStats(statsRes.data);
 
-        // 获取学习统计
-        const studyStatsRes = await apiClient.get("/dashboard/stats");
-        if(studyStatsRes.data) setStudyStats(studyStatsRes.data);
-
-        // 获取断点续学信息
-        const progressRes = await apiClient.get("/dashboard/progress");
-        if(progressRes.data) setLastActivity(progressRes.data.last_activity);
+        // 获取专注统计
+        const todayStatsRes = await apiClient.get("/dashboard/stats");
+        if(todayStatsRes.data) setTodayStats(todayStatsRes.data);
 
         const journalRes = await apiClient.get("/workbench/journal", {
           params: {
@@ -253,7 +243,7 @@ function Dashboard() {
         console.log("后端未连接或未认证，使用模拟数据");
 
         // 模拟数据
-        setStudyStats({
+        setTodayStats({
           focus_minutes: 0,
           notes_created: 0,
           journal_entries: 0,
@@ -323,13 +313,6 @@ function Dashboard() {
     });
   };
 
-  // 格式化时长
-  const formatDuration = (minutes) => {
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    return `${hours}h ${mins}m`;
-  };
-
   // 生成问候语
   const getGreeting = () => {
     const hour = currentTime.getHours();
@@ -340,24 +323,6 @@ function Dashboard() {
     if (hour < 18) return "下午好";
     if (hour < 22) return "晚上好";
     return "夜深了";
-  };
-
-  // 断点续学处理
-  const handleResumeLearning = () => {
-    if (lastActivity) {
-      switch(lastActivity.type) {
-        case 'note':
-          navigate('/notes');
-          break;
-        case 'workbench':
-          navigate('/workbench');
-          break;
-        default:
-          navigate('/workbench');
-      }
-    } else {
-      navigate('/workbench');
-    }
   };
 
   return (
@@ -381,7 +346,7 @@ function Dashboard() {
             <div className="grid grid-cols-5 gap-3 mb-6">
               <StatItem
                 label="笔记"
-                value={studyStats.notes_created || 0}
+                value={todayStats.notes_created || 0}
                 icon={Icons.BookOpen}
                 bgColor="bg-yellow-500/20"
                 textColor="text-yellow-500"
@@ -550,7 +515,7 @@ function Dashboard() {
                   待办 {coachData?.snapshot.pending_todos || 0}
                 </div>
                 <div className="text-xs rounded-lg px-3 py-2 bg-blue-500/10 text-blue-600 dark:text-blue-300">
-                  工作时间 {coachData?.snapshot.today_study_minutes || 0} min
+                  工作时间 {coachData?.snapshot.today_focus_minutes || 0} min
                 </div>
               </div>
 
@@ -566,7 +531,7 @@ function Dashboard() {
                   7天完成率 {Math.round((coachData?.adaptive?.completion_rate || 0) * 100)}%
                 </span>
                 <span className="text-xs rounded-full px-3 py-1 bg-sky-500/10 text-sky-600 dark:text-sky-300">
-                  日均工作 {coachData?.adaptive?.avg_daily_study_minutes || 0} min
+                  日均工作 {coachData?.adaptive?.avg_daily_focus_minutes || 0} min
                 </span>
               </div>
 

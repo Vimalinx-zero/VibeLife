@@ -4,7 +4,7 @@ import { ReactFlow, Background, Controls, MiniMap, type Edge, type Node } from "
 import "@xyflow/react/dist/style.css";
 import { apiClient, projectsAPI, type ProjectRecordDTO } from "../utils/api";
 
-type ProjectCategory = "life" | "work" | "study";
+type ProjectCategory = "life" | "work" | "growth";
 
 type ViewTab = "mindmap" | "notes" | "emails";
 
@@ -23,10 +23,10 @@ const tabLabel: Record<ViewTab, string> = {
 const categoryLabel: Record<ProjectCategory, string> = {
   life: "生活",
   work: "工作",
-  study: "学习"
+  growth: "成长"
 };
 
-const categoryOrder: ProjectCategory[] = ["life", "work", "study"];
+const categoryOrder: ProjectCategory[] = ["life", "work", "growth"];
 
 interface ProjectRecord extends ProjectRecordDTO {
   category: ProjectCategory;
@@ -39,6 +39,16 @@ interface SearchNoteItem {
   tags?: string[];
   date?: string;
 }
+
+const normalizeProjectCategory = (value: string): ProjectCategory | null => {
+  if (value === "study") {
+    return "growth";
+  }
+  if (value === "life" || value === "work" || value === "growth") {
+    return value;
+  }
+  return null;
+};
 
 const ProjectsPage = () => {
   const navigate = useNavigate();
@@ -56,7 +66,15 @@ const ProjectsPage = () => {
       setLoadingProjects(true);
       try {
         const data = await projectsAPI.getProjects();
-        const normalized = data.filter((item): item is ProjectRecord => item.category === "life" || item.category === "work" || item.category === "study");
+        const normalized = data
+          .map((item) => {
+            const category = normalizeProjectCategory(item.category);
+            if (!category) {
+              return null;
+            }
+            return { ...item, category };
+          })
+          .filter((item): item is ProjectRecord => item !== null);
         if (!alive) {
           return;
         }
@@ -87,7 +105,7 @@ const ProjectsPage = () => {
     () => ({
       life: allProjects.filter((item) => item.category === "life"),
       work: allProjects.filter((item) => item.category === "work"),
-      study: allProjects.filter((item) => item.category === "study")
+      growth: allProjects.filter((item) => item.category === "growth")
     }),
     [allProjects]
   );

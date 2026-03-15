@@ -106,6 +106,44 @@ class ProjectCreateApiTest(unittest.TestCase):
         self.assertTrue(project["createdAt"])
         self.assertTrue(project["updatedAt"])
 
+    def test_seeded_projects_use_growth_category_instead_of_study(self):
+        headers = self.register_user()
+
+        response = self.client.get("/api/projects", headers=headers)
+
+        self.assertEqual(response.status_code, 200, response.text)
+        projects = response.json()["projects"]
+        categories = {project["category"] for project in projects}
+
+        self.assertIn("growth", categories)
+        self.assertNotIn("study", categories)
+
+    def test_notes_preview_endpoint_returns_note_summary(self):
+        headers = self.register_user()
+
+        create_response = self.client.post(
+            "/api/notes/create",
+            headers=headers,
+            json={
+                "type": "file",
+                "name": "OpenClaw cleanup note",
+                "content": "This is a cleanup summary for the VibeLife notes preview endpoint.",
+            },
+        )
+        self.assertEqual(create_response.status_code, 200, create_response.text)
+        note_id = create_response.json()["item"]["id"]
+
+        preview_response = self.client.get(
+            f"/api/notes/preview?type=note&id={note_id}",
+            headers=headers,
+        )
+
+        self.assertEqual(preview_response.status_code, 200, preview_response.text)
+        preview = preview_response.json()
+        self.assertTrue(preview["found"])
+        self.assertEqual(preview["id"], note_id)
+        self.assertEqual(preview["title"], "OpenClaw cleanup note")
+
 
 if __name__ == "__main__":
     unittest.main()

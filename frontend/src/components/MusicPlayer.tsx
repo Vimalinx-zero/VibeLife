@@ -33,7 +33,7 @@ const MusicPlayer = memo(() => {
   }> = [
     {
       id: 1,
-      title: "Lofi Study",
+      title: "Deep Focus",
       artist: "FASSounds",
       url: "https://cdn.pixabay.com/audio/2022/05/27/audio_1808fbf07a.mp3",
       duration: "3:19"

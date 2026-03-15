@@ -38,7 +38,7 @@ type ProjectChatMessage = {
 type PersonalTodoItem = {
   id: string;
   text: string;
-  category: "学习" | "工作" | "生活" | "娱乐" | "其他";
+  category: "成长" | "工作" | "生活" | "娱乐" | "其他";
   source: "ai";
   status: "done" | "pending" | "in_progress";
   aiSteps?: Array<{
@@ -97,7 +97,7 @@ const MOCK_PROGRESS_ITEMS: ProgressItem[] = [
   {
     id: "opc-3",
     title: "VibeLife × OpenClaw 联动看板",
-    detail: "统一查看学习任务与代理项目推进节奏，定义关键里程碑和验收节点。",
+    detail: "统一查看成长任务与代理项目推进节奏，定义关键里程碑和验收节点。",
     progress: 27,
     status: "untouched",
     steps: [
@@ -117,7 +117,7 @@ const MOCK_PROJECT_CHAT: ProjectChatMessage[] = [
 const MOCK_PERSONAL_TODOS: PersonalTodoItem[] = [
   { id: "pt-1", text: "复盘今日任务推进", category: "工作", source: "ai", status: "in_progress" },
   { id: "pt-2", text: "整理 OpenClaw 需求清单", category: "工作", source: "ai", status: "pending" },
-  { id: "pt-3", text: "晚间 45 分钟高数复习", category: "学习", source: "ai", status: "done" },
+  { id: "pt-3", text: "晚间 45 分钟表达训练复盘", category: "成长", source: "ai", status: "done" },
   {
     id: "pt-4",
     text: "汇总 gateway 健康状态",
@@ -179,10 +179,10 @@ const MOCK_AGENT_STATUS_BOARD: AgentStatusItem[] = [
   },
 ];
 
-const TODO_CATEGORIES: Array<"学习" | "工作" | "生活" | "娱乐" | "其他"> = ["学习", "工作", "生活", "娱乐", "其他"];
+const TODO_CATEGORIES: Array<"成长" | "工作" | "生活" | "娱乐" | "其他"> = ["成长", "工作", "生活", "娱乐", "其他"];
 
-const inferTodoCategory = (text: string): "学习" | "工作" | "生活" | "娱乐" | "其他" => {
-  if (/(学习|复习|题|背|课程|笔记|英语|数学|阅读)/.test(text)) return "学习";
+const inferTodoCategory = (text: string): "成长" | "工作" | "生活" | "娱乐" | "其他" => {
+  if (/(学习|复习|训练|复盘|课程|笔记|英语|数学|阅读|成长)/.test(text)) return "成长";
   if (/(工作|项目|代理|openclaw|网关|日报|任务|计划|开会|交付)/i.test(text)) return "工作";
   if (/(生活|买|运动|健身|睡|吃|家务|散步|收拾)/.test(text)) return "生活";
   if (/(玩|休息|电影|游戏|音乐|放松)/.test(text)) return "娱乐";

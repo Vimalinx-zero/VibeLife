@@ -22,8 +22,8 @@ export interface Todo {
   updated_at?: string;
 }
 
-export interface StudySession {
-  id: number;
+export interface FocusSession {
+  id: string;
   duration_minutes: number;
   mode: string;
   tasks_completed: number;
@@ -57,7 +57,7 @@ export interface WorkbenchStats {
   total_todos: number;
   completed_todos: number;
   total_sessions: number;
-  total_study_minutes: number;
+  total_focus_minutes: number;
 }
 
 type TodoListResponse =
@@ -140,15 +140,15 @@ export async function clearAllTodos(): Promise<void> {
 }
 
 // ========================
-// Study Sessions API
+// Focus Sessions API
 // ========================
 
-export async function createStudySession(
+export async function createFocusSession(
   durationMinutes: number,
   mode: string,
   tasksCompleted: number = 0
-): Promise<StudySession> {
-  const response = await apiClient.post<StudySession>(`/workbench/sessions`, {
+): Promise<FocusSession> {
+  const response = await apiClient.post<FocusSession>(`/workbench/sessions`, {
     duration_minutes: durationMinutes,
     mode,
     tasks_completed: tasksCompleted
@@ -157,8 +157,8 @@ export async function createStudySession(
   return response.data; // 后端返回创建的session对象
 }
 
-export async function getStudySessions(days: number = 7): Promise<StudySession[]> {
-  const response = await apiClient.get<StudySession[]>(`/workbench/sessions?days=${days}`);
+export async function getFocusSessions(days: number = 7): Promise<FocusSession[]> {
+  const response = await apiClient.get<FocusSession[]>(`/workbench/sessions?days=${days}`);
   return response.data; // 后端直接返回数组
 }
 

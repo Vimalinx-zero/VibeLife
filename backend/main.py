@@ -19,7 +19,7 @@ import json
 
 # 引入本地模块
 import models, crud
-from database import SessionLocal, engine, get_db
+from database import SessionLocal, engine, get_db, run_legacy_cleanup_migrations
 from auth import get_current_user_id  # ✅ 新增：用户认证依赖
 from workbench_routes import router as workbench_router
 from image_routes import router as image_router  # ✨ 新增：图片处理路由
@@ -29,7 +29,8 @@ from git_routes import router as git_router  # ✨ 新增：Git 管理路由
 from project_routes import router as project_router
 from quick_capture_routes import router as quick_capture_router
 
-# 1. 数据库初始化：创建所有表结构
+# 1. 数据库初始化：迁移旧表后创建当前表结构
+run_legacy_cleanup_migrations()
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
@@ -481,10 +482,10 @@ async def get_dashboard_stats(
         .count()
     )
     today_sessions = (
-        db.query(models.StudySession)
+        db.query(models.FocusSession)
         .filter(
-            models.StudySession.user_id == current_user_id,
-            models.StudySession.created_at >= today_start.isoformat(),
+            models.FocusSession.user_id == current_user_id,
+            models.FocusSession.created_at >= today_start.isoformat(),
         )
         .all()
     )
@@ -513,7 +514,7 @@ async def get_leaderboard():
 
 
 @app.get("/api/dashboard/stats")
-async def get_dashboard_study_stats(
+async def get_dashboard_focus_stats(
     current_user_id: str = Depends(get_current_user_id), db: Session = Depends(get_db)
 ):
     """获取今日工作摘要数据（带用户隔离）"""
@@ -524,10 +525,10 @@ async def get_dashboard_study_stats(
     )
 
     today_sessions = (
-        db.query(models.StudySession)
+        db.query(models.FocusSession)
         .filter(
-            models.StudySession.user_id == current_user_id,
-            models.StudySession.created_at >= today_start.isoformat(),
+            models.FocusSession.user_id == current_user_id,
+            models.FocusSession.created_at >= today_start.isoformat(),
         )
         .all()
     )
@@ -575,7 +576,7 @@ async def get_dashboard_heatmap(
     current_user_id: str = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ):
-    """获取学习热力图数据（基于番茄钟会话）（带用户隔离）"""
+    """获取专注热力图数据（带用户隔离）"""
     import datetime as dt
 
     heatmap = []
@@ -586,11 +587,11 @@ async def get_dashboard_heatmap(
 
         # 查询当天的所有会话
         sessions = (
-            db.query(models.StudySession)
+            db.query(models.FocusSession)
             .filter(
-                models.StudySession.user_id == current_user_id,  # ✅ 用户隔离
-                models.StudySession.created_at >= date.isoformat(),
-                models.StudySession.created_at
+                models.FocusSession.user_id == current_user_id,  # ✅ 用户隔离
+                models.FocusSession.created_at >= date.isoformat(),
+                models.FocusSession.created_at
                 < (date + dt.timedelta(days=1)).isoformat(),
             )
             .all()
@@ -616,11 +617,11 @@ async def get_dashboard_heatmap(
 async def get_dashboard_progress(
     current_user_id: str = Depends(get_current_user_id), db: Session = Depends(get_db)
 ):
-    """获取断点续学信息（上次学习位置）"""
+    """获取上次活动进度（上次停留位置）"""
     last_session = (
-        db.query(models.LearningSession)
-        .filter(models.LearningSession.user_id == current_user_id)
-        .order_by(models.LearningSession.id.desc())
+        db.query(models.ActivityCheckpoint)
+        .filter(models.ActivityCheckpoint.user_id == current_user_id)
+        .order_by(models.ActivityCheckpoint.id.desc())
         .first()
     )
 
@@ -636,7 +637,7 @@ async def get_dashboard_progress(
                 if last_session.end_time
                 else last_session.created_at
             ),
-            "description": "继续上次学习",
+            "description": "继续上次进度",
         }
     }
 
@@ -649,9 +650,9 @@ async def update_dashboard_progress(
     current_user_id: str = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ):
-    """更新学习进度（记录用户最后学习的位置）"""
+    """更新活动进度（记录用户最后停留的位置）"""
     now = datetime.datetime.utcnow()
-    session = models.LearningSession(
+    session = models.ActivityCheckpoint(
         user_id=current_user_id,
         type=type,
         focus_item_id=id,
@@ -666,19 +667,19 @@ async def update_dashboard_progress(
 
 
 # =======================
-# 🃏 智能引用卡片接口 (Smart Links)
+# 📝 智能引用预览接口 (Smart Links)
 # =======================
 
 
-@app.get("/api/card/preview")
-async def get_card_preview(
+@app.get("/api/notes/preview")
+async def get_note_preview(
     type: str,
     id: str,
     current_user_id: str = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ):
     """
-    统一预览接口：根据类型和 ID 返回卡片摘要
+    统一预览接口：根据类型和 ID 返回笔记摘要
     """
     if type != "note":
         return {"found": False, "error": "Unsupported type"}

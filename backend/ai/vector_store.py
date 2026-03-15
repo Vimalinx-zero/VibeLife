@@ -1,9 +1,7 @@
 # backend/ai/vector_store.py
-# 向量数据库服务
+# 轻量向量存储服务
 
-import json
-import numpy as np
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional
 from pathlib import Path
 import pickle
 
@@ -11,10 +9,7 @@ class VectorStore:
     """
     向量数据库（简化版，使用本地存储）
 
-    存储内容：
-    - 题目（questions）
-    - 笔记（notes）
-    - 卡片（flashcards）
+    当前仅存储 VibeLife 运行时需要的笔记/采集向量。
     """
 
     def __init__(self, data_dir: str = "./data/vectors"):
@@ -28,11 +23,7 @@ class VectorStore:
         self.data_dir.mkdir(parents=True, exist_ok=True)
 
         # 向量索引: {item_type: {item_id: {"vector": [...], "metadata": {...}}}}
-        self.indexes = {
-            "questions": {},
-            "notes": {},
-            "cards": {}
-        }
+        self.indexes = {"notes": {}}
 
         # 加载已有索引
         self._load_indexes()
@@ -63,7 +54,7 @@ class VectorStore:
         添加项目到向量存储
 
         Args:
-            item_type: 类型（questions/notes/cards）
+            item_type: 类型（notes）
             item_id: 项目ID
             vector: 向量表示
             metadata: 元数据（标题、内容、标签等）
