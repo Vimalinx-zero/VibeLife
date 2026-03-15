@@ -50,6 +50,32 @@ export interface WorkbenchStats {
   total_study_minutes: number;
 }
 
+type TodoListResponse =
+  | Todo[]
+  | {
+      todos?: Todo[];
+      items?: Todo[];
+      data?: Todo[];
+      results?: Todo[];
+    };
+
+const normalizeTodoList = (payload: TodoListResponse): Todo[] => {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  if (payload && typeof payload === 'object') {
+    const candidates = [payload.todos, payload.items, payload.data, payload.results];
+    const matched = candidates.find(Array.isArray);
+    if (matched) {
+      return matched;
+    }
+  }
+
+  console.error('Unexpected todo list response:', payload);
+  return [];
+};
+
 // ========================
 // Todo Items API
 // ========================
@@ -64,8 +90,10 @@ export async function getTodos(completed: boolean | null = null, subject: string
     params.append('subject', subject);
   }
 
-  const response = await apiClient.get<Todo[]>(`/workbench/todos?${params.toString()}`);
-  return response.data.filter((todo) => typeof todo.text === 'string' && todo.text.trim().length > 0);
+  const response = await apiClient.get<TodoListResponse>(`/workbench/todos?${params.toString()}`);
+  return normalizeTodoList(response.data).filter(
+    (todo) => typeof todo.text === 'string' && todo.text.trim().length > 0
+  );
 }
 
 export async function createTodo(
