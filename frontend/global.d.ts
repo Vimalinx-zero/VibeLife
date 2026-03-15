@@ -3,7 +3,15 @@
 // 扩展 Window 对象
 declare global {
   interface Window {
-    // 可以在这里添加全局的 window 属性
+    __VIBELIFE_API_ORIGIN__: string;
+  }
+
+  interface ImportMetaEnv {
+    readonly VITE_API_ORIGIN?: string;
+  }
+
+  interface ImportMeta {
+    readonly env: ImportMetaEnv;
   }
 }
 

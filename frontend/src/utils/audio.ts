@@ -12,7 +12,7 @@ let audioContext: AudioContext | null = null;
 /**
  * Initialize AudioContext (must be done after user interaction)
  */
-const initAudioContext = (): AudioContext => {
+export const initAudioContext = (): AudioContext => {
   if (!audioContext) {
     const AudioContextClass = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext;
     audioContext = new AudioContextClass();

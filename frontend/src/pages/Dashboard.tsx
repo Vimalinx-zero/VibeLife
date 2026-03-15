@@ -18,16 +18,24 @@ const Icons = {
   CheckCircle: () => <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" /></svg>,
 };
 
-interface StudyStats {
-  duration_minutes: number;
-  questions_completed: number;
+interface DashboardStats {
+  username: string;
+  daily_progress: number;
+  notes_count: number;
+  project_count: number;
+  pending_todos: number;
+  today_focus_minutes: number;
+}
+
+interface TodayStats {
+  focus_minutes: number;
   notes_created: number;
-  mistakes_reviewed: number;
-  anki_reviews: number;
+  journal_entries: number;
+  completed_todos: number;
 }
 
 interface LastActivity {
-  type: 'quiz' | 'note' | 'mistake' | 'anki' | 'workbench';
+  type: string;
   description?: string;
 }
 
@@ -42,8 +50,6 @@ interface CoachSuggestion {
 }
 
 interface CoachSnapshot {
-  weak_mistakes_count: number;
-  due_cards_count: number;
   pending_todos: number;
   today_study_minutes: number;
   recent_7d_completion_rate: number;
@@ -75,8 +81,6 @@ const normalizeCoachData = (raw: any): CoachData => {
 
   return ({
   snapshot: {
-    weak_mistakes_count: raw?.snapshot?.weak_mistakes_count || 0,
-    due_cards_count: raw?.snapshot?.due_cards_count || 0,
     pending_todos: raw?.snapshot?.pending_todos || 0,
     today_study_minutes: raw?.snapshot?.today_study_minutes || 0,
     recent_7d_completion_rate: raw?.snapshot?.recent_7d_completion_rate || 0,
@@ -127,18 +131,19 @@ function Dashboard() {
 
   // 状态管理
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [stats, setStats] = useState({
+  const [stats, setStats] = useState<DashboardStats>({
     username: "Alex",
     daily_progress: 0,
-    mistakes_count: 0,
-    notes_count: 0
+    notes_count: 0,
+    project_count: 0,
+    pending_todos: 0,
+    today_focus_minutes: 0
   });
-  const [studyStats, setStudyStats] = useState<StudyStats>({
-    duration_minutes: 0,
-    questions_completed: 0,
+  const [studyStats, setStudyStats] = useState<TodayStats>({
+    focus_minutes: 0,
     notes_created: 0,
-    mistakes_reviewed: 0,
-    anki_reviews: 0
+    journal_entries: 0,
+    completed_todos: 0
   });
   const [lastActivity, setLastActivity] = useState<LastActivity | null>(null);
   const [coachData, setCoachData] = useState<CoachData | null>(null);
@@ -150,8 +155,6 @@ function Dashboard() {
 
   const fallbackCoachData = useCallback((): CoachData => ({
     snapshot: {
-      weak_mistakes_count: 0,
-      due_cards_count: 0,
       pending_todos: 0,
       today_study_minutes: 0,
       recent_7d_completion_rate: 0,
@@ -160,7 +163,7 @@ function Dashboard() {
     adaptive: {
       level: 'balanced',
       label: '稳步推进',
-      focus: '先完成关键任务，再做补充练习',
+      focus: '先完成关键任务，再推进项目和记录',
       completion_rate: 0,
       avg_daily_study_minutes: 0,
       recommended_plan_items: 3,
@@ -176,7 +179,7 @@ function Dashboard() {
         todo_text: '整理今日待办'
       }
     ],
-    coach_message: '先完成高优先级事项，再推进项目和笔记。'
+    coach_message: '先完成高优先级事项，再推进项目、待办和日志。'
   }), []);
 
   // 更新时钟
@@ -251,11 +254,10 @@ function Dashboard() {
 
         // 模拟数据
         setStudyStats({
-          duration_minutes: 0,
-          questions_completed: 0,
+          focus_minutes: 0,
           notes_created: 0,
-          mistakes_reviewed: 0,
-          anki_reviews: 0
+          journal_entries: 0,
+          completed_todos: 0
         });
         setTodayJournalCount(0);
 
@@ -268,7 +270,7 @@ function Dashboard() {
 
   const handleGenerateTodayPlan = async () => {
     if (!coachFeatureEnabled) {
-      toast.info('当前为本地模式，已使用默认学习建议');
+      toast.info('当前为本地模式，已使用默认工作建议');
       setCoachData(fallbackCoachData());
       return;
     }
@@ -365,7 +367,7 @@ function Dashboard() {
         style={{ paddingTop: '8vh' }}
       >
 
-        {/* ========== 第一行：欢迎卡片 + 刷题四件套 ========== */}
+        {/* ========== 第一行：欢迎卡片 + 工作入口 ========== */}
 
         {/* 欢迎卡片 (2x2) - 包含统计 */}
         <GlassCard className="col-span-1 md:col-span-2 md:row-span-2 p-8 flex flex-col justify-between min-h-[400px]" onClick={() => navigate('/workbench')}>
@@ -392,22 +394,22 @@ function Dashboard() {
                 textColor="text-blue-500"
               />
               <StatItem
-                label="完成项目"
-                value={stats.notes_count || 0}
+                label="项目"
+                value={stats.project_count || 0}
                 icon={Icons.CheckCircle}
                 bgColor="bg-green-500/20"
                 textColor="text-green-500"
               />
               <StatItem
                 label="待办"
-                value={coachData?.snapshot.pending_todos || 0}
+                value={stats.pending_todos || 0}
                 icon={Icons.Clock}
                 bgColor="bg-red-500/20"
                 textColor="text-red-500"
               />
               <StatItem
                 label="工作时间"
-                value={coachData?.snapshot.today_study_minutes || 0}
+                value={stats.today_focus_minutes || 0}
                 icon={Icons.Clock}
                 bgColor="bg-purple-500/20"
                 textColor="text-purple-500"
@@ -445,9 +447,9 @@ function Dashboard() {
             </div>
             <div className="text-right">
               <span className="text-3xl font-bold block dark:text-white text-gray-900">
-                4
+                {stats.daily_progress || 0}%
               </span>
-              <span className="text-xs text-gray-500">本月</span>
+              <span className="text-xs text-gray-500">今日推进</span>
             </div>
           </div>
           <div className="mt-6 relative z-10">
@@ -464,7 +466,7 @@ function Dashboard() {
             </div>
             <div className="text-right">
               <span className="text-3xl font-bold block dark:text-white text-gray-900">
-                {stats.mistakes_count || 0}
+                {stats.project_count || 0}
               </span>
             </div>
           </div>
@@ -539,7 +541,7 @@ function Dashboard() {
               <>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
                 <div className="text-xs rounded-lg px-3 py-2 bg-green-500/10 text-green-600 dark:text-green-300">
-                  活跃项目 {stats.notes_count || 0}
+                  活跃项目 {stats.project_count || 0}
                 </div>
                 <div className="text-xs rounded-lg px-3 py-2 bg-purple-500/10 text-purple-600 dark:text-purple-300">
                   今日日志 {todayJournalCount}

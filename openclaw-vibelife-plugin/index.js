@@ -505,106 +505,13 @@ function defineTools(api) {
       {
         name: "vibelife_workbench_stats",
         label: "VibeLife Workbench Stats",
-        description: "Read current VibeLife dashboard stats, including todos, mistakes, and focus time.",
+        description: "Read current VibeLife workbench stats, including todos and focus time.",
         parameters: {
           type: "object",
           additionalProperties: false,
           properties: {},
         },
         handler: () => requestJson(api, "/api/workbench/stats"),
-      },
-      api
-    ),
-    createTool(
-      {
-        name: "vibelife_workbench_mistake_list",
-        label: "VibeLife Workbench Mistake List",
-        description: "List workbench mistakes for the current user.",
-        parameters: {
-          type: "object",
-          additionalProperties: false,
-          properties: {
-            subject: { type: "string" },
-            limit: { type: "integer" },
-          },
-        },
-        handler: (params) =>
-          requestJson(api, "/api/workbench/mistakes", {
-            query: cleanObject({
-              subject:
-                typeof params.subject === "string" ? params.subject.trim() : undefined,
-              limit: Number.isInteger(params.limit) ? params.limit : undefined,
-            }),
-          }),
-      },
-      api
-    ),
-    createTool(
-      {
-        name: "vibelife_workbench_mistake_create",
-        label: "VibeLife Workbench Mistake Create",
-        description: "Create a workbench mistake memo.",
-        parameters: {
-          type: "object",
-          additionalProperties: false,
-          required: ["content", "subject"],
-          properties: {
-            content: { type: "string" },
-            subject: { type: "string" },
-            questionId: { type: "string" },
-          },
-        },
-        handler: (params) =>
-          requestJson(api, "/api/workbench/mistakes", {
-            method: "POST",
-            body: cleanObject({
-              content: params.content,
-              subject: params.subject,
-              question_id:
-                typeof params.questionId === "string" ? params.questionId.trim() : undefined,
-            }),
-          }),
-      },
-      api
-    ),
-    createTool(
-      {
-        name: "vibelife_workbench_mistake_delete",
-        label: "VibeLife Workbench Mistake Delete",
-        description: "Delete a workbench mistake memo by id.",
-        parameters: {
-          type: "object",
-          additionalProperties: false,
-          required: ["id"],
-          properties: {
-            id: { type: "string" },
-          },
-        },
-        handler: (params) =>
-          requestJson(
-            api,
-            `/api/workbench/mistakes/${encodeURIComponent(params.id)}`,
-            {
-              method: "DELETE",
-            }
-          ),
-      },
-      api
-    ),
-    createTool(
-      {
-        name: "vibelife_workbench_mistake_clear_all",
-        label: "VibeLife Workbench Mistake Clear All",
-        description: "Delete all workbench mistake memos for the current user.",
-        parameters: {
-          type: "object",
-          additionalProperties: false,
-          properties: {},
-        },
-        handler: () =>
-          requestJson(api, "/api/workbench/mistakes", {
-            method: "DELETE",
-          }),
       },
       api
     ),
@@ -621,7 +528,6 @@ function defineTools(api) {
             durationMinutes: { type: "integer" },
             mode: { type: "string" },
             tasksCompleted: { type: "integer" },
-            mistakesCollected: { type: "integer" },
           },
         },
         handler: (params) =>
@@ -633,10 +539,6 @@ function defineTools(api) {
               tasks_completed:
                 Number.isInteger(params.tasksCompleted)
                   ? params.tasksCompleted
-                  : undefined,
-              mistakes_collected:
-                Number.isInteger(params.mistakesCollected)
-                  ? params.mistakesCollected
                   : undefined,
             }),
           }),

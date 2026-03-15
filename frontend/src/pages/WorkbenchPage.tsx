@@ -589,18 +589,14 @@ function WorkbenchPage() {
   useEffect(() => {
     // Prevent default context menu on the whole page
     const handleContextMenu = (e) => {
-      // Check if right-clicking on todo item or mistake item
       const isTodoItem = e.target.closest('[data-todo-item]');
-      const isMistakeItem = e.target.closest('[data-mistake-item]');
       const isInput = e.target.closest('input, textarea, [contenteditable]');
       const isButton = e.target.closest('button');
 
-      // Don't interfere with todo/mistake items, inputs, or buttons
-      if (isTodoItem || isMistakeItem || isInput || isButton) {
+      if (isTodoItem || isInput || isButton) {
         return;
       }
 
-      // For other areas, prevent default and show global menu
       e.preventDefault();
       e.stopPropagation();
       setContextMenu({ x: e.clientX, y: e.clientY });

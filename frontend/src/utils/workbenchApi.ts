@@ -22,23 +22,11 @@ export interface Todo {
   updated_at?: string;
 }
 
-export interface WorkbenchMistake {
-  id: number;
-  content: string;
-  subject: string;
-  question_id: number | null;
-  created_at: string;
-  summary?: string; // 错题摘要
-  type?: 'quick' | 'detailed'; // 错题类型
-  content_preview?: string; // 内容预览
-}
-
 export interface StudySession {
   id: number;
   duration_minutes: number;
   mode: string;
   tasks_completed: number;
-  mistakes_collected: number;
   created_at: string;
 }
 
@@ -68,7 +56,6 @@ export interface ScheduleEvent {
 export interface WorkbenchStats {
   total_todos: number;
   completed_todos: number;
-  total_mistakes: number;
   total_sessions: number;
   total_study_minutes: number;
 }
@@ -153,58 +140,18 @@ export async function clearAllTodos(): Promise<void> {
 }
 
 // ========================
-// Workbench Mistakes API
-// ========================
-
-export async function getWorkbenchMistakes(subject: string | null = null, limit: number = 50): Promise<WorkbenchMistake[]> {
-  const params = new URLSearchParams();
-
-  if (subject) {
-    params.append('subject', subject);
-  }
-  params.append('limit', String(limit));
-
-  const response = await apiClient.get<WorkbenchMistake[]>(`/workbench/mistakes?${params.toString()}`);
-  return response.data; // 后端直接返回数组
-}
-
-export async function createWorkbenchMistake(
-  content: string,
-  subject: string,
-  questionId: number | null = null
-): Promise<WorkbenchMistake> {
-  const response = await apiClient.post<WorkbenchMistake>(`/workbench/mistakes`, {
-    content,
-    subject,
-    question_id: questionId
-  });
-
-  return response.data; // 后端返回创建的mistake对象
-}
-
-export async function deleteWorkbenchMistake(mistakeId: number): Promise<void> {
-  await apiClient.delete(`/workbench/mistakes/${mistakeId}`);
-}
-
-export async function clearAllWorkbenchMistakes(): Promise<void> {
-  await apiClient.delete(`/workbench/mistakes`);
-}
-
-// ========================
 // Study Sessions API
 // ========================
 
 export async function createStudySession(
   durationMinutes: number,
   mode: string,
-  tasksCompleted: number = 0,
-  mistakesCollected: number = 0
+  tasksCompleted: number = 0
 ): Promise<StudySession> {
   const response = await apiClient.post<StudySession>(`/workbench/sessions`, {
     duration_minutes: durationMinutes,
     mode,
-    tasks_completed: tasksCompleted,
-    mistakes_collected: mistakesCollected
+    tasks_completed: tasksCompleted
   });
 
   return response.data; // 后端返回创建的session对象

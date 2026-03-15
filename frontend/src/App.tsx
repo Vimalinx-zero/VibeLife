@@ -96,12 +96,6 @@ const AppContent = () => {
                 <Route path="/quick-capture" element={<QuickCapturePage />} />
                 <Route path="/schedule" element={<SchedulePage />} />
                 <Route path="/journal" element={<JournalPage />} />
-                <Route path="/quiz" element={<Navigate to="/" replace />} />
-                <Route path="/mistakes" element={<Navigate to="/" replace />} />
-                <Route path="/anki" element={<Navigate to="/" replace />} />
-                <Route path="/anki/*" element={<Navigate to="/" replace />} />
-                <Route path="/ai-import" element={<Navigate to="/" replace />} />
-                <Route path="/data-management" element={<Navigate to="/" replace />} />
               </Route>
             </Route>
 

@@ -52,7 +52,7 @@ interface PreviewSectionProps {
 }
 
 interface CachedSmartLinkProps {
-  type: 'note' | 'question';
+  type: 'note';
   id: string;
   originalText: React.ReactNode;
   linkCache: Record<string, LinkCacheData>;
@@ -198,7 +198,7 @@ const NoteEditor = ({
             formData.append("file", file);
 
             // 上传图片
-            const response = await fetch("http://localhost:8000/api/notes/upload-image", {
+            const response = await fetch(`${window.__VIBELIFE_API_ORIGIN__}/api/notes/upload-image`, {
               method: "POST",
               body: formData,
             });
@@ -285,7 +285,7 @@ const NoteEditor = ({
 
     if (confirm(`确定要删除笔记 "${title || '未命名'}" 吗？此操作无法撤销。`)) {
       try {
-        await axios.post("http://localhost:8000/api/notes/delete", { id: info.id });
+        await axios.post(`${window.__VIBELIFE_API_ORIGIN__}/api/notes/delete`, { id: info.id });
         toast.success("✅ 笔记已删除", 2000);
         setContextMenu(null);
 
@@ -340,12 +340,11 @@ const NoteEditor = ({
     if (!text) return "";
     let processed = text;
     processed = processed.replace(/\[\[note:(\w+)\]\]/g, "[Note Link](internal:$1)");
-    processed = processed.replace(/\[\[(gk_\w+)\]\]/g, "[Question Card](question:$1)");
     return processed;
   };
 
   const renderers = useMemo<Components>(() => ({
-    // a 标签渲染器：拦截 internal: 和 question: 协议，渲染为 SmartLink
+    // a 标签渲染器：拦截 internal: 协议，渲染为 SmartLink
     a: ({ href, children }: any) => {
 
       // Case A: 笔记链接 [[note:xxx]]
@@ -353,13 +352,6 @@ const NoteEditor = ({
         const id = href.replace("internal:", "");
         // ✅ 使用带缓存的 SmartLink，避免闪烁
         return <CachedSmartLink type="note" id={id} originalText={children} linkCache={linkCache} setLinkCache={setLinkCache} />;
-      }
-
-      // Case B: 题目链接 [[gk_xxx]]
-      if (href && href.startsWith("question:")) {
-        const id = href.replace("question:", "");
-        // ✅ 使用带缓存的 SmartLink，避免闪烁
-        return <CachedSmartLink type="question" id={id} originalText={children} linkCache={linkCache} setLinkCache={setLinkCache} />;
       }
 
       // Case C: 普通超链接

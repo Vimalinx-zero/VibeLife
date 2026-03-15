@@ -131,16 +131,10 @@ class TodoItemUpdate(pydantic.BaseModel):
             raise ValueError("Todo text cannot be empty")
         return text
 
-class WorkbenchMistakeCreate(pydantic.BaseModel):
-    content: str  # 格式：P12T3 注释内容
-    subject: str
-    question_id: Optional[str] = None
-
 class WorkbenchSessionCreate(pydantic.BaseModel):
     duration_minutes: int
     mode: str  # 'classic' | 'flow'
     tasks_completed: int = 0
-    mistakes_collected: int = 0
 
 
 class JournalEntryCreate(pydantic.BaseModel):
@@ -456,103 +450,6 @@ async def clear_all_todos(
     return {"success": True, "deleted_count": count}
 
 # ========================
-# Workbench Mistakes API
-# ========================
-
-@router.get("/api/workbench/mistakes")
-async def get_workbench_mistakes(
-    subject: Optional[str] = None,
-    limit: int = 50,
-    current_user_id: str = Depends(get_current_user_id),
-    db: Session = Depends(get_db)
-):
-    """获取工作台错题备忘录（带用户隔离）"""
-    query = db.query(models.WorkbenchMistake).filter(
-        models.WorkbenchMistake.user_id == current_user_id  # ✅ 用户隔离
-    )
-
-    if subject:
-        query = query.filter(models.WorkbenchMistake.subject == subject)
-
-    mistakes = query.order_by(models.WorkbenchMistake.created_at.desc()).limit(limit).all()
-
-    return [{
-        "id": m.id,
-        "content": m.content,
-        "subject": m.subject,
-        "question_id": m.question_id,
-        "created_at": m.created_at
-    } for m in mistakes]
-
-@router.post("/api/workbench/mistakes")
-async def create_workbench_mistake(
-    mistake: WorkbenchMistakeCreate,
-    current_user_id: str = Depends(get_current_user_id),
-    db: Session = Depends(get_db)
-):
-    """创建工作台错题备忘录（带用户隔离）"""
-    import time
-    mistake_id = f"wb_mistake_{int(time.time() * 1000)}"
-
-    new_mistake = models.WorkbenchMistake(
-        id=mistake_id,
-        content=mistake.content,
-        subject=mistake.subject,
-        question_id=mistake.question_id,
-        user_id=current_user_id  # ✅ 关联到当前用户
-    )
-
-    db.add(new_mistake)
-    db.commit()
-    db.refresh(new_mistake)
-
-    return {
-        "id": new_mistake.id,
-        "content": new_mistake.content,
-        "subject": new_mistake.subject,
-        "question_id": new_mistake.question_id,
-        "created_at": new_mistake.created_at
-    }
-
-@router.delete("/api/workbench/mistakes/{mistake_id}")
-async def delete_workbench_mistake(
-    mistake_id: str,
-    current_user_id: str = Depends(get_current_user_id),
-    db: Session = Depends(get_db)
-):
-    """删除工作台错题备忘录（带用户隔离）"""
-    mistake = db.query(models.WorkbenchMistake).filter(
-        models.WorkbenchMistake.id == mistake_id,
-        models.WorkbenchMistake.user_id == current_user_id  # ✅ 用户隔离
-    ).first()
-
-    if not mistake:
-        raise HTTPException(status_code=404, detail="Mistake not found")
-
-    db.delete(mistake)
-    db.commit()
-
-    return {"success": True, "message": "Mistake deleted"}
-
-@router.delete("/api/workbench/mistakes")
-async def clear_all_workbench_mistakes(
-    current_user_id: str = Depends(get_current_user_id),
-    db: Session = Depends(get_db)
-):
-    """清空所有工作台错题备忘录（带用户隔离）"""
-    mistakes = db.query(models.WorkbenchMistake).filter(
-        models.WorkbenchMistake.user_id == current_user_id  # ✅ 用户隔离
-    ).all()
-
-    count = len(mistakes)
-    for mistake in mistakes:
-        db.delete(mistake)
-
-    db.commit()
-
-    return {"success": True, "deleted_count": count}
-
-# ========================
 # Study Session API
 # ========================
 
@@ -571,7 +468,7 @@ async def create_study_session(
         duration_minutes=session.duration_minutes,
         mode=session.mode,
         tasks_completed=session.tasks_completed,
-        mistakes_collected=session.mistakes_collected,
+        mistakes_collected=0,
         user_id=current_user_id  # ✅ 关联到当前用户
     )
 
@@ -604,7 +501,6 @@ async def get_study_sessions(
         "duration_minutes": s.duration_minutes,
         "mode": s.mode,
         "tasks_completed": s.tasks_completed,
-        "mistakes_collected": s.mistakes_collected,
         "created_at": s.created_at
     } for s in sessions]
 
@@ -881,36 +777,12 @@ async def get_workbench_stats(
         models.TodoItem.completed == True
     ).count()
 
-    # Workbench mistakes stats
-    total_mistakes = db.query(models.WorkbenchMistake).filter(
-        models.WorkbenchMistake.user_id == current_user_id
-    ).count()
-    today_mistakes = db.query(models.WorkbenchMistake).filter(
-        models.WorkbenchMistake.user_id == current_user_id,
-        models.WorkbenchMistake.created_at >= today_start.isoformat()
-    ).count()
-
     # Study sessions stats
     today_sessions = db.query(models.StudySession).filter(
         models.StudySession.user_id == current_user_id,
         models.StudySession.created_at >= today_start.isoformat()
     ).all()
     today_focus_minutes = sum(s.duration_minutes for s in today_sessions)
-
-    # Get recent mistakes (last 10)
-    recent_mistakes = db.query(models.WorkbenchMistake).filter(
-        models.WorkbenchMistake.user_id == current_user_id  # ✅ 用户隔离
-    ).order_by(
-        models.WorkbenchMistake.created_at.desc()
-    ).limit(10).all()
-
-    recent_mistakes_data = [{
-        "id": m.id,
-        "content": m.content,
-        "subject": m.subject,
-        "question_id": m.question_id,
-        "created_at": m.created_at
-    } for m in recent_mistakes]
 
     # Get recent todos (last 10)
     recent_todos = db.query(models.TodoItem).filter(
@@ -933,14 +805,9 @@ async def get_workbench_stats(
             "completed": completed_todos,
             "pending": total_todos - completed_todos
         },
-        "mistakes": {
-            "total": total_mistakes,
-            "today": today_mistakes
-        },
         "study_time": {
             "today_minutes": today_focus_minutes,
             "today_sessions": len(today_sessions)
         },
-        "recent_mistakes": recent_mistakes_data,
         "recent_todos": recent_todos_data
     }

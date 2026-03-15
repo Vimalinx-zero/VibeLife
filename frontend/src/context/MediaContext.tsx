@@ -194,8 +194,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
       await workbenchApi.createStudySession(
         durationMinutes,
         timerMode,
-        0, // tasks_completed - TODO: track this
-        0  // mistakes_collected - TODO: track this
+        0
       );
       console.log(`Study session recorded: ${durationMinutes} minutes in ${timerMode} mode`);
     } catch (error) {

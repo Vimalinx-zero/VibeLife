@@ -1,331 +1,185 @@
-import { useState, useEffect } from "react";
-import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
+import { useEffect, useState } from "react";
 
-// 定义录制状态接口
+type HotkeyCategory = "global" | "navigation" | "notes";
+
 interface RecordingHotkey {
-  category: string;
+  category: HotkeyCategory;
   key: string;
 }
 
-// 默认快捷键配置
 const DEFAULT_HOTKEYS = {
-  // 全局快捷键
   global: {
-    'quickSearch': 'ctrl+k',
-    'toggleDarkMode': 'ctrl+d',
-    'showHotkeys': 'ctrl+/',
-    'goBack': 'escape',
+    quickSearch: "ctrl+k",
+    toggleDarkMode: "ctrl+d",
+    showHotkeys: "ctrl+/",
+    goBack: "escape",
   },
-  // 页面导航
   navigation: {
-    'dashboard': 'alt+1',
-    'quiz': 'alt+2',
-    'mistakes': 'alt+3',
-    'notes': 'alt+4',
-    'anki': 'alt+5',
-    'workbench': 'alt+6',
+    dashboard: "alt+1",
+    projects: "alt+2",
+    workbench: "alt+3",
+    notes: "alt+4",
+    capture: "alt+5",
+    schedule: "alt+6",
   },
-  // 刷题页面
-  quiz: {
-    'nextQuestion': ' ',
-    'selectOptionA': '1',
-    'selectOptionB': '2',
-    'selectOptionC': '3',
-    'selectOptionD': '4',
-    'submitAnswer': 'enter',
-    'toggleFavorite': 'ctrl+f',
-    'skipQuestion': 'ctrl+r',
-  },
-  // 笔记页面
   notes: {
-    'newNote': 'ctrl+n',
-    'saveNote': 'ctrl+s',
+    newNote: "ctrl+n",
+    saveNote: "ctrl+s",
   },
-  // 记忆卡页面
-  anki: {
-    'flipCard': ' ',
-    'rate1': '1',
-    'rate2': '2',
-    'rate3': '3',
-    'rate4': '4',
-    'submitRating': 'enter',
-  },
+} as const;
+
+const HOTKEY_NAMES: Record<string, string> = {
+  quickSearch: "快速搜索",
+  toggleDarkMode: "切换深色模式",
+  showHotkeys: "显示快捷键帮助",
+  goBack: "返回主页 / 关闭弹窗",
+  dashboard: "主页",
+  projects: "项目",
+  workbench: "工作台",
+  notes: "笔记",
+  capture: "采集",
+  schedule: "日程",
+  newNote: "新建笔记",
+  saveNote: "保存笔记",
 };
 
-// 快捷键显示名称
-const HOTKEY_NAMES = {
-  'quickSearch': '快速搜索',
-  'toggleDarkMode': '切换深色模式',
-  'showHotkeys': '显示快捷键帮助',
-  'goBack': '返回上一页',
-  'dashboard': '仪表板',
-  'quiz': '智能刷题',
-  'mistakes': '错题本',
-  'notes': '笔记',
-  'anki': '记忆卡',
-  'workbench': '学习工作台',
-  'nextQuestion': '下一题',
-  'selectOptionA': '选择选项 A',
-  'selectOptionB': '选择选项 B',
-  'selectOptionC': '选择选项 C',
-  'selectOptionD': '选择选项 D',
-  'submitAnswer': '提交答案',
-  'toggleFavorite': '收藏题目',
-  'skipQuestion': '跳过题目',
-  'newNote': '新建笔记',
-  'saveNote': '保存笔记',
-  'flipCard': '翻转卡片',
-  'rate1': '评分：忘记了',
-  'rate2': '评分：有印象',
-  'rate3': '评分：记得',
-  'rate4': '评分：轻松',
-  'submitRating': '提交评分',
-};
+const SECTION_META: Array<{ id: HotkeyCategory; title: string; accent: string }> = [
+  { id: "global", title: "全局快捷键", accent: "text-blue-600 dark:text-blue-400" },
+  { id: "navigation", title: "页面导航", accent: "text-emerald-600 dark:text-emerald-400" },
+  { id: "notes", title: "笔记页面", accent: "text-amber-600 dark:text-amber-400" },
+];
 
 const HotkeysSettings = () => {
   const [customHotkeys, setCustomHotkeys] = useState<Record<string, string>>({});
   const [recordingHotkey, setRecordingHotkey] = useState<RecordingHotkey | null>(null);
-  const [tempHotkey, setTempHotkey] = useState('');
+  const [tempHotkey, setTempHotkey] = useState("");
 
-  // 从 localStorage 加载自定义快捷键
   useEffect(() => {
-    const saved = localStorage.getItem('customHotkeys');
-    if (saved) {
-      try {
-        setCustomHotkeys(JSON.parse(saved));
-      } catch (e) {
-        console.error('Failed to load custom hotkeys:', e);
-      }
+    const saved = localStorage.getItem("customHotkeys");
+    if (!saved) {
+      return;
+    }
+
+    try {
+      setCustomHotkeys(JSON.parse(saved));
+    } catch (error) {
+      console.error("Failed to load custom hotkeys:", error);
     }
   }, []);
 
-  // 保存自定义快捷键
-  const saveCustomHotkeys = (newHotkeys) => {
-    setCustomHotkeys(newHotkeys);
-    localStorage.setItem('customHotkeys', JSON.stringify(newHotkeys));
+  const saveCustomHotkeys = (nextHotkeys: Record<string, string>) => {
+    setCustomHotkeys(nextHotkeys);
+    localStorage.setItem("customHotkeys", JSON.stringify(nextHotkeys));
   };
 
-  // 获取实际的快捷键（自定义或默认）
-  const getActualHotkey = (category, key) => {
-    const customKey = customHotkeys[`${category}.${key}`];
-    return customKey || DEFAULT_HOTKEYS[category][key];
+  const getActualHotkey = (category: HotkeyCategory, key: string) => {
+    return customHotkeys[`${category}.${key}`] || DEFAULT_HOTKEYS[category][key];
   };
 
-  // 开始录制快捷键
-  const startRecording = (category, key) => {
+  const startRecording = (category: HotkeyCategory, key: string) => {
     setRecordingHotkey({ category, key });
-    setTempHotkey('');
+    setTempHotkey("");
   };
 
-  // 停止录制
   const stopRecording = () => {
     setRecordingHotkey(null);
-    setTempHotkey('');
+    setTempHotkey("");
   };
 
-  // 监听按键事件
   useEffect(() => {
-    if (!recordingHotkey) return;
+    if (!recordingHotkey) {
+      return;
+    }
 
-    const handleKeyDown = (e: KeyboardEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
 
-      const key = e.key.toLowerCase();
-      const modifiers: string[] = [];
-
-      if (e.ctrlKey || e.metaKey) modifiers.push('ctrl');
-      if (e.altKey) modifiers.push('alt');
-      if (e.shiftKey) modifiers.push('shift');
-
-      // 忽略单独的修饰键
-      if (['control', 'alt', 'shift', 'meta'].includes(key)) {
+      const key = event.key.toLowerCase();
+      if (["control", "alt", "shift", "meta"].includes(key)) {
         return;
       }
 
-      const hotkeyString = modifiers.length > 0
-        ? `${modifiers.join('+')}+${key}`
-        : key;
+      const modifiers: string[] = [];
+      if (event.ctrlKey || event.metaKey) modifiers.push("ctrl");
+      if (event.altKey) modifiers.push("alt");
+      if (event.shiftKey) modifiers.push("shift");
 
+      const hotkeyString = modifiers.length > 0 ? `${modifiers.join("+")}+${key}` : key;
       setTempHotkey(hotkeyString);
 
-      // 自动保存
       const { category, key: actionKey } = recordingHotkey;
       saveCustomHotkeys({
         ...customHotkeys,
-        [`${category}.${actionKey}`]: hotkeyString
+        [`${category}.${actionKey}`]: hotkeyString,
       });
 
       stopRecording();
     };
 
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
   }, [recordingHotkey, customHotkeys]);
 
-  // 重置快捷键
-  const resetHotkey = (category, key) => {
-    const newHotkeys = { ...customHotkeys };
-    delete newHotkeys[`${category}.${key}`];
-    saveCustomHotkeys(newHotkeys);
+  const resetHotkey = (category: HotkeyCategory, key: string) => {
+    const nextHotkeys = { ...customHotkeys };
+    delete nextHotkeys[`${category}.${key}`];
+    saveCustomHotkeys(nextHotkeys);
   };
 
-  // 重置所有快捷键
   const resetAllHotkeys = () => {
-    if (confirm('确定要重置所有快捷键为默认值吗？')) {
-      setCustomHotkeys({});
-      localStorage.removeItem('customHotkeys');
+    if (!confirm("确定要重置所有快捷键为默认值吗？")) {
+      return;
     }
+
+    setCustomHotkeys({});
+    localStorage.removeItem("customHotkeys");
   };
 
   return (
     <div className="space-y-6">
-      {/* 顶部提示 */}
       <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
         <div className="flex items-start gap-3">
           <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5">
-            <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm8.751-1.034a.75.75 0 010 1.966h-5.69c-.309 0-.542-.29-.459-.587l1.07-3.745a1.125 1.125 0 012.296 0l1.07 3.745c.083.297-.15.587-.459.587h-.455M12 6a2.25 2.25 0 00-2.25 2.25v.094c0 .534.13.943.233 1.226.167.458.36.815.516 1.103.13.24.242.449.242.683 0 .234-.112.443-.242.683-.156.288-.35.645-.516 1.103-.103.283-.233.692-.233 1.226v.094A2.25 2.25 0 0012 18h.75a2.25 2.25 0 002.25-2.25v-.094c0-.534-.13-.943-.233-1.226-.167-.458-.36-.815-.516-1.103-.13-.24-.242-.449-.242-.683 0-.234.112-.443.242-.683.156-.288.35-.645.516-1.103.103-.283.233-.692.233-1.226V9.75A2.25 2.25 0 0012.75 6H12z" clipRule="evenodd" />
+            <path
+              fillRule="evenodd"
+              d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm8.751-1.034a.75.75 0 010 1.966h-5.69c-.309 0-.542-.29-.459-.587l1.07-3.745a1.125 1.125 0 012.296 0l1.07 3.745c.083.297-.15.587-.459.587h-.455M12 6a2.25 2.25 0 00-2.25 2.25v.094c0 .534.13.943.233 1.226.167.458.36.815.516 1.103.13.24.242.449.242.683 0 .234-.112.443-.242.683-.156.288-.35.645-.516 1.103-.103.283-.233.692-.233 1.226v.094A2.25 2.25 0 0012 18h.75a2.25 2.25 0 002.25-2.25v-.094c0-.534-.13-.943-.233-1.226-.167-.458-.36-.815-.516-1.103-.13-.24-.242-.449-.242-.683 0-.234.112-.443.242-.683.156-.288.35-.645.516-1.103.103-.283.233-.692.233-1.226V9.75A2.25 2.25 0 0012.75 6H12z"
+              clipRule="evenodd"
+            />
           </svg>
           <div className="flex-1">
             <h4 className="font-bold text-blue-900 dark:text-blue-200 mb-1">自定义快捷键</h4>
             <p className="text-sm text-blue-700 dark:text-blue-300">
-              点击快捷键按钮，然后按下你想要设置的组合键。自定义快捷键会自动保存到本地存储。
+              这里只保留当前 VibeLife 还在使用的页面和操作，不再展示旧的题库、错题本、Anki 快捷键。
             </p>
           </div>
         </div>
       </div>
 
-      {/* 全局快捷键 */}
-      <section>
-        <h3 className="text-lg font-bold mb-3 text-gray-900 dark:text-white flex items-center gap-2">
-          🌐 全局快捷键
-        </h3>
-        <div className="space-y-2">
-          {Object.entries(DEFAULT_HOTKEYS.global).map(([key, defaultHotkey]) => (
-            <div key={key} className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-lg border dark:border-white/10">
-              <span className="text-gray-700 dark:text-gray-300">{HOTKEY_NAMES[key]}</span>
-              <div className="flex items-center gap-2">
-                <kbd className="px-3 py-1.5 text-sm font-mono bg-gray-100 dark:bg-slate-700 border dark:border-white/10 rounded min-w-[80px] text-center dark:text-gray-300">
-                  {getActualHotkey('global', key)}
-                </kbd>
-                <button
-                  onClick={() => startRecording('global', key)}
-                  className="px-3 py-1.5 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
-                >
-                  {recordingHotkey?.category === 'global' && recordingHotkey?.key === key
-                    ? '请按键...'
-                    : '修改'}
-                </button>
-                {customHotkeys[`global.${key}`] && (
-                  <button
-                    onClick={() => resetHotkey('global', key)}
-                    className="px-3 py-1.5 text-sm bg-gray-500 hover:bg-gray-600 text-white rounded transition-colors"
-                  >
-                    重置
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* 页面导航 */}
-      <section>
-        <h3 className="text-lg font-bold mb-3 text-gray-900 dark:text-white flex items-center gap-2">
-          🧭 页面导航
-        </h3>
-        <div className="grid grid-cols-2 gap-2">
-          {Object.entries(DEFAULT_HOTKEYS.navigation).map(([key, defaultHotkey]) => (
-            <div key={key} className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-lg border dark:border-white/10">
-              <span className="text-sm text-gray-700 dark:text-gray-300">{HOTKEY_NAMES[key]}</span>
-              <div className="flex items-center gap-2">
-                <kbd className="px-2 py-1 text-xs font-mono bg-gray-100 dark:bg-slate-700 border dark:border-white/10 rounded min-w-[60px] text-center dark:text-gray-300">
-                  {getActualHotkey('navigation', key)}
-                </kbd>
-                <button
-                  onClick={() => startRecording('navigation', key)}
-                  className="px-2 py-1 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
-                >
-                  {recordingHotkey?.category === 'navigation' && recordingHotkey?.key === key
-                    ? '...'
-                    : '修改'}
-                </button>
-                {customHotkeys[`navigation.${key}`] && (
-                  <button
-                    onClick={() => resetHotkey('navigation', key)}
-                    className="px-2 py-1 text-xs bg-gray-500 hover:bg-gray-600 text-white rounded transition-colors"
-                  >
-                    重置
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* 刷题页面 */}
-      <section>
-        <h3 className="text-lg font-bold mb-3 text-gray-900 dark:text-white flex items-center gap-2">
-          ✏️ 刷题页面
-        </h3>
-        <div className="grid grid-cols-2 gap-2">
-          {Object.entries(DEFAULT_HOTKEYS.quiz).map(([key, defaultHotkey]) => (
-            <div key={key} className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-lg border dark:border-white/10">
-              <span className="text-sm text-gray-700 dark:text-gray-300">{HOTKEY_NAMES[key]}</span>
-              <div className="flex items-center gap-2">
-                <kbd className="px-2 py-1 text-xs font-mono bg-gray-100 dark:bg-slate-700 border dark:border-white/10 rounded min-w-[60px] text-center dark:text-gray-300">
-                  {getActualHotkey('quiz', key)}
-                </kbd>
-                <button
-                  onClick={() => startRecording('quiz', key)}
-                  className="px-2 py-1 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
-                >
-                  {recordingHotkey?.category === 'quiz' && recordingHotkey?.key === key
-                    ? '...'
-                    : '修改'}
-                </button>
-                {customHotkeys[`quiz.${key}`] && (
-                  <button
-                    onClick={() => resetHotkey('quiz', key)}
-                    className="px-2 py-1 text-xs bg-gray-500 hover:bg-gray-600 text-white rounded transition-colors"
-                  >
-                    重置
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* 笔记和记忆卡 */}
-      <div className="grid grid-cols-2 gap-6">
-        <section>
-          <h3 className="text-lg font-bold mb-3 text-gray-900 dark:text-white flex items-center gap-2">
-            📝 笔记页面
-          </h3>
+      {SECTION_META.map((section) => (
+        <section key={section.id}>
+          <h3 className={`text-lg font-bold mb-3 ${section.accent}`}>{section.title}</h3>
           <div className="space-y-2">
-            {Object.entries(DEFAULT_HOTKEYS.notes).map(([key, defaultHotkey]) => (
-              <div key={key} className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-lg border dark:border-white/10">
+            {Object.entries(DEFAULT_HOTKEYS[section.id]).map(([key]) => (
+              <div
+                key={key}
+                className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-lg border dark:border-white/10"
+              >
                 <span className="text-sm text-gray-700 dark:text-gray-300">{HOTKEY_NAMES[key]}</span>
                 <div className="flex items-center gap-2">
-                  <kbd className="px-2 py-1 text-xs font-mono bg-gray-100 dark:bg-slate-700 border dark:border-white/10 rounded min-w-[60px] text-center dark:text-gray-300">
-                    {getActualHotkey('notes', key)}
+                  <kbd className="px-3 py-1.5 text-sm font-mono bg-gray-100 dark:bg-slate-700 border dark:border-white/10 rounded min-w-[84px] text-center dark:text-gray-300">
+                    {getActualHotkey(section.id, key)}
                   </kbd>
                   <button
-                    onClick={() => startRecording('notes', key)}
-                    className="px-2 py-1 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
+                    onClick={() => startRecording(section.id, key)}
+                    className="px-3 py-1.5 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
                   >
-                    {recordingHotkey?.category === 'notes' && recordingHotkey?.key === key
-                      ? '...'
-                      : '修改'}
+                    {recordingHotkey?.category === section.id && recordingHotkey.key === key ? "请按键..." : "修改"}
                   </button>
-                  {customHotkeys[`notes.${key}`] && (
+                  {customHotkeys[`${section.id}.${key}`] && (
                     <button
-                      onClick={() => resetHotkey('notes', key)}
-                      className="px-2 py-1 text-xs bg-gray-500 hover:bg-gray-600 text-white rounded transition-colors"
+                      onClick={() => resetHotkey(section.id, key)}
+                      className="px-3 py-1.5 text-sm bg-gray-500 hover:bg-gray-600 text-white rounded transition-colors"
                     >
                       重置
                     </button>
@@ -335,46 +189,11 @@ const HotkeysSettings = () => {
             ))}
           </div>
         </section>
+      ))}
 
-        <section>
-          <h3 className="text-lg font-bold mb-3 text-gray-900 dark:text-white flex items-center gap-2">
-            🧠 记忆卡页面
-          </h3>
-          <div className="space-y-2">
-            {Object.entries(DEFAULT_HOTKEYS.anki).map(([key, defaultHotkey]) => (
-              <div key={key} className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-lg border dark:border-white/10">
-                <span className="text-sm text-gray-700 dark:text-gray-300">{HOTKEY_NAMES[key]}</span>
-                <div className="flex items-center gap-2">
-                  <kbd className="px-2 py-1 text-xs font-mono bg-gray-100 dark:bg-slate-700 border dark:border-white/10 rounded min-w-[60px] text-center dark:text-gray-300">
-                    {getActualHotkey('anki', key)}
-                  </kbd>
-                  <button
-                    onClick={() => startRecording('anki', key)}
-                    className="px-2 py-1 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
-                  >
-                    {recordingHotkey?.category === 'anki' && recordingHotkey?.key === key
-                      ? '...'
-                      : '修改'}
-                  </button>
-                  {customHotkeys[`anki.${key}`] && (
-                    <button
-                      onClick={() => resetHotkey('anki', key)}
-                      className="px-2 py-1 text-xs bg-gray-500 hover:bg-gray-600 text-white rounded transition-colors"
-                    >
-                      重置
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      </div>
-
-      {/* 底部操作 */}
       <div className="pt-6 border-t dark:border-white/10 flex justify-between items-center">
         <div className="text-sm text-gray-500 dark:text-gray-400">
-          💡 提示：修改后需要刷新页面才能生效
+          当前面板只显示现行功能；旧学习模块快捷键已移除。
         </div>
         <button
           onClick={resetAllHotkeys}
@@ -384,7 +203,6 @@ const HotkeysSettings = () => {
         </button>
       </div>
 
-      {/* 录制状态提示 */}
       {recordingHotkey && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-8 max-w-md w-full">

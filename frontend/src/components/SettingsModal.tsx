@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTheme } from "../context/ThemeContext";
 import { useToast } from "../context/ToastContext";
@@ -247,9 +247,6 @@ const SettingsModal = () => {
   const toast = useToast();
 
    const [activeTab, setActiveTab] = useState("profile");  // ✨ 改为默认打开 profile
-   const [stats, setStats] = useState<{ notes: number; folders: number } | null>(null);
-   const [loading, setLoading] = useState(false);
-
   // ✨ 新增：修改密码状态
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: "",
@@ -351,52 +348,6 @@ const SettingsModal = () => {
     }
   };
 
-  // 数据管理函数
-  const fetchStats = async () => {
-    try {
-      const response = await apiClient.get('/data/stats');
-      setStats({
-        notes: response.data?.notes ?? 0,
-        folders: response.data?.folders ?? 0,
-      });
-    } catch (error) {
-      console.error('Failed to fetch stats:', error);
-    }
-  };
-
-  const handleExport = async (type) => {
-    try {
-      setLoading(true);
-      const response = await apiClient.get(`/data/export/${type}`, {
-        responseType: 'blob'
-      });
-
-      // 创建下载链接
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `vibelife_${type}_${Date.now()}.json`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-
-      toast.success(type === 'notes' ? '笔记导出成功！' : `${type} 导出成功！`);
-    } catch (error) {
-      const err = error as Error;
-      toast.error(`导出失败: ${err.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 切换到数据标签时加载统计
-  useEffect(() => {
-    if (activeTab === 'data') {
-      fetchStats();
-    }
-  }, [activeTab]);
-
   const tabs = [
     { id: "profile", name: "通用", icon: Icons.User },
     { id: "focus", name: "专注", icon: Icons.Clock },
@@ -404,7 +355,6 @@ const SettingsModal = () => {
     { id: "ai", name: "AI", icon: Icons.Robot },
     { id: "theme", name: "主题", icon: Icons.Palette },
     { id: "hotkeys", name: "快捷键", icon: Icons.Keyboard },
-    { id: "data", name: "数据", icon: Icons.Database },
   ];
 
   return (
@@ -808,84 +758,6 @@ const SettingsModal = () => {
                                                     ))}
                                                 </div>
                                             </div>
-                                        </div>
-                                    </>
-                                )}
-
-                                {/* --- 数据管理 --- */}
-                                {activeTab === 'data' && (
-                                    <>
-                                        <h3 className="text-3xl font-bold dark:text-white text-gray-900 mb-6">数据管理</h3>
-
-                                        {/* 数据统计 */}
-                                        <div className="mb-8 p-6 rounded-2xl bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-500/10 dark:to-purple-500/10 border border-blue-100 dark:border-blue-500/20">
-                                            <div className="flex items-center justify-between mb-4">
-                                                <h4 className="font-bold dark:text-white flex items-center gap-2">
-                                                    <Icons.ChartBar className="w-5 h-5 text-blue-500" />
-                                                    数据统计
-                                                </h4>
-                                                <button
-                                                    onClick={fetchStats}
-                                                    className="p-2 rounded-lg hover:bg-white/50 dark:hover:bg-white/10 transition"
-                                                    title="刷新"
-                                                >
-                                                    <Icons.Refresh className="w-4 h-4 dark:text-white" />
-                                                </button>
-                                            </div>
-                                            {stats ? (
-                                                <div className="grid grid-cols-2 gap-4">
-                                                    <div className="text-center">
-                                                        <div className="text-3xl font-bold text-green-600 dark:text-green-400">{stats.notes}</div>
-                                                        <div className="text-xs text-gray-500 dark:text-gray-400">笔记</div>
-                                                    </div>
-                                                    <div className="text-center">
-                                                        <div className="text-3xl font-bold text-purple-600 dark:text-purple-400">{stats.folders}</div>
-                                                        <div className="text-xs text-gray-500 dark:text-gray-400">文件夹</div>
-                                                    </div>
-                                                </div>
-                                            ) : (
-                                                <div className="text-sm text-gray-500 dark:text-gray-400">加载中...</div>
-                                            )}
-                                        </div>
-
-                                        {/* 导出功能 */}
-                                        <div className="mb-8">
-                                            <h4 className="font-bold dark:text-white mb-4 flex items-center gap-2">
-                                                <Icons.Download className="w-5 h-5 text-green-500" />
-                                                导出数据
-                                            </h4>
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <button
-                                                    onClick={() => handleExport('notes')}
-                                                    disabled={loading}
-                                                    className="p-4 rounded-xl border dark:border-white/10 hover:bg-blue-50 dark:hover:bg-blue-500/10 hover:border-blue-500 dark:hover:border-blue-500/30 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                                                >
-                                                    <div className="font-bold dark:text-white">笔记</div>
-                                                    <div className="text-xs text-gray-500 dark:text-gray-400">导出所有笔记</div>
-                                                </button>
-                                                <div className="p-4 rounded-xl border dark:border-white/10 bg-gray-50/50 dark:bg-white/5 flex items-center justify-between">
-                                                    <div>
-                                                        <div className="font-bold dark:text-white">说明</div>
-                                                        <div className="text-xs text-gray-500 dark:text-gray-400">当前仅保留笔记数据导出。</div>
-                                                    </div>
-                                                    <Icons.FileText className="w-5 h-5 text-blue-500" />
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* 危险区域 */}
-                                        <div className="p-6 rounded-2xl bg-red-50 dark:bg-red-500/10 border border-red-100 dark:border-red-500/20">
-                                            <h4 className="text-red-600 dark:text-red-400 font-bold mb-2">危险区域</h4>
-                                            <p className="text-sm text-red-500/80 mb-4">重置将清空所有本地缓存和配置，此操作无法撤销。</p>
-                                            <button
-                                                onClick={() => {
-                                                    localStorage.clear();
-                                                    window.location.reload();
-                                                }}
-                                                className="px-4 py-2 bg-white dark:bg-black/20 text-red-500 font-bold rounded-lg border border-red-200 dark:border-red-500/30 text-sm hover:bg-red-50 transition"
-                                            >
-                                                重置应用
-                                            </button>
                                         </div>
                                     </>
                                 )}
