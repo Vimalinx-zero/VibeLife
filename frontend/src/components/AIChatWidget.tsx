@@ -254,32 +254,6 @@ const AIChatWidget: React.FC = () => {
     };
   }, [shouldShowDock, isOpen]);
 
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target as Node | null;
-      if (!target || !chatCanvasRef.current || !chatCanvasRef.current.contains(target)) {
-        return;
-      }
-
-      const elementTarget = target instanceof Element ? target : null;
-      if (elementTarget?.closest('[data-chat-item="true"]') || elementTarget?.closest('[data-chat-control="true"]')) {
-        return;
-      }
-
-      setIsOpen(false);
-      setIsDockHovered(false);
-    };
-
-    document.addEventListener('pointerdown', handlePointerDown);
-    return () => {
-      document.removeEventListener('pointerdown', handlePointerDown);
-    };
-  }, [isOpen]);
-
   const handleSend = async () => {
     if (!inputValue.trim() || isTyping || loading) return;
 
@@ -406,21 +380,22 @@ const AIChatWidget: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 16 }}
             transition={{ duration: 0.25, ease: 'easeOut' }}
-            className="fixed inset-x-0 top-3 bottom-28 z-[93] flex justify-center px-3 md:top-4 md:bottom-32 md:px-6 pointer-events-none"
+            className="fixed inset-x-0 top-3 bottom-28 z-[93] flex justify-center px-3 md:top-4 md:bottom-32 md:px-6"
           >
             <div
               ref={chatCanvasRef}
-              className="relative h-full w-full max-w-5xl pointer-events-auto"
+              data-chat-control="true"
+              className="relative h-full w-full max-w-5xl"
             >
               <div
                 data-chat-control="true"
-                className="absolute right-0 top-4 z-10 flex flex-col gap-2 pr-1 md:right-2"
+                className="absolute right-0 top-4 z-10 flex pointer-events-auto flex-col gap-2 pr-1 md:right-2"
               >
                 <button
                   type="button"
                   onClick={() => scrollMessagesPage('up')}
                   disabled={!canPageUp}
-                  className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-black/45 text-white shadow-lg backdrop-blur disabled:cursor-not-allowed disabled:opacity-35"
+                  className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-white/15 bg-black/55 text-white shadow-lg backdrop-blur disabled:cursor-not-allowed disabled:opacity-35"
                 >
                   <PagingIcons.Up />
                 </button>
@@ -428,7 +403,7 @@ const AIChatWidget: React.FC = () => {
                   type="button"
                   onClick={() => scrollMessagesPage('down')}
                   disabled={!canPageDown}
-                  className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-black/45 text-white shadow-lg backdrop-blur disabled:cursor-not-allowed disabled:opacity-35"
+                  className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-white/15 bg-black/55 text-white shadow-lg backdrop-blur disabled:cursor-not-allowed disabled:opacity-35"
                 >
                   <PagingIcons.Down />
                 </button>
@@ -436,9 +411,10 @@ const AIChatWidget: React.FC = () => {
 
               <div
                 ref={messagesViewportRef}
-                className="flex h-full overflow-y-auto overscroll-contain px-1 pb-5 pr-14 pt-2 md:px-3 md:pb-6 md:pr-16 md:pt-3"
+                data-chat-control="true"
+                className="h-full overflow-y-auto overscroll-contain px-1 pb-5 pr-14 pt-2 md:px-3 md:pb-6 md:pr-16 md:pt-3"
               >
-                <div className="flex min-h-full w-full flex-col justify-end gap-3">
+                <div className="mx-auto flex w-full max-w-4xl flex-col gap-3">
                   <AnimatePresence initial={false}>
                     {messages.map((message) => (
                       <motion.div
