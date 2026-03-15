@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 REPO_ROOT = Path(__file__).resolve().parent.parent
 OPENCLAW_STATE_ROOT = Path.home() / ".openclaw"
 DEFAULT_OPENCLAW_WORKSPACE = str(Path.home() / ".openclaw" / "workspace")
+DEFAULT_VIBELIFE_WORKSPACE = str(Path.home() / ".openclaw" / "workspace-vibelife")
 DEFAULT_OPENCLAW_MODEL = "rightcodes/gpt-5.4"
 _verified_agents = {"main"}
 _verified_agents_lock = threading.Lock()
@@ -225,6 +226,13 @@ def _resolve_openclaw_agent_id(agent: str, current_user_id: Optional[str]) -> st
     return f"{base_agent}-{suffix}"
 
 
+def _resolve_openclaw_workspace(agent: str) -> str:
+    normalized_agent = str(agent).strip()
+    if normalized_agent == "vibelife" or normalized_agent.startswith("vibelife-"):
+        return DEFAULT_VIBELIFE_WORKSPACE
+    return DEFAULT_OPENCLAW_WORKSPACE
+
+
 def _run_openclaw_command(command: List[str], *, timeout_seconds: int) -> subprocess.CompletedProcess[str]:
     try:
         return subprocess.run(
@@ -284,11 +292,13 @@ def ensure_openclaw_agent(
                     _verified_agents.add(normalized_agent)
                     return
 
-        workspace = _get_openclaw_config_value(
-            "agents.defaults.workspace",
-            fallback=DEFAULT_OPENCLAW_WORKSPACE,
-            timeout_seconds=timeout_seconds,
-        )
+        workspace = _resolve_openclaw_workspace(normalized_agent)
+        if workspace == DEFAULT_OPENCLAW_WORKSPACE:
+            workspace = _get_openclaw_config_value(
+                "agents.defaults.workspace",
+                fallback=DEFAULT_OPENCLAW_WORKSPACE,
+                timeout_seconds=timeout_seconds,
+            )
         target_model = (
             str(model).strip()
             if isinstance(model, str) and model.strip()
