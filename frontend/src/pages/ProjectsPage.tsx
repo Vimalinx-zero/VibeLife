@@ -3,8 +3,12 @@ import { useNavigate } from "react-router-dom";
 import { ReactFlow, Background, Controls, MiniMap, type Edge, type Node } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { apiClient, projectsAPI, type ProjectRecordDTO } from "../utils/api";
-
-type ProjectCategory = "life" | "work" | "growth";
+import {
+  getProjectCategoryLabel,
+  getProjectCategoryOrder,
+  normalizeProjectCategory,
+  type ProjectCategory,
+} from "./projectsPageCategories";
 
 type ViewTab = "mindmap" | "notes" | "emails";
 
@@ -20,14 +24,6 @@ const tabLabel: Record<ViewTab, string> = {
   emails: "邮件"
 };
 
-const categoryLabel: Record<ProjectCategory, string> = {
-  life: "生活",
-  work: "工作",
-  growth: "成长"
-};
-
-const categoryOrder: ProjectCategory[] = ["life", "work", "growth"];
-
 interface ProjectRecord extends ProjectRecordDTO {
   category: ProjectCategory;
 }
@@ -39,16 +35,6 @@ interface SearchNoteItem {
   tags?: string[];
   date?: string;
 }
-
-const normalizeProjectCategory = (value: string): ProjectCategory | null => {
-  if (value === "study") {
-    return "growth";
-  }
-  if (value === "life" || value === "work" || value === "growth") {
-    return value;
-  }
-  return null;
-};
 
 const ProjectsPage = () => {
   const navigate = useNavigate();
@@ -66,21 +52,17 @@ const ProjectsPage = () => {
       setLoadingProjects(true);
       try {
         const data = await projectsAPI.getProjects();
-        const normalized = data
-          .map((item) => {
-            const category = normalizeProjectCategory(item.category);
-            if (!category) {
-              return null;
-            }
-            return { ...item, category };
-          })
-          .filter((item): item is ProjectRecord => item !== null);
+        const normalized = data.map((item) => ({
+          ...item,
+          category: normalizeProjectCategory(item.category),
+        })) satisfies ProjectRecord[];
         if (!alive) {
           return;
         }
         setProjects(normalized);
         if (!selectedProjectId && normalized.length > 0) {
           setSelectedProjectId(normalized[0].id);
+          setActiveCategory(normalized[0].category);
         }
       } finally {
         if (alive) {
@@ -96,24 +78,49 @@ const ProjectsPage = () => {
 
   const allProjects = useMemo(() => projects, [projects]);
 
+  const categoryOrder = useMemo(() => getProjectCategoryOrder(allProjects), [allProjects]);
+
   const selectedProject = useMemo(
     () => allProjects.find((project) => project.id === selectedProjectId) ?? allProjects[0] ?? null,
     [allProjects, selectedProjectId]
   );
 
-  const projectsByCategory = useMemo(
-    () => ({
-      life: allProjects.filter((item) => item.category === "life"),
-      work: allProjects.filter((item) => item.category === "work"),
-      growth: allProjects.filter((item) => item.category === "growth")
-    }),
-    [allProjects]
-  );
+  const projectsByCategory = useMemo(() => {
+    const grouped = categoryOrder.reduce<Record<ProjectCategory, ProjectRecord[]>>((accumulator, category) => {
+      accumulator[category] = [];
+      return accumulator;
+    }, {});
 
-  const folderProjects = useMemo(() => projectsByCategory[activeCategory], [projectsByCategory, activeCategory]);
+    allProjects.forEach((project) => {
+      if (!grouped[project.category]) {
+        grouped[project.category] = [];
+      }
+      grouped[project.category].push(project);
+    });
+
+    return grouped;
+  }, [allProjects, categoryOrder]);
+
+  const folderProjects = useMemo(() => projectsByCategory[activeCategory] ?? [], [projectsByCategory, activeCategory]);
 
   const selectedProjectName = selectedProject?.name ?? "";
   const selectedProjectKey = selectedProject?.id ?? "";
+
+  useEffect(() => {
+    if (categoryOrder.length === 0) {
+      return;
+    }
+
+    if (!categoryOrder.includes(activeCategory)) {
+      setActiveCategory(categoryOrder[0]);
+    }
+  }, [activeCategory, categoryOrder]);
+
+  useEffect(() => {
+    if (selectedProject && selectedProject.category !== activeCategory) {
+      setActiveCategory(selectedProject.category);
+    }
+  }, [activeCategory, selectedProject]);
 
   useEffect(() => {
     if (!selectedProjectKey || !selectedProjectName) {
@@ -236,15 +243,15 @@ const ProjectsPage = () => {
                       : "bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/20"
                   }`}
                 >
-                  <span className="font-semibold">{categoryLabel[category]}</span>
-                  <span className="text-xs opacity-80">{projectsByCategory[category].length}</span>
+                  <span className="font-semibold">{getProjectCategoryLabel(category)}</span>
+                  <span className="text-xs opacity-80">{projectsByCategory[category]?.length ?? 0}</span>
                 </button>
               ))}
             </div>
           </div>
 
           <div className="w-full p-4 bg-white/60 dark:bg-[#1e293b]/60 backdrop-blur-2xl border border-white/40 dark:border-white/10 rounded-3xl shadow-xl overflow-hidden">
-            <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-3">{categoryLabel[activeCategory]}项目</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-3">{getProjectCategoryLabel(activeCategory)}项目</p>
             <div className="space-y-2 max-h-[calc(100vh-22rem)] overflow-y-auto custom-scrollbar pr-1">
               {folderProjects.map((project) => (
                 <button
