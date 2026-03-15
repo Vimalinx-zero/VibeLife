@@ -401,6 +401,34 @@ class ProjectEmail(Base):
     time = Column(String, default="")
 
 
+class JournalEntry(Base):
+    __tablename__ = "journal_entries"
+
+    id = Column(String, primary_key=True, index=True)
+    user_id = Column(String, index=True, nullable=False)
+    title = Column(String, nullable=False)
+    content = Column(Text, nullable=False)
+    entry_date = Column(String, index=True, nullable=False)  # YYYY-MM-DD
+    mood = Column(String, default="")
+    tags = Column(JSON, default=list)
+    created_at = Column(String, default=lambda: datetime.datetime.utcnow().isoformat())
+    updated_at = Column(String, default=lambda: datetime.datetime.utcnow().isoformat())
+
+
+class ScheduleEvent(Base):
+    __tablename__ = "schedule_events"
+
+    id = Column(String, primary_key=True, index=True)
+    user_id = Column(String, index=True, nullable=False)
+    title = Column(String, nullable=False)
+    description = Column(Text, default="")
+    event_date = Column(String, index=True, nullable=False)  # YYYY-MM-DD
+    time = Column(String, nullable=True)  # HH:MM or human-readable time label
+    type = Column(String, default="task")  # meeting | deadline | reminder | task
+    created_at = Column(String, default=lambda: datetime.datetime.utcnow().isoformat())
+    updated_at = Column(String, default=lambda: datetime.datetime.utcnow().isoformat())
+
+
 class QuickNoteCapture(Base):
     __tablename__ = "quick_note_captures"
 

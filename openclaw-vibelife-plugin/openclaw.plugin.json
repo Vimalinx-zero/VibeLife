@@ -1,7 +1,7 @@
 {
   "id": "vibelife",
   "name": "VibeLife Tools",
-  "description": "Manage VibeLife todos, notes, and projects from OpenClaw.",
+  "description": "Manage VibeLife todos, notes, journals, schedule events, and projects from OpenClaw.",
   "version": "0.1.0",
   "configSchema": {
     "type": "object",

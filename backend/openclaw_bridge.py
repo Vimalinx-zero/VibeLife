@@ -28,11 +28,12 @@ def build_vibelife_chat_prompt(
         "引用工具返回的 ID、标题、状态时，请保持原样，不要缩写或改写。",
         "如果用户意图不明确，先提出最小必要澄清问题。",
         "如果你完成了动作，要明确说明你做了什么以及结果。",
+        "如果你调用工具完成了写入或更新，最终回复里必须给出简短中文总结，并尽量包含对象类型和 ID。",
     ]
 
     if tools_enabled:
         guidance_lines.append(
-            "当用户要求查看或修改 VibeLife 内的待办、笔记、项目数据时，优先调用可用的 VibeLife 工具，而不是口头假设已经完成。"
+            "当用户要求查看或修改 VibeLife 内的待办、笔记、日志、日程、项目数据时，优先调用可用的 VibeLife 工具，而不是口头假设已经完成。"
         )
     else:
         guidance_lines.append(

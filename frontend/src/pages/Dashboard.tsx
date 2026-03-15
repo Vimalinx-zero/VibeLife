@@ -113,6 +113,12 @@ const StatItem = ({ label, value, icon: Icon, bgColor, textColor }: StatItemProp
   </div>
 );
 
+const getTodayDateKey = (): string => {
+  const now = new Date();
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 10);
+};
+
 function Dashboard() {
   const navigate = useNavigate();
   const { profile } = useTheme();
@@ -139,6 +145,7 @@ function Dashboard() {
   const [coachLoading, setCoachLoading] = useState<boolean>(true);
   const [coachGenerating, setCoachGenerating] = useState<boolean>(false);
   const [todoWidgetKey, setTodoWidgetKey] = useState<number>(0);
+  const [todayJournalCount, setTodayJournalCount] = useState<number>(0);
   const coachFeatureEnabled = false;
 
   const fallbackCoachData = useCallback((): CoachData => ({
@@ -231,6 +238,14 @@ function Dashboard() {
         const progressRes = await apiClient.get("/dashboard/progress");
         if(progressRes.data) setLastActivity(progressRes.data.last_activity);
 
+        const journalRes = await apiClient.get("/workbench/journal", {
+          params: {
+            entry_date: getTodayDateKey(),
+            limit: 200,
+          }
+        });
+        setTodayJournalCount(Array.isArray(journalRes.data) ? journalRes.data.length : 0);
+
       } catch (error) {
         console.log("后端未连接或未认证，使用模拟数据");
 
@@ -242,6 +257,7 @@ function Dashboard() {
           mistakes_reviewed: 0,
           anki_reviews: 0
         });
+        setTodayJournalCount(0);
 
       }
     };
@@ -370,7 +386,7 @@ function Dashboard() {
               />
               <StatItem
                 label="今日日志"
-                value={studyStats.duration_minutes || 0}
+                value={todayJournalCount}
                 icon={Icons.Clock}
                 bgColor="bg-blue-500/20"
                 textColor="text-blue-500"
@@ -477,14 +493,14 @@ function Dashboard() {
         </GlassCard>
 
         {/* 日志 */}
-        <GlassCard className="p-6 relative group overflow-hidden" delay={0.35} onClick={() => navigate('/notes')}>
+        <GlassCard className="p-6 relative group overflow-hidden" delay={0.35} onClick={() => navigate('/journal')}>
           <div className="flex justify-between items-start relative z-10">
             <div className="p-3 bg-purple-500/20 rounded-2xl text-purple-500">
               <Icons.Clock />
             </div>
             <div className="text-right">
               <span className="text-3xl font-bold block dark:text-white text-gray-900">
-                {studyStats.duration_minutes || 0}
+                {todayJournalCount}
               </span>
               <span className="text-xs text-gray-500">今日</span>
             </div>
@@ -526,7 +542,7 @@ function Dashboard() {
                   活跃项目 {stats.notes_count || 0}
                 </div>
                 <div className="text-xs rounded-lg px-3 py-2 bg-purple-500/10 text-purple-600 dark:text-purple-300">
-                  今日日志 {studyStats.duration_minutes || 0}
+                  今日日志 {todayJournalCount}
                 </div>
                 <div className="text-xs rounded-lg px-3 py-2 bg-amber-500/10 text-amber-700 dark:text-amber-300">
                   待办 {coachData?.snapshot.pending_todos || 0}

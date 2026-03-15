@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { id: "workbench", label: "Workbench", path: "/workbench" },
   { id: "notes", label: "Notes", path: "/notes" },
   { id: "schedule", label: "Schedule", path: "/schedule" },
+  { id: "journal", label: "Journal", path: "/journal" },
   { id: "capture", label: "Capture", path: "/quick-capture" },
 ];
 

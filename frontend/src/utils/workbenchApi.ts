@@ -42,6 +42,29 @@ export interface StudySession {
   created_at: string;
 }
 
+export interface JournalEntry {
+  id: string;
+  title: string;
+  content: string;
+  entry_date: string;
+  mood?: string | null;
+  tags: string[];
+  preview: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ScheduleEvent {
+  id: string;
+  title: string;
+  description?: string;
+  event_date: string;
+  time?: string | null;
+  type: 'meeting' | 'deadline' | 'reminder' | 'task' | string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface WorkbenchStats {
   total_todos: number;
   completed_todos: number;
@@ -190,6 +213,116 @@ export async function createStudySession(
 export async function getStudySessions(days: number = 7): Promise<StudySession[]> {
   const response = await apiClient.get<StudySession[]>(`/workbench/sessions?days=${days}`);
   return response.data; // 后端直接返回数组
+}
+
+// ========================
+// Journal API
+// ========================
+
+export async function getJournalEntries(params: {
+  entryDate?: string | null;
+  dateFrom?: string | null;
+  dateTo?: string | null;
+  limit?: number;
+} = {}): Promise<JournalEntry[]> {
+  const search = new URLSearchParams();
+
+  if (params.entryDate) {
+    search.append('entry_date', params.entryDate);
+  }
+  if (params.dateFrom) {
+    search.append('date_from', params.dateFrom);
+  }
+  if (params.dateTo) {
+    search.append('date_to', params.dateTo);
+  }
+  if (typeof params.limit === 'number') {
+    search.append('limit', String(params.limit));
+  }
+
+  const query = search.toString();
+  const response = await apiClient.get<JournalEntry[]>(
+    query ? `/workbench/journal?${query}` : `/workbench/journal`
+  );
+  return response.data;
+}
+
+export async function createJournalEntry(payload: {
+  title?: string;
+  content: string;
+  entry_date?: string | null;
+  mood?: string | null;
+  tags?: string[];
+}): Promise<JournalEntry> {
+  const response = await apiClient.post<JournalEntry>(`/workbench/journal`, payload);
+  return response.data;
+}
+
+export async function updateJournalEntry(
+  entryId: string,
+  payload: Partial<Pick<JournalEntry, 'title' | 'content' | 'entry_date' | 'mood' | 'tags'>>
+): Promise<JournalEntry> {
+  const response = await apiClient.put<JournalEntry>(`/workbench/journal/${entryId}`, payload);
+  return response.data;
+}
+
+// ========================
+// Schedule API
+// ========================
+
+export async function getScheduleEvents(params: {
+  year?: number;
+  month?: number;
+  dateFrom?: string | null;
+  dateTo?: string | null;
+  type?: string | null;
+  limit?: number;
+} = {}): Promise<ScheduleEvent[]> {
+  const search = new URLSearchParams();
+
+  if (typeof params.year === 'number') {
+    search.append('year', String(params.year));
+  }
+  if (typeof params.month === 'number') {
+    search.append('month', String(params.month));
+  }
+  if (params.dateFrom) {
+    search.append('date_from', params.dateFrom);
+  }
+  if (params.dateTo) {
+    search.append('date_to', params.dateTo);
+  }
+  if (params.type) {
+    search.append('type', params.type);
+  }
+  if (typeof params.limit === 'number') {
+    search.append('limit', String(params.limit));
+  }
+
+  const query = search.toString();
+  const response = await apiClient.get<ScheduleEvent[]>(
+    query ? `/workbench/schedule-events?${query}` : `/workbench/schedule-events`
+  );
+  return response.data;
+}
+
+export async function createScheduleEvent(payload: {
+  title: string;
+  event_date?: string | null;
+  description?: string;
+  time?: string | null;
+  type?: string;
+}): Promise<ScheduleEvent> {
+  const response = await apiClient.post<ScheduleEvent>(`/workbench/schedule-events`, payload);
+  return response.data;
+}
+
+export async function updateScheduleEvent(
+  eventId: string,
+  payload: Partial<Pick<ScheduleEvent, 'title' | 'event_date' | 'description' | 'time' | 'type'>>
+): Promise<ScheduleEvent> {
+  const response = await apiClient.put<ScheduleEvent>(`/workbench/schedule-events/${eventId}`, payload);
+  return response.data;
 }
 
 // ========================

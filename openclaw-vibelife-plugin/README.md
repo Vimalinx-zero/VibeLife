@@ -8,6 +8,12 @@ OpenClaw tools for managing VibeLife data:
 - `vibelife_note_search`
 - `vibelife_note_create`
 - `vibelife_note_update`
+- `vibelife_journal_list`
+- `vibelife_journal_create`
+- `vibelife_journal_update`
+- `vibelife_schedule_list`
+- `vibelife_schedule_create`
+- `vibelife_schedule_update`
 - `vibelife_project_list`
 - `vibelife_project_update`
 - `vibelife_project_step_create`

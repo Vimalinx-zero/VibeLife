@@ -19,6 +19,7 @@ const WorkbenchPage = lazy(() => import("./pages/WorkbenchPage"));
 const ProjectsPage = lazy(() => import("./pages/ProjectsPage"));
 const QuickCapturePage = lazy(() => import("./pages/QuickCapturePage"));
 const SchedulePage = lazy(() => import("./pages/SchedulePage"));
+const JournalPage = lazy(() => import("./pages/JournalPage"));
 
 const RequireAuth = () => {
   const { loading, isAuthenticated } = useAuth();
@@ -94,6 +95,7 @@ const AppContent = () => {
                 <Route path="/projects" element={<ProjectsPage />} />
                 <Route path="/quick-capture" element={<QuickCapturePage />} />
                 <Route path="/schedule" element={<SchedulePage />} />
+                <Route path="/journal" element={<JournalPage />} />
                 <Route path="/quiz" element={<Navigate to="/" replace />} />
                 <Route path="/mistakes" element={<Navigate to="/" replace />} />
                 <Route path="/anki" element={<Navigate to="/" replace />} />

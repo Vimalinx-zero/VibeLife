@@ -356,6 +356,235 @@ function defineTools(api) {
     ),
     createTool(
       {
+        name: "vibelife_journal_list",
+        label: "VibeLife Journal List",
+        description: "List the current user's VibeLife journal entries.",
+        parameters: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            entryDate: { type: "string" },
+            dateFrom: { type: "string" },
+            dateTo: { type: "string" },
+            limit: { type: "integer" },
+          },
+        },
+        handler: (params) =>
+          requestJson(api, "/api/workbench/journal", {
+            query: cleanObject({
+              entry_date:
+                typeof params.entryDate === "string"
+                  ? params.entryDate.trim()
+                  : undefined,
+              date_from:
+                typeof params.dateFrom === "string"
+                  ? params.dateFrom.trim()
+                  : undefined,
+              date_to:
+                typeof params.dateTo === "string" ? params.dateTo.trim() : undefined,
+              limit: Number.isInteger(params.limit) ? params.limit : undefined,
+            }),
+          }),
+      },
+      api
+    ),
+    createTool(
+      {
+        name: "vibelife_journal_create",
+        label: "VibeLife Journal Create",
+        description: "Create a VibeLife journal entry.",
+        parameters: {
+          type: "object",
+          additionalProperties: false,
+          required: ["content"],
+          properties: {
+            title: { type: "string" },
+            content: { type: "string" },
+            entryDate: { type: "string" },
+            mood: { type: "string" },
+            tags: {
+              type: "array",
+              items: { type: "string" },
+            },
+          },
+        },
+        handler: (params) =>
+          requestJson(api, "/api/workbench/journal", {
+            method: "POST",
+            body: cleanObject({
+              title: typeof params.title === "string" ? params.title : undefined,
+              content: params.content,
+              entry_date:
+                typeof params.entryDate === "string"
+                  ? params.entryDate.trim()
+                  : undefined,
+              mood: typeof params.mood === "string" ? params.mood.trim() : undefined,
+              tags: Array.isArray(params.tags) ? params.tags : undefined,
+            }),
+          }),
+      },
+      api
+    ),
+    createTool(
+      {
+        name: "vibelife_journal_update",
+        label: "VibeLife Journal Update",
+        description: "Update an existing VibeLife journal entry by id.",
+        parameters: {
+          type: "object",
+          additionalProperties: false,
+          required: ["id"],
+          properties: {
+            id: { type: "string" },
+            title: { type: "string" },
+            content: { type: "string" },
+            entryDate: { type: "string" },
+            mood: { type: "string" },
+            tags: {
+              type: "array",
+              items: { type: "string" },
+            },
+          },
+        },
+        handler: (params) =>
+          requestJson(
+            api,
+            `/api/workbench/journal/${encodeURIComponent(params.id)}`,
+            {
+              method: "PUT",
+              body: cleanObject({
+                title: typeof params.title === "string" ? params.title : undefined,
+                content:
+                  typeof params.content === "string" ? params.content : undefined,
+                entry_date:
+                  typeof params.entryDate === "string"
+                    ? params.entryDate.trim()
+                    : undefined,
+                mood:
+                  typeof params.mood === "string" ? params.mood.trim() : undefined,
+                tags: Array.isArray(params.tags) ? params.tags : undefined,
+              }),
+            }
+          ),
+      },
+      api
+    ),
+    createTool(
+      {
+        name: "vibelife_schedule_list",
+        label: "VibeLife Schedule List",
+        description: "List VibeLife schedule events for the current user.",
+        parameters: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            year: { type: "integer" },
+            month: { type: "integer" },
+            dateFrom: { type: "string" },
+            dateTo: { type: "string" },
+            type: { type: "string" },
+            limit: { type: "integer" },
+          },
+        },
+        handler: (params) =>
+          requestJson(api, "/api/workbench/schedule-events", {
+            query: cleanObject({
+              year: Number.isInteger(params.year) ? params.year : undefined,
+              month: Number.isInteger(params.month) ? params.month : undefined,
+              date_from:
+                typeof params.dateFrom === "string"
+                  ? params.dateFrom.trim()
+                  : undefined,
+              date_to:
+                typeof params.dateTo === "string" ? params.dateTo.trim() : undefined,
+              type: typeof params.type === "string" ? params.type.trim() : undefined,
+              limit: Number.isInteger(params.limit) ? params.limit : undefined,
+            }),
+          }),
+      },
+      api
+    ),
+    createTool(
+      {
+        name: "vibelife_schedule_create",
+        label: "VibeLife Schedule Create",
+        description: "Create a VibeLife schedule event.",
+        parameters: {
+          type: "object",
+          additionalProperties: false,
+          required: ["title"],
+          properties: {
+            title: { type: "string" },
+            eventDate: { type: "string" },
+            description: { type: "string" },
+            time: { type: "string" },
+            type: { type: "string" },
+          },
+        },
+        handler: (params) =>
+          requestJson(api, "/api/workbench/schedule-events", {
+            method: "POST",
+            body: cleanObject({
+              title: params.title,
+              event_date:
+                typeof params.eventDate === "string"
+                  ? params.eventDate.trim()
+                  : undefined,
+              description:
+                typeof params.description === "string"
+                  ? params.description
+                  : undefined,
+              time: typeof params.time === "string" ? params.time.trim() : undefined,
+              type: typeof params.type === "string" ? params.type.trim() : undefined,
+            }),
+          }),
+      },
+      api
+    ),
+    createTool(
+      {
+        name: "vibelife_schedule_update",
+        label: "VibeLife Schedule Update",
+        description: "Update an existing VibeLife schedule event by id.",
+        parameters: {
+          type: "object",
+          additionalProperties: false,
+          required: ["id"],
+          properties: {
+            id: { type: "string" },
+            title: { type: "string" },
+            eventDate: { type: "string" },
+            description: { type: "string" },
+            time: { type: "string" },
+            type: { type: "string" },
+          },
+        },
+        handler: (params) =>
+          requestJson(
+            api,
+            `/api/workbench/schedule-events/${encodeURIComponent(params.id)}`,
+            {
+              method: "PUT",
+              body: cleanObject({
+                title: typeof params.title === "string" ? params.title : undefined,
+                event_date:
+                  typeof params.eventDate === "string"
+                    ? params.eventDate.trim()
+                    : undefined,
+                description:
+                  typeof params.description === "string"
+                    ? params.description
+                    : undefined,
+                time: typeof params.time === "string" ? params.time.trim() : undefined,
+                type: typeof params.type === "string" ? params.type.trim() : undefined,
+              }),
+            }
+          ),
+      },
+      api
+    ),
+    createTool(
+      {
         name: "vibelife_project_list",
         label: "VibeLife Project List",
         description: "List VibeLife projects with steps and resources.",
