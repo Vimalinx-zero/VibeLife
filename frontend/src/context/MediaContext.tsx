@@ -1,9 +1,16 @@
-import { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from "react";
-import { playChime, playClick } from "../utils/audio";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { initAudioContext, playChime, playClick } from "../utils/audio";
 import * as workbenchApi from "../utils/workbenchApi";
-
-type TimerMode = 'classic' | 'flow';
-type TimerStatus = 'idle' | 'running' | 'paused';
+import { useTheme } from "./ThemeContext";
+import {
+  advancePomodoroState,
+  completePomodoroFocus,
+  createInitialPomodoroState,
+  type PomodoroPhase,
+  type PomodoroState,
+  type TimerMode,
+  type TimerStatus,
+} from "./pomodoroState";
 
 interface Track {
   id: number;
@@ -20,7 +27,6 @@ interface AudioData {
 }
 
 interface MediaContextType {
-  // Music
   isMusicPlaying: boolean;
   isMusicMuted: boolean;
   audioData: AudioData;
@@ -34,18 +40,24 @@ interface MediaContextType {
   playTrack: (index: number) => void;
   playNext: () => void;
   playPrevious: () => void;
-  // Timer
   timerMode: TimerMode;
+  timerPhase: PomodoroPhase;
   timerStatus: TimerStatus;
   timerSeconds: number;
+  phaseTotalSeconds: number;
   flowDuration: number;
   customMinutes: number;
+  breakMinutes: number;
+  autoBreak: boolean;
   toggleTimer: () => void;
   stopTimer: () => void;
   switchTimerMode: (mode: TimerMode) => void;
   adjustTimerTime: (delta: number) => void;
+  setTimerDuration: (minutes: number) => void;
   formatTime: (totalSeconds: number) => string;
 }
+
+const clampMinutes = (minutes: number) => Math.max(1, Math.min(120, Math.floor(minutes)));
 
 const MediaContext = createContext<MediaContextType | undefined>(undefined);
 
@@ -58,7 +70,8 @@ export const useMedia = () => {
 };
 
 export const MediaProvider = ({ children }: { children: ReactNode }) => {
-  // ✅ 音乐曲目列表（使用稳定的免费音频源）
+  const { focusSettings, setFocusSettings } = useTheme();
+
   const tracks: Track[] = [
     {
       id: 1,
@@ -66,7 +79,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
       artist: "FASSounds",
       url: "https://cdn.pixabay.com/audio/2022/05/27/audio_1808fbf07a.mp3",
       duration: "3:19",
-      cover: "🎵"
+      cover: "🎵",
     },
     {
       id: 2,
@@ -74,7 +87,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
       artist: "FASSounds",
       url: "https://cdn.pixabay.com/audio/2022/05/27/audio_1808fbf07a.mp3",
       duration: "2:54",
-      cover: "🎶"
+      cover: "🎶",
     },
     {
       id: 3,
@@ -82,7 +95,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
       artist: "FASSounds",
       url: "https://cdn.pixabay.com/audio/2022/05/27/audio_1808fbf07a.mp3",
       duration: "3:06",
-      cover: "🎼"
+      cover: "🎼",
     },
     {
       id: 4,
@@ -90,7 +103,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
       artist: "RelaxingBeats",
       url: "https://cdn.pixabay.com/audio/2022/05/27/audio_1808fbf07a.mp3",
       duration: "4:15",
-      cover: "🎹"
+      cover: "🎹",
     },
     {
       id: 5,
@@ -98,36 +111,39 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
       artist: "AmbientMusic",
       url: "https://cdn.pixabay.com/audio/2022/05/27/audio_1808fbf07a.mp3",
       duration: "3:45",
-      cover: "🎸"
-    }
+      cover: "🎸",
+    },
   ];
 
-  // Music State
+  const buildInitialPomodoroState = useCallback(
+    (mode: TimerMode) =>
+      createInitialPomodoroState({
+        timerMode: mode,
+        focusMinutes: focusSettings.duration,
+        breakMinutes: focusSettings.breakDuration,
+        autoBreak: focusSettings.autoBreak,
+      }),
+    [focusSettings.autoBreak, focusSettings.breakDuration, focusSettings.duration]
+  );
+
   const [isMusicPlaying, setIsMusicPlaying] = useState<boolean>(false);
   const [isMusicMuted, setIsMusicMuted] = useState<boolean>(false);
   const [audioData, setAudioData] = useState<AudioData>({ frequency: 0, amplitude: 0 });
   const [currentTrackIndex, setCurrentTrackIndex] = useState<number>(0);
+  const [pomodoro, setPomodoro] = useState<PomodoroState>(() => buildInitialPomodoroState("classic"));
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
+  const previousPomodoroRef = useRef<PomodoroState | null>(null);
 
-  // Initialize audio element on mount
   useEffect(() => {
-    if (typeof window !== 'undefined' && !audioRef.current) {
+    if (typeof window !== "undefined" && !audioRef.current) {
       audioRef.current = new Audio();
       audioRef.current.loop = true;
       audioRef.current.volume = 0.5;
     }
   }, []);
 
-  // Timer State
-  const [timerMode, setTimerMode] = useState<TimerMode>('classic');
-  const [timerStatus, setTimerStatus] = useState<TimerStatus>('idle');
-  const [timerSeconds, setTimerSeconds] = useState<number>(25 * 60);
-  const [flowDuration, setFlowDuration] = useState<number>(0);
-  const [customMinutes, setCustomMinutes] = useState<number>(25);
-
-  // Audio visualization update function
   const updateAudioData = useCallback(() => {
     if (!analyserRef.current) return;
 
@@ -138,7 +154,7 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
     const average = dataArray.reduce((a, b) => a + b) / bufferLength;
     setAudioData({
       frequency: average,
-      amplitude: average / 255
+      amplitude: average / 255,
     });
 
     if (isMusicPlaying) {
@@ -146,90 +162,102 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [isMusicPlaying]);
 
-  // Initialize audio context for visualization
-  // Disabled due to CORS restrictions on external audio files
-  // Audio will play normally, but visualization won't work
   useEffect(() => {
-    // Skip audio context initialization to avoid CORS errors
     return;
   }, []);
 
-  // Update audio visualization when playing
   useEffect(() => {
     if (isMusicPlaying && analyserRef.current) {
       updateAudioData();
     }
   }, [isMusicPlaying, updateAudioData]);
 
-  // Timer completion handler
-  const handleTimerComplete = useCallback(async () => {
-    setTimerStatus('idle');
-
-    // ✅ 确保 AudioContext 已初始化（用户已交互）
-    try {
-      // 初始化 AudioContext（用户已经点击了开始按钮）
-      const { initAudioContext } = await import('../utils/audio');
-      initAudioContext();
-      // 播放完成铃声
-      playChime('complete');
-    } catch (error) {
-      console.error('Failed to play completion chime:', error);
-    }
-
-    // Calculate focus duration
-    let durationMinutes = 0;
-    if (timerMode === 'classic') {
-      durationMinutes = Math.round((customMinutes * 60 - timerSeconds) / 60);
-      if (durationMinutes < 1) durationMinutes = customMinutes; // At least 1 minute
-      setTimerSeconds(customMinutes * 60);
-    } else {
-      durationMinutes = Math.round(flowDuration / 60);
-      if (durationMinutes < 1) durationMinutes = 1;
-      setFlowDuration(0);
-      setTimerSeconds(0);
-    }
-
-    // Record focus session to database
-    try {
-      await workbenchApi.createFocusSession(
-        durationMinutes,
-        timerMode,
-        0
-      );
-      console.log(`Focus session recorded: ${durationMinutes} minutes in ${timerMode} mode`);
-    } catch (error) {
-      console.error('Failed to record focus session:', error);
-    }
-  }, [timerMode, customMinutes, timerSeconds, flowDuration]);
-
-  // Timer effect
   useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-    if (timerStatus === 'running') {
-      interval = setInterval(() => {
-        setTimerSeconds(prev => {
-          if (timerMode === 'classic') {
-            if (prev <= 1) {
-              handleTimerComplete();
-              return 0;
-            }
-            return prev - 1;
-          } else {
-            return prev + 1;
-          }
-        });
+    const nextFocusMinutes = clampMinutes(focusSettings.duration);
+    const nextBreakMinutes = clampMinutes(focusSettings.breakDuration);
+    const nextAutoBreak = focusSettings.autoBreak;
 
-        if (timerMode === 'flow') {
-          setFlowDuration(prev => prev + 1);
+    setPomodoro((current) => {
+      const nextState: PomodoroState = {
+        ...current,
+        focusMinutes: nextFocusMinutes,
+        breakMinutes: nextBreakMinutes,
+        autoBreak: nextAutoBreak,
+      };
+
+      if (current.timerStatus === "idle") {
+        if (current.timerMode === "classic" && current.phase === "focus") {
+          nextState.timerSeconds = nextFocusMinutes * 60;
+          nextState.phaseTotalSeconds = nextFocusMinutes * 60;
+        } else if (current.timerMode === "classic" && current.phase === "break") {
+          nextState.timerSeconds = nextBreakMinutes * 60;
+          nextState.phaseTotalSeconds = nextBreakMinutes * 60;
+        } else if (current.timerMode === "flow" && current.phase === "focus") {
+          nextState.timerSeconds = 0;
+          nextState.phaseTotalSeconds = 0;
         }
-      }, 1000);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [timerStatus, timerMode, handleTimerComplete]);
+      }
 
-  // Music controls
+      const isUnchanged =
+        current.focusMinutes === nextState.focusMinutes &&
+        current.breakMinutes === nextState.breakMinutes &&
+        current.autoBreak === nextState.autoBreak &&
+        current.timerSeconds === nextState.timerSeconds &&
+        current.phaseTotalSeconds === nextState.phaseTotalSeconds;
+
+      return isUnchanged ? current : nextState;
+    });
+  }, [focusSettings.autoBreak, focusSettings.breakDuration, focusSettings.duration]);
+
+  useEffect(() => {
+    if (pomodoro.timerStatus !== "running") {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setPomodoro((current) => advancePomodoroState(current));
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [pomodoro.timerStatus]);
+
+  useEffect(() => {
+    if (pomodoro.chimes.length === 0) {
+      return;
+    }
+
+    try {
+      initAudioContext();
+      pomodoro.chimes.forEach((chime) => playChime(chime));
+    } catch (error) {
+      console.error("Failed to play pomodoro chime:", error);
+    } finally {
+      setPomodoro((current) => (current.chimes.length === 0 ? current : { ...current, chimes: [] }));
+    }
+  }, [pomodoro.chimes]);
+
+  useEffect(() => {
+    const previous = previousPomodoroRef.current;
+
+    if (previous && previous.phase === "focus" && pomodoro.phase === "break") {
+      const durationMinutes =
+        previous.timerMode === "classic"
+          ? Math.max(1, previous.focusMinutes)
+          : Math.max(1, Math.ceil(previous.flowDuration / 60));
+
+      void workbenchApi
+        .createFocusSession(durationMinutes, previous.timerMode, 0)
+        .then(() => {
+          console.log(`Focus session recorded: ${durationMinutes} minutes in ${previous.timerMode} mode`);
+        })
+        .catch((error) => {
+          console.error("Failed to record focus session:", error);
+        });
+    }
+
+    previousPomodoroRef.current = pomodoro;
+  }, [pomodoro]);
+
   const toggleMusic = useCallback(async () => {
     if (!audioRef.current) return;
 
@@ -238,13 +266,13 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
         audioRef.current.pause();
       } else {
         await audioRef.current.play();
-        if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+        if (audioContextRef.current && audioContextRef.current.state === "suspended") {
           await audioContextRef.current.resume();
         }
       }
       setIsMusicPlaying(!isMusicPlaying);
-    } catch (e) {
-      console.error("Failed to toggle music:", e);
+    } catch (error) {
+      console.error("Failed to toggle music:", error);
     }
   }, [isMusicPlaying]);
 
@@ -263,99 +291,109 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
     if (!audioRef.current) return;
 
     const wasPlaying = !audioRef.current.paused;
-
-    // Pause current audio before loading new source
     audioRef.current.pause();
-
-    // Update source and load
     audioRef.current.src = url;
     audioRef.current.load();
 
-    // Resume if it was playing
     if (wasPlaying) {
-      audioRef.current.play().catch(e => console.error("Failed to play:", e));
+      audioRef.current.play().catch((error) => console.error("Failed to play:", error));
     }
   }, []);
 
-  // ✅ 新增：获取当前曲目
-  const getCurrentTrack = useCallback((): Track => {
-    return tracks[currentTrackIndex];
-  }, [currentTrackIndex, tracks]);
+  const getCurrentTrack = useCallback((): Track => tracks[currentTrackIndex], [currentTrackIndex, tracks]);
 
-  // ✅ 新增：播放指定曲目
-  const playTrack = useCallback((index: number) => {
-    if (index < 0 || index >= tracks.length) return;
-    const wasPlaying = isMusicPlaying;
-    setCurrentTrackIndex(index);
-    setMusicSource(tracks[index].url);
-    // 如果正在播放，切换后继续播放
-    if (wasPlaying) {
-      setTimeout(() => {
-        if (audioRef.current) {
-          audioRef.current.play().catch(e => console.error("Failed to play:", e));
-        }
-      }, 100);
-    }
-  }, [isMusicPlaying, tracks, setMusicSource]);
+  const playTrack = useCallback(
+    (index: number) => {
+      if (index < 0 || index >= tracks.length) return;
 
-  // ✅ 新增：下一首
+      const wasPlaying = isMusicPlaying;
+      setCurrentTrackIndex(index);
+      setMusicSource(tracks[index].url);
+
+      if (wasPlaying) {
+        setTimeout(() => {
+          if (audioRef.current) {
+            audioRef.current.play().catch((error) => console.error("Failed to play:", error));
+          }
+        }, 100);
+      }
+    },
+    [isMusicPlaying, setMusicSource, tracks]
+  );
+
   const playNext = useCallback(() => {
     const nextIndex = (currentTrackIndex + 1) % tracks.length;
     playTrack(nextIndex);
-  }, [currentTrackIndex, tracks.length, playTrack]);
+  }, [currentTrackIndex, playTrack, tracks.length]);
 
-  // ✅ 新增：上一首
   const playPrevious = useCallback(() => {
-    const prevIndex = (currentTrackIndex - 1 + tracks.length) % tracks.length;
-    playTrack(prevIndex);
-  }, [currentTrackIndex, tracks.length, playTrack]);
+    const previousIndex = (currentTrackIndex - 1 + tracks.length) % tracks.length;
+    playTrack(previousIndex);
+  }, [currentTrackIndex, playTrack, tracks.length]);
 
-  // Timer controls
   const toggleTimer = useCallback(() => {
     playClick();
-    if (timerStatus === 'idle' || timerStatus === 'paused') {
-      setTimerStatus('running');
-    } else {
-      setTimerStatus('paused');
-    }
-  }, [timerStatus]);
+    setPomodoro((current) => ({
+      ...current,
+      timerStatus: current.timerStatus === "running" ? "paused" : "running",
+    }));
+  }, []);
 
   const stopTimer = useCallback(() => {
-    setTimerStatus('idle');
-    if (timerMode === 'classic') {
-      setTimerSeconds(customMinutes * 60);
-    } else {
-      setTimerSeconds(0);
-      setFlowDuration(0);
-    }
-  }, [timerMode, customMinutes]);
+    setPomodoro((current) => {
+      if (current.timerMode === "flow" && current.phase === "focus" && current.flowDuration > 0) {
+        return completePomodoroFocus(current);
+      }
+      return buildInitialPomodoroState(current.timerMode);
+    });
+  }, [buildInitialPomodoroState]);
 
-  const switchTimerMode = useCallback((mode: TimerMode) => {
-    setTimerMode(mode);
-    setTimerStatus('idle');
-    setFlowDuration(0);
-    if (mode === 'classic') {
-      setTimerSeconds(customMinutes * 60);
-    } else {
-      setTimerSeconds(0);
-    }
-  }, [customMinutes]);
+  const switchTimerMode = useCallback(
+    (mode: TimerMode) => {
+      setPomodoro(buildInitialPomodoroState(mode));
+    },
+    [buildInitialPomodoroState]
+  );
 
-  const adjustTimerTime = useCallback((delta: number) => {
-    if (timerStatus !== 'idle' || timerMode !== 'classic') return;
-    const newMinutes = Math.max(1, Math.min(120, customMinutes + delta));
-    setCustomMinutes(newMinutes);
-    setTimerSeconds(newMinutes * 60);
-  }, [timerStatus, timerMode, customMinutes]);
+  const setTimerDuration = useCallback(
+    (minutes: number) => {
+      const nextMinutes = clampMinutes(minutes);
+      setFocusSettings((current) => ({ ...current, duration: nextMinutes }));
+
+      setPomodoro((current) => {
+        if (current.timerMode !== "classic" || current.phase !== "focus" || current.timerStatus !== "idle") {
+          return current.focusMinutes === nextMinutes ? current : { ...current, focusMinutes: nextMinutes };
+        }
+
+        return {
+          ...current,
+          focusMinutes: nextMinutes,
+          timerSeconds: nextMinutes * 60,
+          phaseTotalSeconds: nextMinutes * 60,
+        };
+      });
+    },
+    [setFocusSettings]
+  );
+
+  const adjustTimerTime = useCallback(
+    (delta: number) => {
+      if (pomodoro.timerStatus !== "idle" || pomodoro.timerMode !== "classic" || pomodoro.phase !== "focus") {
+        return;
+      }
+      setTimerDuration(pomodoro.focusMinutes + delta);
+    },
+    [pomodoro.focusMinutes, pomodoro.phase, pomodoro.timerMode, pomodoro.timerStatus, setTimerDuration]
+  );
 
   const formatTime = useCallback((totalSeconds: number): string => {
-    const m = Math.floor(totalSeconds / 60);
-    const s = totalSeconds % 60;
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    const safeSeconds = Math.max(0, Math.floor(totalSeconds));
+    const minutes = Math.floor(safeSeconds / 60);
+    const seconds = safeSeconds % 60;
+    return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
   }, []);
 
   const value: MediaContextType = {
-    // Music
     isMusicPlaying,
     isMusicMuted,
     audioData,
@@ -369,22 +407,22 @@ export const MediaProvider = ({ children }: { children: ReactNode }) => {
     playTrack,
     playNext,
     playPrevious,
-    // Timer
-    timerMode,
-    timerStatus,
-    timerSeconds,
-    flowDuration,
-    customMinutes,
+    timerMode: pomodoro.timerMode,
+    timerPhase: pomodoro.phase,
+    timerStatus: pomodoro.timerStatus,
+    timerSeconds: pomodoro.timerSeconds,
+    phaseTotalSeconds: pomodoro.phaseTotalSeconds,
+    flowDuration: pomodoro.flowDuration,
+    customMinutes: pomodoro.focusMinutes,
+    breakMinutes: pomodoro.breakMinutes,
+    autoBreak: pomodoro.autoBreak,
     toggleTimer,
     stopTimer,
     switchTimerMode,
     adjustTimerTime,
-    formatTime
+    setTimerDuration,
+    formatTime,
   };
 
-  return (
-    <MediaContext.Provider value={value}>
-      {children}
-    </MediaContext.Provider>
-  );
+  return <MediaContext.Provider value={value}>{children}</MediaContext.Provider>;
 };

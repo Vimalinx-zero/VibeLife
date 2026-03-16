@@ -1,8 +1,9 @@
 import { memo, type ReactNode } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 
 export type TimerMode = "classic" | "flow";
 export type TimerStatus = "idle" | "running" | "paused";
+export type TimerPhase = "focus" | "break";
 
 const Icons = {
   Play: () => (
@@ -54,12 +55,15 @@ const Icons = {
 
 export interface PomodoroTimerUIProps {
   timerMode: TimerMode;
+  timerPhase: TimerPhase;
   timerStatus: TimerStatus;
   timerSeconds: number;
+  phaseTotalSeconds?: number;
   customMinutes: number;
   flowDuration?: number;
   isMusicPlaying?: boolean;
   audioAmplitude?: number;
+  stopLabel?: string;
   onToggleTimer?: () => void;
   onStopTimer?: () => void;
   onSwitchMode?: (mode: TimerMode) => void;
@@ -68,21 +72,24 @@ export interface PomodoroTimerUIProps {
 }
 
 const formatTime = (totalSeconds: number) => {
-  const s = Math.max(0, Math.floor(totalSeconds));
-  const mm = Math.floor(s / 60);
-  const ss = s % 60;
-  return `${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+  const safeSeconds = Math.max(0, Math.floor(totalSeconds));
+  const minutes = Math.floor(safeSeconds / 60);
+  const seconds = safeSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 };
 
 export const PomodoroTimerUI = memo((props: PomodoroTimerUIProps) => {
   const {
     timerMode,
+    timerPhase,
     timerStatus,
     timerSeconds,
+    phaseTotalSeconds = 0,
     customMinutes,
     flowDuration = 0,
     isMusicPlaying = false,
     audioAmplitude = 0,
+    stopLabel,
     onToggleTimer,
     onStopTimer,
     onSwitchMode,
@@ -91,16 +98,19 @@ export const PomodoroTimerUI = memo((props: PomodoroTimerUIProps) => {
   } = props;
 
   const safeAmplitude = Number.isFinite(audioAmplitude) ? Math.max(0, Math.min(1, audioAmplitude)) : 0;
-  const classicTotal = Math.max(1, customMinutes) * 60;
-  const classicProgress = 1 - timerSeconds / classicTotal;
-  const flowProgress = Math.min(Math.max(flowDuration, 0) / 3600, 1);
-
+  const countdownTotal = Math.max(1, phaseTotalSeconds || Math.max(1, customMinutes) * 60);
+  const countdownProgress = 1 - timerSeconds / countdownTotal;
+  const flowFocusProgress = Math.min(Math.max(flowDuration, 0) / 3600, 1);
+  const ringProgress =
+    timerMode === "flow" && timerPhase === "focus" ? flowFocusProgress : Math.max(0, Math.min(1, countdownProgress));
   const ringStrokeWidth = isMusicPlaying ? 2 + safeAmplitude * 8 : 2;
   const ringGlow = isMusicPlaying ? `drop-shadow(0 0 ${8 + safeAmplitude * 15}px rgba(255,255,255,0.6))` : "none";
+  const phaseLabel = timerPhase === "break" ? "Break" : timerMode === "flow" ? "Flow Focus" : "Focus";
+  const stopAriaLabel = stopLabel || "Stop";
 
   return (
     <div className="flex flex-col items-center justify-center relative z-10">
-      <div className="flex gap-4 mb-16 relative z-20">
+      <div className="flex gap-4 mb-8 relative z-20">
         <button
           type="button"
           onClick={() => onSwitchMode?.("classic")}
@@ -126,50 +136,30 @@ export const PomodoroTimerUI = memo((props: PomodoroTimerUIProps) => {
         </button>
       </div>
 
-      <div className="relative mb-16 group flex items-center justify-center">
-        {timerMode === "classic" && (
-          <svg
-            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] -rotate-90 pointer-events-none transition-all duration-75 overflow-visible"
-            aria-hidden="true"
-            focusable="false"
-          >
-            <circle cx="250" cy="250" r="220" stroke="currentColor" strokeWidth="1" fill="none" className="text-gray-200 dark:text-white/10" />
-            <circle
-              cx="250"
-              cy="250"
-              r="220"
-              stroke="currentColor"
-              strokeWidth={ringStrokeWidth}
-              fill="none"
-              strokeDasharray={2 * Math.PI * 220}
-              strokeDashoffset={2 * Math.PI * 220 * (1 - Math.max(0, Math.min(1, classicProgress)))}
-              className="text-gray-900 dark:text-white transition-all duration-100 ease-linear"
-              style={{ filter: ringGlow }}
-            />
-          </svg>
-        )}
+      <div className="mb-8 rounded-full border border-gray-300/70 bg-white/60 px-4 py-1 text-xs font-semibold uppercase tracking-[0.32em] text-gray-600 backdrop-blur dark:border-white/10 dark:bg-white/5 dark:text-white/70">
+        {phaseLabel}
+      </div>
 
-        {timerMode === "flow" && (
-          <svg
-            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] -rotate-90 pointer-events-none transition-all duration-75 overflow-visible"
-            aria-hidden="true"
-            focusable="false"
-          >
-            <circle cx="250" cy="250" r="220" stroke="currentColor" strokeWidth="1" fill="none" className="text-gray-200 dark:text-white/10" />
-            <circle
-              cx="250"
-              cy="250"
-              r="220"
-              stroke="currentColor"
-              strokeWidth={ringStrokeWidth}
-              fill="none"
-              strokeDasharray={2 * Math.PI * 220}
-              strokeDashoffset={2 * Math.PI * 220 * (1 - flowProgress)}
-              className="text-gray-900 dark:text-white transition-all duration-100 ease-linear"
-              style={{ filter: ringGlow }}
-            />
-          </svg>
-        )}
+      <div className="relative mb-16 group flex items-center justify-center">
+        <svg
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] -rotate-90 pointer-events-none transition-all duration-75 overflow-visible"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <circle cx="250" cy="250" r="220" stroke="currentColor" strokeWidth="1" fill="none" className="text-gray-200 dark:text-white/10" />
+          <circle
+            cx="250"
+            cy="250"
+            r="220"
+            stroke="currentColor"
+            strokeWidth={ringStrokeWidth}
+            fill="none"
+            strokeDasharray={2 * Math.PI * 220}
+            strokeDashoffset={2 * Math.PI * 220 * (1 - ringProgress)}
+            className="text-gray-900 dark:text-white transition-all duration-100 ease-linear"
+            style={{ filter: ringGlow }}
+          />
+        </svg>
 
         <div
           className={`text-[6rem] font-light tracking-tighter tabular-nums leading-none select-none transition-all duration-500 z-10 ${
@@ -179,7 +169,7 @@ export const PomodoroTimerUI = memo((props: PomodoroTimerUIProps) => {
           {formatTime(timerSeconds)}
         </div>
 
-        {timerMode === "classic" && timerStatus === "idle" && onAdjustTime && (
+        {timerMode === "classic" && timerPhase === "focus" && timerStatus === "idle" && onAdjustTime && (
           <div className="absolute -bottom-16 left-1/2 -translate-x-1/2 flex items-center gap-4 z-20">
             <motion.button
               type="button"
@@ -227,7 +217,8 @@ export const PomodoroTimerUI = memo((props: PomodoroTimerUIProps) => {
               exit={{ opacity: 0, scale: 0.5, x: -20 }}
               onClick={onStopTimer}
               className="w-12 h-12 rounded-full border border-gray-300 dark:border-white/20 text-gray-500 dark:text-white/70 hover:text-gray-900 dark:hover:text-white hover:border-gray-900 dark:hover:border-white flex items-center justify-center transition-colors"
-              aria-label="Stop"
+              aria-label={stopAriaLabel}
+              title={stopAriaLabel}
             >
               <Icons.Stop />
             </motion.button>

@@ -16,6 +16,7 @@ interface Profile extends ThemeProfile {
 // 专注设置接口
 interface FocusSettings {
   duration: number;    // 分钟
+  breakDuration: number; // classic 休息分钟
   autoBreak: boolean;
   volume: number;      // 0-100
 }
@@ -79,8 +80,19 @@ export const ThemeProvider = ({ children }: ThemeProviderProps) => {
   // 4. ✨ 新增：专注设置状态
   const [focusSettings, setFocusSettings] = useState<FocusSettings>(() => {
     const stored = localStorage.getItem('focusSettings');
-    return stored ? JSON.parse(stored) : {
+    if (stored) {
+      const parsed = JSON.parse(stored) as Partial<FocusSettings>;
+      return {
+        duration: typeof parsed.duration === 'number' ? parsed.duration : 25,
+        breakDuration: typeof parsed.breakDuration === 'number' ? parsed.breakDuration : 5,
+        autoBreak: Boolean(parsed.autoBreak),
+        volume: typeof parsed.volume === 'number' ? parsed.volume : 50
+      };
+    }
+
+    return {
       duration: 25, // 分钟
+      breakDuration: 5,
       autoBreak: false,
       volume: 50
     };

@@ -671,6 +671,21 @@ const SettingsModal = () => {
                                                     className="w-full h-2 bg-gray-200 dark:bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-500" 
                                                 />
                                             </div>
+                                            <div>
+                                                <div className="flex justify-between mb-2">
+                                                    <label className="font-bold dark:text-gray-300">Classic 休息时长</label>
+                                                    <span className="font-mono text-blue-500 font-bold">{focusSettings.breakDuration} min</span>
+                                                </div>
+                                                <input
+                                                    type="range" min="1" max="30" step="1"
+                                                    value={focusSettings.breakDuration}
+                                                    onChange={(e) => setFocusSettings({...focusSettings, breakDuration: parseInt(e.target.value, 10)})}
+                                                    className="w-full h-2 bg-gray-200 dark:bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                                                />
+                                                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                                    Flow 模式休息时长会按 `ceil(专注分钟 / 10)` 自动计算。
+                                                </p>
+                                            </div>
                                             <div 
                                                 className="flex items-center justify-between p-4 rounded-xl bg-gray-50 dark:bg-white/5 cursor-pointer hover:bg-black/5 dark:hover:bg-white/10 transition"
                                                 onClick={() => setFocusSettings({...focusSettings, autoBreak: !focusSettings.autoBreak})} // ✅ 更新: 开关
