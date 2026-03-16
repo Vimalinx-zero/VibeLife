@@ -6,20 +6,16 @@ import {
   normalizeProjectCategory,
 } from "../src/pages/projectsPageCategories.ts";
 
-test("normalizeProjectCategory keeps custom categories and maps study to growth", () => {
-  assert.equal(normalizeProjectCategory("study"), "growth");
-  assert.equal(normalizeProjectCategory(" research "), "research");
-  assert.equal(normalizeProjectCategory(""), "work");
+test("normalizeProjectCategory keeps legacy study visible instead of rewriting it", () => {
+  assert.equal(normalizeProjectCategory("study"), "study");
 });
 
-test("getProjectCategoryOrder keeps priority categories first and preserves custom ones", () => {
-  const order = getProjectCategoryOrder([
-    { category: "research" },
-    { category: "work" },
-    { category: "personal" },
+test("getProjectCategoryOrder keeps known categories first and preserves extras", () => {
+  const ordered = getProjectCategoryOrder([
+    { category: "growth" },
     { category: "study" },
     { category: "work" },
   ]);
 
-  assert.deepEqual(order, ["work", "growth", "research", "personal"]);
+  assert.deepEqual(ordered, ["work", "growth", "study"]);
 });

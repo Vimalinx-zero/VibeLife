@@ -118,6 +118,44 @@ class ProjectCreateApiTest(unittest.TestCase):
         self.assertIn("growth", categories)
         self.assertNotIn("study", categories)
 
+    def test_create_project_rejects_legacy_study_category(self):
+        headers = self.register_user()
+
+        response = self.client.post(
+            "/api/projects",
+            headers=headers,
+            json={
+                "name": "Legacy study project",
+                "category": "study",
+            },
+        )
+
+        self.assertEqual(response.status_code, 422, response.text)
+
+    def test_update_project_rejects_legacy_study_category(self):
+        headers = self.register_user()
+
+        create_response = self.client.post(
+            "/api/projects",
+            headers=headers,
+            json={
+                "name": "Growth project",
+                "category": "growth",
+            },
+        )
+        self.assertEqual(create_response.status_code, 201, create_response.text)
+        project_id = create_response.json()["project"]["id"]
+
+        update_response = self.client.put(
+            f"/api/projects/{project_id}",
+            headers=headers,
+            json={
+                "category": "study",
+            },
+        )
+
+        self.assertEqual(update_response.status_code, 422, update_response.text)
+
     def test_notes_preview_endpoint_returns_note_summary(self):
         headers = self.register_user()
 

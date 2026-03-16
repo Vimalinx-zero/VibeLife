@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 import time
 import pydantic
+from typing import Literal
 
 from database import get_db
 from auth import get_current_user_id
@@ -10,17 +11,12 @@ import models
 
 router = APIRouter()
 
-
-def _normalize_project_category(value: str | None) -> str:
-    text = (value or "work").strip().lower() or "work"
-    if text == "study":
-        return "growth"
-    return text
+ProjectCategory = Literal["work", "life", "growth"]
 
 
 class ProjectCreate(pydantic.BaseModel):
     name: str
-    category: str = "work"
+    category: ProjectCategory = "work"
     subtitle: str = ""
     status: str = "正常推进"
     nextAction: str = ""
@@ -28,7 +24,7 @@ class ProjectCreate(pydantic.BaseModel):
 
 class ProjectUpdate(pydantic.BaseModel):
     name: str | None = None
-    category: str | None = None
+    category: ProjectCategory | None = None
     subtitle: str | None = None
     status: str | None = None
     nextAction: str | None = None
@@ -56,7 +52,7 @@ def _serialize_project(project: models.Project) -> dict:
     return {
         "id": project.id,
         "name": project.name,
-        "category": _normalize_project_category(project.category),
+        "category": project.category,
         "subtitle": project.subtitle,
         "status": project.status,
         "nextAction": project.next_action,
@@ -260,7 +256,7 @@ async def create_project(
         id=f"project_{int(time.time() * 1000)}",
         user_id=current_user_id,
         name=payload.name,
-        category=_normalize_project_category(payload.category),
+        category=payload.category,
         subtitle=payload.subtitle,
         status=payload.status,
         next_action=payload.nextAction,
@@ -285,9 +281,7 @@ async def get_projects(
 
     query = db.query(models.Project).filter(models.Project.user_id == current_user_id)
     if category and category != "all":
-        query = query.filter(
-            models.Project.category == _normalize_project_category(category)
-        )
+        query = query.filter(models.Project.category == category)
     projects = query.order_by(models.Project.updated_at.desc()).all()
 
     project_ids = [p.id for p in projects]
@@ -362,7 +356,7 @@ async def get_projects(
         {
             "id": p.id,
             "name": p.name,
-            "category": _normalize_project_category(p.category),
+            "category": p.category,
             "subtitle": p.subtitle,
             "status": p.status,
             "nextAction": p.next_action,
@@ -412,7 +406,7 @@ async def update_project(
     if payload.name is not None:
         project.name = payload.name
     if payload.category is not None:
-        project.category = _normalize_project_category(payload.category)
+        project.category = payload.category
     if payload.subtitle is not None:
         project.subtitle = payload.subtitle
     if payload.status is not None:

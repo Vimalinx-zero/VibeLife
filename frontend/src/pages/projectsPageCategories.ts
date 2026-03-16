@@ -9,10 +9,6 @@ export const normalizeProjectCategory = (value: string | null | undefined): Proj
     return "work";
   }
 
-  if (normalized === "study") {
-    return "growth";
-  }
-
   return normalized;
 };
 
