@@ -84,12 +84,13 @@ Cons:
 
 ## Design
 
-### 1. Todo 数据增加来源和批次标记
+### 1. Todo 数据增加来源和计划标记
 
 `backend/models.py` 中的 `TodoItem` 增加两个字段：
 
 - `source`: `manual | project | ai_daily`
 - `plan_batch_id`: 可空字符串，仅对 `ai_daily` 有值
+- `plan_date`: 可空字符串，仅对 `ai_daily` 有值，格式为 `YYYY-MM-DD`
 
 字段语义：
 
@@ -100,7 +101,8 @@ Cons:
 批次规则：
 
 - 同一次“今日计划重排”创建的所有 `ai_daily` 待办共用一个新的 `plan_batch_id`；
-- 下次重排时，只删除 `completed = false AND source = ai_daily` 的旧待办；
+- 同一次“今日计划重排”创建的所有 `ai_daily` 待办共用同一个 `plan_date`，默认就是当天；
+- 下次重排时，只删除 `completed = false AND source = ai_daily AND plan_date = 今天` 的旧待办；
 - `manual` 和 `project` 待办永远不在这条链路里被删除；
 - `completed = true` 的旧 `ai_daily` 待办保留。
 
@@ -126,7 +128,7 @@ Cons:
   - 今日专注数据；
   - 今日日志数量；
 - 执行重排：
-  - 删除旧未完成 `ai_daily`；
+  - 删除“今天”旧未完成 `ai_daily`；
   - 新建新批次 `ai_daily`；
   - 返回 `plan_batch_id`、删除数量、新建条目列表。
 
@@ -139,7 +141,15 @@ Cons:
 
 #### `GET /api/ai/coach/today`
 
-返回可直接喂给 `Dashboard` 的摘要视图，包括：
+返回可直接喂给 `Dashboard` 的摘要视图，并保留现有前端判断口径：
+
+- `success: true`
+- `snapshot`
+- `adaptive`
+- `suggestions`
+- `coach_message`
+
+其中核心字段包括：
 
 - `snapshot`
   - `pending_todos`
@@ -160,11 +170,49 @@ Cons:
 
 这个接口只读，不产生写入。
 
+`suggestions` 必须继续满足现有前端结构：
+
+- `id`
+- `title`
+- `reason`
+- `target`
+- `estimated_minutes`
+- `subject`
+- `todo_text`
+
+如果当前存在未完成的 `ai_daily` 待办，后端要把它们映射成上述结构：
+
+- `id = todo.id`
+- `title = todo.text`
+- `reason = "来自今日计划"`
+- `target = "/workbench"`
+- `estimated_minutes = 20` 作为当前固定默认值
+- `subject = todo.subject`
+- `todo_text = todo.text`
+
+这样 `Dashboard` 无需先改类型结构，也能直接展示已经落库的今日计划。
+
 #### `POST /api/ai/coach/today/plan`
 
 执行真实重排。请求体可以保持最小，只需要：
 
 - `max_items` 可选
+
+响应必须兼容当前 `Dashboard` 的读取方式，并补足插件可复用字段：
+
+- `success: true`
+- `plan_batch_id`
+- `created_count`
+- `skipped_count`
+- `deleted_count`
+- `todos`
+- `provider: "openclaw"`
+
+其中：
+
+- `created_count` 是本次新建的 `ai_daily` 数量；
+- `skipped_count` 在这一轮固定返回 `0`，先用于兼容现有前端；
+- `deleted_count` 是本次删除的旧 `ai_daily` 数量。
 
 执行流程：
 
@@ -172,13 +220,14 @@ Cons:
 2. 调用 OpenClaw 生成结构化今日计划；
 3. 校验每条计划项的 `text / priority / subject / due_date`；
 4. 开启事务；
-5. 删除所有 `completed = false AND source = ai_daily` 的待办；
+5. 删除所有 `completed = false AND source = ai_daily AND plan_date = 今天` 的待办；
 6. 生成新的 `plan_batch_id`；
-7. 写入新的 `ai_daily` 待办；
+7. 写入新的 `ai_daily` 待办，并统一写入今天的 `plan_date`；
 8. 返回：
    - `success`
    - `plan_batch_id`
    - `created_count`
+   - `skipped_count`
    - `deleted_count`
    - `todos`
    - `provider: "openclaw"`
@@ -193,7 +242,7 @@ Cons:
 
 - 它不直接逐条删除/创建待办；
 - 它只调用 `POST /api/ai/coach/today/plan`；
-- 可接受 `maxItems` 之类的小参数；
+- 可接受 `maxItems`，并映射为后端的 `max_items`；
 - 返回后端返回的批次和待办结果。
 
 这样用户在 OpenClaw 中说：
@@ -254,6 +303,7 @@ Cons:
 - `priority` 非法时回退到安全默认值；
 - `subject` 在这一轮保持 `general`，避免误碰项目分类；
 - JSON 不合法则整次失败，不落库。
+- 后端把返回的 todo 写入数据库时，会额外补上 `source = ai_daily`、`plan_batch_id`、`plan_date = 今天`。
 
 ## Data Flow
 
