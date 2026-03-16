@@ -10,8 +10,6 @@ import {
 
 type WorkbenchTodo = workbenchApi.Todo;
 
-const LOCAL_TODO_KEY = "workbench_todos";
-
 interface Todo {
   id: string;
   text: string;
@@ -84,31 +82,6 @@ const TodoList = ({ onTaskSelect }: TodoListProps) => {
   }, [toast]);
 
   useEffect(() => {
-    const legacy = localStorage.getItem(LOCAL_TODO_KEY);
-    if (!legacy) {
-      loadTodos();
-      return;
-    }
-
-    try {
-      const parsed = JSON.parse(legacy);
-      if (Array.isArray(parsed)) {
-        const blankCount = parsed.filter(
-          (item) => !item || typeof item.text !== "string" || item.text.trim().length === 0
-        ).length;
-        if (parsed.length > 100 || blankCount > 0) {
-          localStorage.removeItem(LOCAL_TODO_KEY);
-          console.info("Dropped legacy local todo cache", {
-            total: parsed.length,
-            blankCount,
-          });
-        }
-      }
-    } catch (error) {
-      console.error("Failed to inspect legacy local todos:", error);
-      localStorage.removeItem(LOCAL_TODO_KEY);
-    }
-
     loadTodos();
   }, [loadTodos]);
 
