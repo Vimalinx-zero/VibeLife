@@ -3,6 +3,10 @@ import { useToast } from "../context/ToastContext";
 import { playClick } from "../utils/audio";
 import ContextMenu from "./ContextMenu";
 import * as workbenchApi from "../utils/workbenchApi";
+import {
+  dispatchWorkbenchTodosRefresh,
+  WORKBENCH_TODOS_REFRESH_EVENT,
+} from "../utils/workbenchTodoEvents";
 
 type WorkbenchTodo = workbenchApi.Todo;
 
@@ -122,7 +126,7 @@ const TodoList = ({ onTaskSelect }: TodoListProps) => {
 
       try {
         await workbenchApi.clearCompletedTodos();
-        await loadTodos();
+        dispatchWorkbenchTodosRefresh();
         toast.success(`已清除 ${completed.length} 个已完成任务`);
       } catch (error) {
         console.error("Failed to clear completed todos:", error);
@@ -141,7 +145,7 @@ const TodoList = ({ onTaskSelect }: TodoListProps) => {
 
       try {
         await workbenchApi.clearAllTodos();
-        await loadTodos();
+        dispatchWorkbenchTodosRefresh();
         toast.success("已清空所有任务");
       } catch (error) {
         console.error("Failed to clear all todos:", error);
@@ -159,7 +163,7 @@ const TodoList = ({ onTaskSelect }: TodoListProps) => {
         }
 
         await Promise.all(lines.map((line) => workbenchApi.createTodo(line, 0, "general")));
-        await loadTodos();
+        dispatchWorkbenchTodosRefresh();
         toast.success(`已添加 ${lines.length} 个任务`);
       } catch (error) {
         console.error("Failed to quick add todos:", error);
@@ -193,7 +197,7 @@ const TodoList = ({ onTaskSelect }: TodoListProps) => {
 
       try {
         await workbenchApi.createTodo(text, 1, "general");
-        await loadTodos();
+        dispatchWorkbenchTodosRefresh();
       } catch (error) {
         console.error("Failed to add direct todo:", error);
         toast.error("添加任务失败");
@@ -202,13 +206,13 @@ const TodoList = ({ onTaskSelect }: TodoListProps) => {
 
     window.addEventListener("workbench-clear", handleClearEvent as EventListener);
     window.addEventListener("workbench-quick-add", handleQuickAddEvent as EventListener);
-    window.addEventListener("workbench-todos-refresh", handleTodosRefresh as EventListener);
+    window.addEventListener(WORKBENCH_TODOS_REFRESH_EVENT, handleTodosRefresh as EventListener);
     window.addEventListener("workbench-direct-add-todo", handleDirectAddTodo as EventListener);
 
     return () => {
       window.removeEventListener("workbench-clear", handleClearEvent as EventListener);
       window.removeEventListener("workbench-quick-add", handleQuickAddEvent as EventListener);
-      window.removeEventListener("workbench-todos-refresh", handleTodosRefresh as EventListener);
+      window.removeEventListener(WORKBENCH_TODOS_REFRESH_EVENT, handleTodosRefresh as EventListener);
       window.removeEventListener("workbench-direct-add-todo", handleDirectAddTodo as EventListener);
     };
   }, [loadTodos, toast]);
@@ -222,7 +226,7 @@ const TodoList = ({ onTaskSelect }: TodoListProps) => {
     playClick();
     try {
       await workbenchApi.createTodo(text, priorityMap[selectedPriority] || 1, "general");
-      await loadTodos();
+      dispatchWorkbenchTodosRefresh();
       setInputValue("");
     } catch (error) {
       console.error("Failed to create todo:", error);
@@ -239,7 +243,7 @@ const TodoList = ({ onTaskSelect }: TodoListProps) => {
 
     try {
       await workbenchApi.updateTodo(id, { completed: !todo.completed });
-      await loadTodos();
+      dispatchWorkbenchTodosRefresh();
     } catch (error) {
       console.error("Failed to update todo:", error);
       toast.error("更新任务失败");
@@ -249,7 +253,7 @@ const TodoList = ({ onTaskSelect }: TodoListProps) => {
   const deleteTask = async (id: string) => {
     try {
       await workbenchApi.deleteTodo(id);
-      await loadTodos();
+      dispatchWorkbenchTodosRefresh();
       toast.info("任务已删除");
     } catch (error) {
       console.error("Failed to delete todo:", error);
@@ -305,7 +309,7 @@ const TodoList = ({ onTaskSelect }: TodoListProps) => {
             contextMenuTarget.subject,
             contextMenuTarget.due_date ?? null
           );
-          await loadTodos();
+          dispatchWorkbenchTodosRefresh();
           toast.success("任务已复制");
           break;
         case "toggleComplete":
@@ -329,7 +333,7 @@ const TodoList = ({ onTaskSelect }: TodoListProps) => {
 
     try {
       await workbenchApi.updateTodo(editingTask, { text });
-      await loadTodos();
+      dispatchWorkbenchTodosRefresh();
       setEditingTask(null);
       setEditText("");
       toast.success("任务已更新");

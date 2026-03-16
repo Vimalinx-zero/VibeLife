@@ -5,6 +5,7 @@ import {
   buildProjectPanelHistory,
   getProjectPanelHistoryStorageKey,
   groupTodosByCategory,
+  limitProjectPanelMessages,
   parseStoredProjectPanelState,
 } from "../src/pages/workbenchProjectPanelState.ts";
 
@@ -72,6 +73,21 @@ test("buildProjectPanelHistory keeps only the latest 10 non-empty messages", () 
   assert.equal(history.length, 10);
   assert.deepEqual(history[0], { role: "user", content: "message-1" });
   assert.deepEqual(history.at(-1), { role: "user", content: "message-11" });
+});
+
+test("limitProjectPanelMessages keeps only the latest 50 live messages", () => {
+  const limited = limitProjectPanelMessages(
+    Array.from({ length: 55 }, (_, index) => ({
+      id: `m-${index}`,
+      role: index % 2 === 0 ? "assistant" : "user",
+      content: `message-${index}`,
+      timestamp: new Date(`2026-03-16T10:${String(index % 60).padStart(2, "0")}:00.000Z`),
+    }))
+  );
+
+  assert.equal(limited.length, 50);
+  assert.equal(limited[0].id, "m-5");
+  assert.equal(limited.at(-1).id, "m-54");
 });
 
 test("groupTodosByCategory filters blank todos and groups live items", () => {

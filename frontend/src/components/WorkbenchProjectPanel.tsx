@@ -12,12 +12,16 @@ import {
   createProjectPanelSession,
   getProjectPanelHistoryStorageKey,
   groupTodosByCategory,
+  limitProjectPanelMessages,
   parseStoredProjectPanelState,
   serializeProjectPanelState,
   type ProjectPanelMessage,
-  type ProjectPanelSession,
   type ProjectPanelState,
 } from "../pages/workbenchProjectPanelState";
+import {
+  dispatchWorkbenchTodosRefresh,
+  WORKBENCH_TODOS_REFRESH_EVENT,
+} from "../utils/workbenchTodoEvents";
 
 type ProjectLeftTab = "myTodo" | "subAgents" | "insights" | "status" | "git";
 
@@ -90,15 +94,17 @@ const WorkbenchProjectPanel = () => {
   const isProjectChatThinking = typingSessionId === activeSession?.id;
 
   const updateSessionMessages = (sessionId: string, nextMessages: ProjectPanelMessage[], updatedAt: Date) => {
+    const cappedMessages = limitProjectPanelMessages(nextMessages);
+
     setProjectPanelState((previousState) => ({
       ...previousState,
       sessions: previousState.sessions.map((session, index) =>
         session.id === sessionId
           ? {
               ...session,
-              title: buildProjectPanelSessionTitle(nextMessages, session.title || `项目会话 ${String(index + 1).padStart(2, "0")}`),
+              title: buildProjectPanelSessionTitle(cappedMessages, session.title || `项目会话 ${String(index + 1).padStart(2, "0")}`),
               updatedAt,
-              messages: nextMessages,
+              messages: cappedMessages,
             }
           : session
       ),
@@ -149,9 +155,9 @@ const WorkbenchProjectPanel = () => {
       void loadProjectTodos();
     };
 
-    window.addEventListener("workbench-todos-refresh", handleTodosRefresh);
+    window.addEventListener(WORKBENCH_TODOS_REFRESH_EVENT, handleTodosRefresh);
     return () => {
-      window.removeEventListener("workbench-todos-refresh", handleTodosRefresh);
+      window.removeEventListener(WORKBENCH_TODOS_REFRESH_EVENT, handleTodosRefresh);
     };
   }, []);
 
@@ -195,7 +201,7 @@ const WorkbenchProjectPanel = () => {
       content: text,
       timestamp: new Date(),
     };
-    const nextMessages = [...activeMessages, userMessage];
+    const nextMessages = limitProjectPanelMessages([...activeMessages, userMessage]);
 
     updateSessionMessages(sessionId, nextMessages, userMessage.timestamp);
     setProjectChatInput("");
@@ -235,7 +241,7 @@ const WorkbenchProjectPanel = () => {
       };
 
       updateSessionMessages(sessionId, [...nextMessages, assistantMessage], assistantMessage.timestamp);
-      window.dispatchEvent(new Event("workbench-todos-refresh"));
+      dispatchWorkbenchTodosRefresh();
     } catch (error) {
       const failureMessage: ProjectPanelMessage = {
         id: createChatId("project_panel_ai"),

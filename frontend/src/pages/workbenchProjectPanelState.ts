@@ -83,6 +83,10 @@ export const buildProjectPanelSessionTitle = (
   return firstUserMessage ? summarizeSessionTitle(firstUserMessage.content) : fallbackTitle;
 };
 
+export const limitProjectPanelMessages = (
+  messages: readonly ProjectPanelMessage[]
+): ProjectPanelMessage[] => messages.slice(-MAX_SESSION_MESSAGES);
+
 const parseStoredMessages = (value: unknown): ProjectPanelMessage[] => {
   if (!Array.isArray(value)) {
     return [createWelcomeMessage()];
@@ -109,7 +113,7 @@ const parseStoredMessages = (value: unknown): ProjectPanelMessage[] => {
     }))
     .filter((message) => !Number.isNaN(message.timestamp.getTime()));
 
-  return messages.length > 0 ? messages.slice(-MAX_SESSION_MESSAGES) : [createWelcomeMessage()];
+  return messages.length > 0 ? limitProjectPanelMessages(messages) : [createWelcomeMessage()];
 };
 
 export const createProjectPanelSession = (
@@ -119,7 +123,7 @@ export const createProjectPanelSession = (
   const createdAt = overrides.createdAt ?? new Date();
   const messages =
     overrides.messages && overrides.messages.length > 0
-      ? overrides.messages.slice(-MAX_SESSION_MESSAGES)
+      ? limitProjectPanelMessages(overrides.messages)
       : [createWelcomeMessage()];
   const updatedAt = overrides.updatedAt ?? messages[messages.length - 1]?.timestamp ?? createdAt;
   const fallbackTitle = overrides.title?.trim() || getFallbackSessionTitle(index);
@@ -202,7 +206,7 @@ export const serializeProjectPanelState = (state: ProjectPanelState): StoredProj
     title: session.title,
     createdAt: session.createdAt.toISOString(),
     updatedAt: session.updatedAt.toISOString(),
-    messages: session.messages.slice(-MAX_SESSION_MESSAGES).map((message) => ({
+    messages: limitProjectPanelMessages(session.messages).map((message) => ({
       id: message.id,
       role: message.role,
       content: message.content,

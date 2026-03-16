@@ -7,6 +7,7 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { dispatchWorkbenchTodosRefresh } from '../utils/workbenchTodoEvents';
 
 interface Message {
   id: string;
@@ -617,7 +618,7 @@ const AIChatWidget: React.FC = () => {
         timestamp: new Date(),
       };
       updateSessionMessages(sessionId, [...nextMessages, aiMessage].slice(-MAX_HISTORY_MESSAGES), aiMessage.timestamp);
-      window.dispatchEvent(new Event('workbench-todos-refresh'));
+      dispatchWorkbenchTodosRefresh();
 
       if (!isOpenRef.current) {
         toast.info(`AI 已在后台回复：${promptSummary}`, 4200);
