@@ -74,12 +74,26 @@ This is the smallest slice that makes the panel genuinely useful. It converts th
 
 The right-side `项目 AI 助手` panel will stop using `/api/ai/quick-qa-stream`. It will call `/api/ai/chat` with `provider: openclaw`, passing the recent message history in the same shape already used by `AIChatWidget`.
 
+The request contract in this slice is explicit:
+
+- `Authorization: Bearer <token>`,
+- JSON body:
+  - `message`: current user input,
+  - `provider: "openclaw"`,
+  - `history`: latest 10 non-empty messages mapped to `{ role, content }`.
+
 The chat surface keeps only the panel-local responsibilities:
 
 - append the user's message immediately,
 - show a pending assistant bubble while waiting,
 - append the assistant reply or error bubble,
 - refresh dependent UI after a successful reply.
+
+Auth/error behavior follows the existing `AIChatWidget` path:
+
+- `401` triggers `logout()`,
+- request failure appends an assistant error bubble,
+- chat failures never clear the active session.
 
 ### 2. Workbench project panel gets its own session storage
 
@@ -92,11 +106,35 @@ Each session stores:
 - `updatedAt`,
 - `messages`.
 
-The title will be derived from the first user message. The panel only needs simple multi-session behavior in this slice: create session, switch session, and continue in the active session.
+The persisted state also stores `activeSessionId`. Parsing rules are explicit:
+
+- malformed JSON falls back to one default session,
+- empty/invalid message arrays fall back to one assistant welcome message,
+- missing or invalid `activeSessionId` falls back to the first valid session,
+- the storage key is user-scoped so user switches naturally isolate sessions.
+
+The title will be derived from the first user message. The panel only needs simple multi-session behavior in this slice:
+
+- create session,
+- switch session,
+- continue in the active session.
+
+The UI affordance is intentionally small: a compact session strip in the project AI header plus a `新会话` action.
 
 ### 3. `我的Todo` switches to real VibeLife todos
 
 The `我的Todo` tab will load from `frontend/src/utils/workbenchApi.ts#getTodos`. Todos will be grouped using the existing `inferTodoCategory` helper, which is already aligned with the current Chinese category labels.
+
+This tab uses **pending todos only** through `getTodos(false)`. The current mock-only fields are removed:
+
+- no fake `source`,
+- no fake `status`,
+- no fake `aiSteps`.
+
+The real card contract becomes:
+
+- primary text: `todo.text`,
+- secondary metadata: priority / subject / due date when present.
 
 This tab is read-only in this slice except for refresh via the existing todo refresh event. The purpose here is trustworthiness: when OpenClaw creates or updates todos, the panel reflects the real backend state.
 
@@ -113,12 +151,14 @@ The rule is simple: no fake operational data should remain labeled like live sys
 3. OpenClaw runs against the real VibeLife tool surface.
 4. Frontend appends the reply to the active project-panel session.
 5. Frontend dispatches `workbench-todos-refresh` and reloads the project-panel todo list.
+6. The project panel also listens for `workbench-todos-refresh` so todo changes from other surfaces stay in sync.
 
 ## Error Handling
 
 - `401`: reuse current auth flow and log the user out through `useAuth`.
 - request failure or invalid payload: append a clear assistant error message in the current session.
-- todo reload failure: show empty-state copy for that tab and log the error, but do not destroy chat state.
+- todo reload failure: show dedicated failure copy for that tab and log the error, but do not destroy chat state.
+- empty todo result: show a separate “暂无待办” copy so empty and failed states are distinct.
 
 ## Testing
 

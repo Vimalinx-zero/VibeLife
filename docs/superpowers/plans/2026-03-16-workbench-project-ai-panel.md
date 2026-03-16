@@ -54,25 +54,34 @@
 - Reference: `frontend/src/utils/api.ts`
 - Reference: `frontend/src/utils/workbenchApi.ts`
 
-- [ ] Step 1: Add a failing regression expectation in the helper test file for the request history shape if it is not already covered.
-- [ ] Step 2: Run `node --test frontend/tests/workbenchProjectPanelState.test.mjs` and verify the failure is about missing request-shaping behavior.
+- [ ] Step 1: Confirm the helper test file explicitly covers the `/api/ai/chat` request history shape and add a failing expectation if anything is missing.
+- [ ] Step 2: Run `node --test frontend/tests/workbenchProjectPanelState.test.mjs` and verify the failure is about the missing request-shaping behavior.
 - [ ] Step 3: In `frontend/src/pages/WorkbenchPage.tsx`, remove `MOCK_PROJECT_CHAT` and the ad-hoc quick-qa todo parsing flow from `handleProjectChatSend`.
 - [ ] Step 4: Add project-panel local state that:
   - loads from `getProjectPanelHistoryStorageKey(user?.id)`,
   - keeps an active session,
   - creates a new session on demand,
+  - supports switching active session from the panel header,
   - persists updates back to local storage.
 - [ ] Step 5: Replace the chat send flow so it:
+  - uses `useAuth` / `logout` for auth state,
   - requires auth token,
   - POSTs to `${window.__VIBELIFE_API_ORIGIN__}/api/ai/chat`,
   - sends `provider: "openclaw"`,
+  - sends the top-level `message` field plus recent `history`,
   - sends recent history via `buildProjectPanelHistory`,
+  - logs out on `401`,
   - appends success and failure assistant messages to the active session.
-- [ ] Step 6: Load real todos for the `我的Todo` tab via `getTodos()` and group them with `groupTodosByCategory`.
-- [ ] Step 7: After successful chat replies, dispatch `workbench-todos-refresh` and reload the panel-local todo list so OpenClaw tool actions show up.
-- [ ] Step 8: Re-run `node --test frontend/tests/workbenchProjectPanelState.test.mjs`.
+- [ ] Step 6: Replace the current `我的Todo` mock render path so it renders real pending todos only, using backend fields (`text`, `priority`, `subject`, `due_date`) and no mock-only `source` / `status` / `aiSteps`.
+- [ ] Step 7: Add panel-local todo loading state with distinct UI for:
+  - loading,
+  - empty (`暂无待办`),
+  - failure (`待办加载失败`).
+- [ ] Step 8: Listen for `workbench-todos-refresh` in the project panel and reload the panel-local todo list so changes from chat replies or other surfaces stay in sync.
+- [ ] Step 9: After successful chat replies, dispatch `workbench-todos-refresh`.
+- [ ] Step 10: Re-run `node --test frontend/tests/workbenchProjectPanelState.test.mjs`.
   Expected: pass.
-- [ ] Step 9: Commit this chunk.
+- [ ] Step 11: Commit this chunk.
   Run:
   ```bash
   git add frontend/src/pages/WorkbenchPage.tsx frontend/src/pages/workbenchProjectPanelState.ts frontend/tests/workbenchProjectPanelState.test.mjs
@@ -89,14 +98,15 @@
 
 - [ ] Step 1: Remove the `Mock 数据` label in places that are now real.
 - [ ] Step 2: Replace unsupported `子代理任务进程` / `项目洞察` / `代理状态总览` / `Git 面板` mock renderings with explicit placeholder cards that say these tabs are not yet connected to live data.
-- [ ] Step 3: Re-read the spec at `docs/superpowers/specs/2026-03-16-workbench-project-ai-panel-design.md` and verify the implementation still matches the chosen scope.
-- [ ] Step 4: Run `node --test frontend/tests/workbenchProjectPanelState.test.mjs`.
+- [ ] Step 3: If `frontend/src/pages/WorkbenchPage.tsx` grows materially during the chat/todo rewiring, extract the new project-panel-specific rendering into a focused helper component instead of pushing more stateful JSX into the page file.
+- [ ] Step 4: Re-read the spec at `docs/superpowers/specs/2026-03-16-workbench-project-ai-panel-design.md` and verify the implementation still matches the chosen scope.
+- [ ] Step 5: Run `node --test frontend/tests/workbenchProjectPanelState.test.mjs`.
   Expected: 0 failures.
-- [ ] Step 5: Run `cd frontend && npx tsc --noEmit`.
+- [ ] Step 6: Run `cd frontend && npx tsc --noEmit`.
   Expected: exit 0.
-- [ ] Step 6: Run `cd frontend && npm run build`.
+- [ ] Step 7: Run `cd frontend && npm run build`.
   Expected: exit 0. Existing non-blocking Vite warnings are acceptable if the exit code stays 0.
-- [ ] Step 7: Commit the cleanup/verification chunk.
+- [ ] Step 8: Commit the cleanup/verification chunk.
   Run:
   ```bash
   git add frontend/src/pages/WorkbenchPage.tsx
