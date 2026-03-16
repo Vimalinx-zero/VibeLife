@@ -51,24 +51,27 @@ def run_legacy_cleanup_migrations() -> None:
         inspector = inspect(conn)
         tables = set(inspector.get_table_names())
 
-        if "study_sessions" in tables and "focus_sessions" not in tables:
+        if "study_sessions" in tables:
             study_columns = {
                 column["name"] for column in inspector.get_columns("study_sessions")
             }
             tasks_completed_expr = "tasks_completed" if "tasks_completed" in study_columns else "0"
 
-            conn.exec_driver_sql(
-                """
-                CREATE TABLE focus_sessions (
-                    id VARCHAR PRIMARY KEY,
-                    user_id VARCHAR NOT NULL,
-                    duration_minutes INTEGER NOT NULL,
-                    mode VARCHAR NOT NULL,
-                    tasks_completed INTEGER DEFAULT 0,
-                    created_at VARCHAR
+            if "focus_sessions" not in tables:
+                conn.exec_driver_sql(
+                    """
+                    CREATE TABLE focus_sessions (
+                        id VARCHAR PRIMARY KEY,
+                        user_id VARCHAR NOT NULL,
+                        duration_minutes INTEGER NOT NULL,
+                        mode VARCHAR NOT NULL,
+                        tasks_completed INTEGER DEFAULT 0,
+                        created_at VARCHAR
+                    )
+                    """
                 )
-                """
-            )
+                tables.add("focus_sessions")
+
             conn.exec_driver_sql(
                 f"""
                 INSERT INTO focus_sessions (
@@ -87,28 +90,31 @@ def run_legacy_cleanup_migrations() -> None:
                     {tasks_completed_expr},
                     created_at
                 FROM study_sessions
+                WHERE id NOT IN (SELECT id FROM focus_sessions)
                 """
             )
             conn.exec_driver_sql("DROP TABLE study_sessions")
             tables.discard("study_sessions")
-            tables.add("focus_sessions")
 
-        if "learning_sessions" in tables and "activity_checkpoints" not in tables:
-            conn.exec_driver_sql(
-                """
-                CREATE TABLE activity_checkpoints (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id VARCHAR NOT NULL,
-                    type VARCHAR NOT NULL,
-                    focus_item_id VARCHAR,
-                    start_time DATETIME NOT NULL,
-                    end_time DATETIME,
-                    duration INTEGER DEFAULT 0,
-                    pomodoro_count INTEGER DEFAULT 0,
-                    created_at VARCHAR
+        if "learning_sessions" in tables:
+            if "activity_checkpoints" not in tables:
+                conn.exec_driver_sql(
+                    """
+                    CREATE TABLE activity_checkpoints (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id VARCHAR NOT NULL,
+                        type VARCHAR NOT NULL,
+                        focus_item_id VARCHAR,
+                        start_time DATETIME NOT NULL,
+                        end_time DATETIME,
+                        duration INTEGER DEFAULT 0,
+                        pomodoro_count INTEGER DEFAULT 0,
+                        created_at VARCHAR
+                    )
+                    """
                 )
-                """
-            )
+                tables.add("activity_checkpoints")
+
             conn.exec_driver_sql(
                 """
                 INSERT INTO activity_checkpoints (
@@ -133,11 +139,11 @@ def run_legacy_cleanup_migrations() -> None:
                     pomodoro_count,
                     created_at
                 FROM learning_sessions
+                WHERE id NOT IN (SELECT id FROM activity_checkpoints)
                 """
             )
             conn.exec_driver_sql("DROP TABLE learning_sessions")
             tables.discard("learning_sessions")
-            tables.add("activity_checkpoints")
 
         if "projects" in tables:
             conn.exec_driver_sql(

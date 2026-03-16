@@ -6,6 +6,13 @@ import { useTheme } from "../context/ThemeContext";
 import { useAuth } from "../context/AuthContext";  // ✅ 导入 AuthContext
 import { useToast } from "../context/ToastContext";
 import TodayTodos from "../components/TodayTodos";
+import {
+  normalizeCoachData,
+  type CoachData,
+  type CoachAdaptive,
+  type CoachSuggestion,
+  type CoachSnapshot,
+} from "./dashboardCoachData";
 
 // --- 纯手写 SVG 图标 ---
 const Icons = {
@@ -33,66 +40,6 @@ interface TodayStats {
   journal_entries: number;
   completed_todos: number;
 }
-
-interface CoachSuggestion {
-  id: string;
-  title: string;
-  reason: string;
-  target: string;
-  estimated_minutes: number;
-  subject: string;
-  todo_text: string;
-}
-
-interface CoachSnapshot {
-  pending_todos: number;
-  today_focus_minutes: number;
-  recent_7d_completion_rate: number;
-  recent_7d_avg_focus_minutes: number;
-}
-
-interface CoachAdaptive {
-  level: 'build' | 'balanced' | 'challenge';
-  label: string;
-  focus: string;
-  completion_rate: number;
-  avg_daily_focus_minutes: number;
-  recommended_plan_items: number;
-}
-
-interface CoachData {
-  snapshot: CoachSnapshot;
-  adaptive: CoachAdaptive;
-  suggestions: CoachSuggestion[];
-  coach_message: string;
-}
-
-const normalizeCoachData = (raw: any): CoachData => {
-  const adaptiveLevelRaw = raw?.adaptive?.level;
-  const adaptiveLevel: CoachAdaptive['level'] =
-    adaptiveLevelRaw === 'build' || adaptiveLevelRaw === 'balanced' || adaptiveLevelRaw === 'challenge'
-      ? adaptiveLevelRaw
-      : 'balanced';
-
-  return ({
-  snapshot: {
-    pending_todos: raw?.snapshot?.pending_todos || 0,
-    today_focus_minutes: raw?.snapshot?.today_focus_minutes ?? raw?.snapshot?.today_study_minutes ?? 0,
-    recent_7d_completion_rate: raw?.snapshot?.recent_7d_completion_rate || 0,
-    recent_7d_avg_focus_minutes: raw?.snapshot?.recent_7d_avg_focus_minutes ?? raw?.snapshot?.recent_7d_avg_study_minutes ?? 0,
-  },
-  adaptive: {
-    level: adaptiveLevel,
-    label: raw?.adaptive?.label || '稳步推进',
-    focus: raw?.adaptive?.focus || '按优先级完成关键任务',
-    completion_rate: raw?.adaptive?.completion_rate || 0,
-    avg_daily_focus_minutes: raw?.adaptive?.avg_daily_focus_minutes ?? raw?.adaptive?.avg_daily_study_minutes ?? 0,
-    recommended_plan_items: raw?.adaptive?.recommended_plan_items || 3,
-  },
-  suggestions: raw?.suggestions || [],
-  coach_message: raw?.coach_message || '',
-  });
-};
 
 interface StatItemProps {
   label: string;
