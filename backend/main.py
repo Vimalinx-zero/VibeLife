@@ -19,7 +19,7 @@ import json
 
 # 引入本地模块
 import models, crud
-from database import SessionLocal, engine, get_db, run_legacy_cleanup_migrations
+from database import engine, get_db, run_legacy_cleanup_migrations
 from auth import get_current_user_id  # ✅ 新增：用户认证依赖
 from workbench_routes import router as workbench_router
 from image_routes import router as image_router  # ✨ 新增：图片处理路由
@@ -88,14 +88,6 @@ app.include_router(auth_router)
 app.include_router(git_router)
 app.include_router(project_router)
 app.include_router(quick_capture_router)
-
-
-# 2. 启动事件：注入 Mock 种子数据 (防止数据库为空)
-@app.on_event("startup")
-def on_startup():
-    db = SessionLocal()
-    # crud.init_db(db) # ✅ 暂时禁用：使用新的题型系统，不再灌入旧数据
-    db.close()
 
 
 # =======================
@@ -501,16 +493,6 @@ async def get_dashboard_stats(
         "pending_todos": pending_todos,
         "today_focus_minutes": today_focus_minutes,
     }
-
-
-@app.get("/api/leaderboard")
-async def get_leaderboard():
-    """排行榜数据 (Mock)"""
-    return [
-        {"rank": 1, "name": "Sarah", "duration": "4h 20m", "avatar": "Sarah"},
-        {"rank": 2, "name": "Mike", "duration": "3h 50m", "avatar": "Mike"},
-        {"rank": 3, "name": "Alex", "duration": "2h 10m", "avatar": "Felix"},
-    ]
 
 
 @app.get("/api/dashboard/stats")
