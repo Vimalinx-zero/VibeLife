@@ -86,7 +86,7 @@ Cons:
 
 ### 1. Todo 数据增加来源和计划标记
 
-`backend/models.py` 中的 `TodoItem` 增加两个字段：
+`backend/models.py` 中的 `TodoItem` 增加三个字段：
 
 - `source`: `manual | project | ai_daily`
 - `plan_batch_id`: 可空字符串，仅对 `ai_daily` 有值
@@ -98,13 +98,29 @@ Cons:
 - `project`: 项目面板或项目相关流程产生的待办；
 - `ai_daily`: 通过“安排今天 / 准备工作台 / 生成今日计划”创建的日常待办。
 
+默认值与回填规则必须写死：
+
+- 数据库 schema 默认值必须是 `source = "manual"`；
+- 现有历史 todo 在迁移时一律回填为 `source = "manual"`；
+- 历史 todo 的 `plan_batch_id` 和 `plan_date` 一律保持 `NULL`；
+- 普通工作台创建路径默认写 `manual`；
+- 项目待办创建路径显式写 `project`；
+- 只有今日计划刷新服务允许写入 `ai_daily`。
+
 批次规则：
 
 - 同一次“今日计划重排”创建的所有 `ai_daily` 待办共用一个新的 `plan_batch_id`；
-- 同一次“今日计划重排”创建的所有 `ai_daily` 待办共用同一个 `plan_date`，默认就是当天；
-- 下次重排时，只删除 `completed = false AND source = ai_daily AND plan_date = 今天` 的旧待办；
+- 同一次“今日计划重排”创建的所有 `ai_daily` 待办共用同一个 `plan_date`；
+- `plan_date` 不是服务端猜测的“今天”，而是调用方显式传入的 `date_key`；
+- 下次重排时，只删除 `current_user_id + completed = false + source = ai_daily + plan_date = date_key` 范围内的旧待办；
 - `manual` 和 `project` 待办永远不在这条链路里被删除；
 - `completed = true` 的旧 `ai_daily` 待办保留。
+
+用户编辑语义也要固定：
+
+- 用户手动编辑某条 `ai_daily` 的文本或优先级，不会把它转成 `manual`；
+- 只要它仍然是 `completed = false AND source = ai_daily` 且属于当前 `plan_date`，下次 refresh 仍然允许被替换；
+- 这一轮不提供“接管 AI 待办为手动待办”的专门能力。
 
 ### 2. 新增独立的今日计划服务层
 
@@ -116,28 +132,45 @@ Cons:
 2. 生成给 OpenClaw 的结构化计划 prompt；
 3. 调用 OpenClaw；
 4. 解析和校验返回的计划结构；
-5. 在一个数据库事务里替换旧的未完成 `ai_daily` 待办；
-6. 返回给前端和插件统一的结果摘要。
+5. 以用户为粒度串行化 refresh；
+6. 在一个数据库事务里替换旧的未完成 `ai_daily` 待办；
+7. 返回给前端和插件统一的结果摘要。
 
 建议拆分为两类职责：
 
 - 读取与整理上下文：
-  - 当前未完成 `manual` 待办；
-  - 当前未完成 `project` 待办；
+  - 当前用户未完成 `manual` 待办；
+  - 当前用户未完成 `project` 待办；
   - 今日/最近的项目摘要；
   - 今日专注数据；
   - 今日日志数量；
 - 执行重排：
-  - 删除“今天”旧未完成 `ai_daily`；
+  - 拿到用户级 refresh 锁；
+  - 删除当前用户在 `date_key` 下旧的未完成 `ai_daily`；
   - 新建新批次 `ai_daily`；
   - 返回 `plan_batch_id`、删除数量、新建条目列表。
+
+并发规则：
+
+- 同一用户同一时刻只允许一个 refresh 在跑；
+- 当前切片基于后端单进程部署，使用进程内用户级锁即可；
+- 如果同一用户已有 refresh 在执行，新的请求直接返回 `409`，不进入删改流程。
 
 ### 3. 后端提供真实 coach 接口
 
 保留前端已占位的接口名，真正实现：
 
-- `GET /api/ai/coach/today`
+- `GET /api/ai/coach/today?date_key=YYYY-MM-DD`
 - `POST /api/ai/coach/today/plan`
+
+`date_key` 的来源必须统一：
+
+- 由调用方按自己的本地自然日计算；
+- `Dashboard` 使用浏览器本地 `getTodayDateKey()`；
+- OpenClaw 插件使用当前机器本地日期；
+- 后端不再自行猜测“今天”属于哪个时区，只把 `date_key` 当作当前用户当天的唯一口径。
+
+所有 refresh 相关查询和删除都必须显式带 `current_user_id` 过滤，不能只依赖 `source / plan_date` 条件。
 
 #### `GET /api/ai/coach/today`
 
@@ -164,11 +197,18 @@ Cons:
   - `avg_daily_focus_minutes`
   - `recommended_plan_items`
 - `suggestions`
-  - 优先返回当前未完成的 `ai_daily` 待办；
+  - 优先返回当前用户、当前 `date_key`、当前激活批次里的未完成 `ai_daily` 待办；
   - 如果当前没有 `ai_daily`，返回基于上下文生成的建议摘要；
 - `coach_message`
 
 这个接口只读，不产生写入。
+
+当前激活批次的定义要固定：
+
+- 在 `current_user_id + plan_date = date_key + source = ai_daily` 范围内；
+- 取 `created_at` 最新的一批 `plan_batch_id` 作为“当前计划批次”；
+- `GET /today` 的 `suggestions` 只从这个最新批次的未完成待办中映射；
+- 同一天历史上更早批次的已完成 `ai_daily` 只保留为历史记录，不混进当前展示。
 
 `suggestions` 必须继续满足现有前端结构：
 
@@ -197,6 +237,7 @@ Cons:
 执行真实重排。请求体可以保持最小，只需要：
 
 - `max_items` 可选
+- `date_key` 必填，格式 `YYYY-MM-DD`
 
 响应必须兼容当前 `Dashboard` 的读取方式，并补足插件可复用字段：
 
@@ -214,16 +255,24 @@ Cons:
 - `skipped_count` 在这一轮固定返回 `0`，先用于兼容现有前端；
 - `deleted_count` 是本次删除的旧 `ai_daily` 数量。
 
+空计划语义必须明确：
+
+- 如果 OpenClaw 返回合法 JSON，但在裁剪和清洗后 `todos.length === 0`，本次 refresh 视为失败；
+- 失败时不删除旧 `ai_daily`；
+- 前端和插件都收到明确错误信息，而不是“成功但清空计划”。
+
 执行流程：
 
 1. 读取上下文；
 2. 调用 OpenClaw 生成结构化今日计划；
 3. 校验每条计划项的 `text / priority / subject / due_date`；
-4. 开启事务；
-5. 删除所有 `completed = false AND source = ai_daily AND plan_date = 今天` 的待办；
-6. 生成新的 `plan_batch_id`；
-7. 写入新的 `ai_daily` 待办，并统一写入今天的 `plan_date`；
-8. 返回：
+4. 如果校验后 `todos` 为空，直接返回失败，不进入删除逻辑；
+5. 获取当前用户的 refresh 锁；
+6. 开启事务；
+7. 删除所有 `current_user_id + completed = false + source = ai_daily + plan_date = date_key` 的待办；
+8. 生成新的 `plan_batch_id`；
+9. 写入新的 `ai_daily` 待办，并统一写入请求里的 `date_key`；
+10. 返回：
    - `success`
    - `plan_batch_id`
    - `created_count`
@@ -243,6 +292,7 @@ Cons:
 - 它不直接逐条删除/创建待办；
 - 它只调用 `POST /api/ai/coach/today/plan`；
 - 可接受 `maxItems`，并映射为后端的 `max_items`；
+- 必须显式传入本地计算出的 `date_key`；
 - 返回后端返回的批次和待办结果。
 
 这样用户在 OpenClaw 中说：
@@ -261,8 +311,8 @@ Cons:
 
 变更后的行为：
 
-- 页面加载时，真实请求 `GET /ai/coach/today`；
-- 点击“生成计划”时，真实调用 `POST /ai/coach/today/plan`；
+- 页面加载时，真实请求 `GET /ai/coach/today?date_key=<getTodayDateKey()>`；
+- 点击“生成计划”时，真实调用 `POST /ai/coach/today/plan`，并传 `date_key = getTodayDateKey()`；
 - 成功后：
   - 刷新 coach 数据；
   - 触发待办刷新事件；
@@ -303,24 +353,24 @@ Cons:
 - `priority` 非法时回退到安全默认值；
 - `subject` 在这一轮保持 `general`，避免误碰项目分类；
 - JSON 不合法则整次失败，不落库。
-- 后端把返回的 todo 写入数据库时，会额外补上 `source = ai_daily`、`plan_batch_id`、`plan_date = 今天`。
+- 后端把返回的 todo 写入数据库时，会额外补上 `source = ai_daily`、`plan_batch_id`、`plan_date = date_key`。
 
 ## Data Flow
 
 ### Dashboard 按钮
 
 1. 用户点击“生成计划”；
-2. 前端调用 `POST /api/ai/coach/today/plan`；
+2. 前端调用 `POST /api/ai/coach/today/plan`，并传 `date_key`；
 3. 后端读取上下文并调用 OpenClaw；
 4. OpenClaw 返回结构化今日计划；
-5. 后端事务性替换旧未完成 `ai_daily` 待办；
+5. 后端事务性替换当前用户在该 `date_key` 下旧未完成 `ai_daily` 待办；
 6. 前端刷新 TodayTodos 与 coach 摘要。
 
 ### OpenClaw 对话
 
 1. 用户在 OpenClaw 中说“准备工作台”；
 2. OpenClaw 调用 `vibelife_daily_plan_refresh`；
-3. 插件调用 `POST /api/ai/coach/today/plan`；
+3. 插件调用 `POST /api/ai/coach/today/plan`，并传本地 `date_key`；
 4. 后端执行同一套重排逻辑；
 5. OpenClaw 回复用户“已重排今天计划，并写入 N 条待办”。
 
@@ -328,7 +378,9 @@ Cons:
 
 - OpenClaw 调用失败：直接返回错误，不删除任何旧待办。
 - OpenClaw 返回非 JSON 或 JSON 非法：直接失败，不落库。
+- OpenClaw 返回合法但空的计划：直接失败，不删除任何旧待办。
 - 数据库事务失败：整笔回滚，不出现删一半、写一半。
+- 同一用户重复触发 refresh：返回 `409`，不修改数据。
 - 前端请求失败：保留当前页面已有状态，只显示错误提示。
 - 插件调用失败：把错误原样传回 OpenClaw，便于用户重试。
 
@@ -339,10 +391,15 @@ Cons:
 新增针对今日计划服务的测试，至少覆盖：
 
 - 首次生成时，会创建一批 `ai_daily` 待办；
-- 再次生成时，只删除旧的未完成 `ai_daily`；
+- 再次生成时，只删除当前用户、当前 `date_key` 下旧的未完成 `ai_daily`；
 - `manual` 待办保留；
 - `project` 待办保留；
 - 已完成 `ai_daily` 待办保留；
+- 历史 todo 迁移后默认是 `manual`；
+- 非今日计划入口创建的 todo 默认是 `manual`；
+- `GET /today` 只返回当前激活批次的 `suggestions`；
+- 并发 refresh 时第二个请求返回 `409`；
+- 合法空计划不会清空旧数据；
 - OpenClaw 返回非法结构时，不发生写入；
 - 重排结果接口返回统一字段。
 
