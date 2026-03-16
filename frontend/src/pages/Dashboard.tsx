@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiClient } from "../utils/api"; // ✅ 修复：导入 apiClient 以自动添加 token
 import GlassCard from "../components/GlassCard";
@@ -6,6 +6,7 @@ import { useTheme } from "../context/ThemeContext";
 import { useAuth } from "../context/AuthContext";  // ✅ 导入 AuthContext
 import { useToast } from "../context/ToastContext";
 import TodayTodos from "../components/TodayTodos";
+import { dispatchWorkbenchTodosRefresh } from "../utils/workbenchTodoEvents";
 import {
   normalizeCoachData,
   type CoachData,
@@ -90,38 +91,7 @@ function Dashboard() {
   const [coachData, setCoachData] = useState<CoachData | null>(null);
   const [coachLoading, setCoachLoading] = useState<boolean>(true);
   const [coachGenerating, setCoachGenerating] = useState<boolean>(false);
-  const [todoWidgetKey, setTodoWidgetKey] = useState<number>(0);
   const [todayJournalCount, setTodayJournalCount] = useState<number>(0);
-  const coachFeatureEnabled = false;
-
-  const fallbackCoachData = useCallback((): CoachData => ({
-    snapshot: {
-      pending_todos: 0,
-      today_focus_minutes: 0,
-      recent_7d_completion_rate: 0,
-      recent_7d_avg_focus_minutes: 0,
-    },
-    adaptive: {
-      level: 'balanced',
-      label: '稳步推进',
-      focus: '先完成关键任务，再推进项目和记录',
-      completion_rate: 0,
-      avg_daily_focus_minutes: 0,
-      recommended_plan_items: 3,
-    },
-    suggestions: [
-      {
-        id: 'steady-workbench',
-        title: '整理今日待办',
-        reason: '先收拢今天最重要的事情',
-        target: '/workbench',
-        estimated_minutes: 20,
-        subject: 'general',
-        todo_text: '整理今日待办'
-      }
-    ],
-    coach_message: '先完成高优先级事项，再推进项目、待办和日志。'
-  }), []);
 
   // 更新时钟
   useEffect(() => {
@@ -150,19 +120,16 @@ function Dashboard() {
     }
 
     const loadCoach = async () => {
-      if (!coachFeatureEnabled) {
-        setCoachData(fallbackCoachData());
-        setCoachLoading(false);
-        return;
-      }
       try {
         setCoachLoading(true);
-        const response = await apiClient.get('/ai/coach/today');
+        const response = await apiClient.get('/ai/coach/today', {
+          params: { date_key: getTodayDateKey() },
+        });
         if (response.data?.success) {
           setCoachData(normalizeCoachData(response.data));
         }
       } catch (error) {
-        setCoachData(fallbackCoachData());
+        console.error('Failed to load coach data:', error);
       } finally {
         setCoachLoading(false);
       }
@@ -203,17 +170,15 @@ function Dashboard() {
 
     fetchData();
     loadCoach();
-  }, [token, fallbackCoachData]);  // ✅ 依赖 token
+  }, [token]);  // ✅ 依赖 token
 
   const handleGenerateTodayPlan = async () => {
-    if (!coachFeatureEnabled) {
-      toast.info('当前为本地模式，已使用默认工作建议');
-      setCoachData(fallbackCoachData());
-      return;
-    }
+    const dateKey = getTodayDateKey();
+
     try {
       setCoachGenerating(true);
       const response = await apiClient.post('/ai/coach/today/plan', {
+        date_key: dateKey,
         max_items: coachData?.adaptive?.recommended_plan_items || 3
       });
       const createdCount = response.data?.created_count || 0;
@@ -229,12 +194,14 @@ function Dashboard() {
         console.log(`Skipped ${skippedCount} duplicated tasks`);
       }
 
-      const coachResponse = await apiClient.get('/ai/coach/today');
+      const coachResponse = await apiClient.get('/ai/coach/today', {
+        params: { date_key: dateKey },
+      });
       if (coachResponse.data?.success) {
         setCoachData(normalizeCoachData(coachResponse.data));
       }
 
-      setTodoWidgetKey(prev => prev + 1);
+      dispatchWorkbenchTodosRefresh();
     } catch (error: any) {
       toast.error(`❌ 生成计划失败: ${error?.response?.data?.detail || error?.message || '未知错误'}`);
     } finally {
@@ -427,7 +394,7 @@ function Dashboard() {
 
         {/* 今日待办 (2x2) */}
         <GlassCard className="col-span-1 md:col-span-2 md:row-span-2 p-5 h-[300px] md:h-[320px] overflow-hidden" delay={0.4}>
-          <TodayTodos key={todoWidgetKey} />
+          <TodayTodos />
         </GlassCard>
 
         <GlassCard className="col-span-1 md:col-span-2 md:row-span-2 p-5 h-[300px] md:h-[320px] overflow-hidden" delay={0.58}>

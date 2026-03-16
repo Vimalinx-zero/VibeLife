@@ -146,3 +146,60 @@ test("project creation tool only sends provided fields and preserves server defa
     globalThis.fetch = originalFetch
   }
 })
+
+test("daily plan refresh tool posts to coach refresh endpoint", async () => {
+  const calls = []
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async (url, options = {}) => {
+    calls.push({ url, options })
+    return {
+      ok: true,
+      status: 200,
+      async text() {
+        return JSON.stringify({
+          success: true,
+          provider: "openclaw",
+          plan_batch_id: "plan_123",
+          created_count: 2,
+          skipped_count: 0,
+          deleted_count: 1,
+          todos: [
+            { id: "todo_1", text: "plan item 1" },
+            { id: "todo_2", text: "plan item 2" },
+          ],
+        })
+      },
+    }
+  }
+
+  try {
+    const tools = collectTools({
+      authToken: "test-token",
+      baseUrl: "http://127.0.0.1:49174",
+    })
+    const tool = tools.find((entry) => entry.name === "vibelife_daily_plan_refresh")
+
+    assert.ok(tool, "expected vibelife_daily_plan_refresh to be registered")
+
+    const response = await tool.execute("tool_daily_refresh", {
+      dateKey: "2026-03-17",
+      maxItems: 4,
+    })
+
+    assert.equal(calls.length, 1)
+    assert.equal(calls[0].url, "http://127.0.0.1:49174/api/ai/coach/today/plan")
+    assert.equal(calls[0].options.method, "POST")
+    assert.deepEqual(JSON.parse(calls[0].options.body), {
+      date_key: "2026-03-17",
+      max_items: 4,
+    })
+    assert.equal(
+      calls[0].options.headers.Authorization,
+      "Bearer test-token"
+    )
+    assert.equal(response.details.json.plan_batch_id, "plan_123")
+    assert.equal(response.details.json.created_count, 2)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})

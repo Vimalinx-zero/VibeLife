@@ -96,6 +96,22 @@ def _serialize_schedule_event(event: models.ScheduleEvent) -> dict:
         "updated_at": event.updated_at,
     }
 
+
+def _serialize_todo(todo: models.TodoItem) -> dict:
+    return {
+        "id": todo.id,
+        "text": todo.text,
+        "completed": todo.completed,
+        "priority": todo.priority,
+        "subject": todo.subject,
+        "source": todo.source or "manual",
+        "plan_batch_id": todo.plan_batch_id,
+        "plan_date": todo.plan_date,
+        "created_at": todo.created_at,
+        "completed_at": todo.completed_at,
+        "due_date": todo.due_date,
+    }
+
 # ========================
 # Schemas
 # ========================
@@ -300,16 +316,7 @@ async def get_todos(
 
     todos = query.order_by(models.TodoItem.created_at.desc()).all()
 
-    return [{
-        "id": t.id,
-        "text": t.text,
-        "completed": t.completed,
-        "priority": t.priority,
-        "subject": t.subject,
-        "created_at": t.created_at,
-        "completed_at": t.completed_at,
-        "due_date": t.due_date
-    } for t in todos if isinstance(t.text, str) and t.text.strip()]
+    return [_serialize_todo(t) for t in todos if isinstance(t.text, str) and t.text.strip()]
 
 @router.post("/api/workbench/todos")
 async def create_todo(
@@ -327,6 +334,9 @@ async def create_todo(
         priority=todo.priority,
         subject=todo.subject,
         due_date=todo.due_date,
+        source="manual",
+        plan_batch_id=None,
+        plan_date=None,
         user_id=current_user_id  # ✅ 关联到当前用户
     )
 
@@ -334,16 +344,7 @@ async def create_todo(
     db.commit()
     db.refresh(new_todo)
 
-    return {
-        "id": new_todo.id,
-        "text": new_todo.text,
-        "completed": new_todo.completed,
-        "priority": new_todo.priority,
-        "subject": new_todo.subject,
-        "created_at": new_todo.created_at,
-        "completed_at": new_todo.completed_at,
-        "due_date": new_todo.due_date
-    }
+    return _serialize_todo(new_todo)
 
 @router.put("/api/workbench/todos/{todo_id}")
 async def update_todo(
@@ -380,16 +381,7 @@ async def update_todo(
     db.commit()
     db.refresh(todo)
 
-    return {
-        "id": todo.id,
-        "text": todo.text,
-        "completed": todo.completed,
-        "priority": todo.priority,
-        "subject": todo.subject,
-        "created_at": todo.created_at,
-        "completed_at": todo.completed_at,
-        "due_date": todo.due_date
-    }
+    return _serialize_todo(todo)
 
 @router.delete("/api/workbench/todos/{todo_id}")
 async def delete_todo(

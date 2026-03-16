@@ -150,6 +150,37 @@ def run_legacy_cleanup_migrations() -> None:
                 "UPDATE projects SET category = 'growth' WHERE lower(category) = 'study'"
             )
 
+        if "todo_items" in tables:
+            todo_columns = {
+                column["name"] for column in inspector.get_columns("todo_items")
+            }
+
+            if "source" not in todo_columns:
+                conn.exec_driver_sql(
+                    "ALTER TABLE todo_items ADD COLUMN source VARCHAR NOT NULL DEFAULT 'manual'"
+                )
+                todo_columns.add("source")
+            if "plan_batch_id" not in todo_columns:
+                conn.exec_driver_sql(
+                    "ALTER TABLE todo_items ADD COLUMN plan_batch_id VARCHAR"
+                )
+                todo_columns.add("plan_batch_id")
+            if "plan_date" not in todo_columns:
+                conn.exec_driver_sql(
+                    "ALTER TABLE todo_items ADD COLUMN plan_date VARCHAR"
+                )
+                todo_columns.add("plan_date")
+
+            conn.exec_driver_sql(
+                "UPDATE todo_items SET source = 'manual' WHERE source IS NULL OR trim(source) = ''"
+            )
+            conn.exec_driver_sql(
+                "UPDATE todo_items SET plan_batch_id = NULL WHERE trim(COALESCE(plan_batch_id, '')) = ''"
+            )
+            conn.exec_driver_sql(
+                "UPDATE todo_items SET plan_date = NULL WHERE trim(COALESCE(plan_date, '')) = ''"
+            )
+
 # 依赖项：每个请求创建一个独立的 DB 会话
 def get_db(): 
     db = SessionLocal() 

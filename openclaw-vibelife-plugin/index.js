@@ -182,6 +182,11 @@ function truncateText(value, maxChars = 12000) {
   return `${value.slice(0, maxChars)}\n... [truncated ${value.length - maxChars} chars]`
 }
 
+function getLocalDateKey(date = new Date()) {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+  return local.toISOString().slice(0, 10)
+}
+
 function resolveCurrentUserId(api) {
   const pluginConfig = api?.pluginConfig ?? {}
   const userId = process.env.VIBELIFE_CURRENT_USER_ID ?? pluginConfig.currentUserId ?? ""
@@ -394,6 +399,34 @@ function defineTools(api) {
                 typeof params.subject === "string" ? params.subject.trim() : undefined,
               due_date:
                 typeof params.dueDate === "string" ? params.dueDate.trim() : undefined,
+            }),
+          }),
+      },
+      api
+    ),
+    createTool(
+      {
+        name: "vibelife_daily_plan_refresh",
+        label: "VibeLife Daily Plan Refresh",
+        description: "Refresh today's AI daily plan in VibeLife through the unified coach endpoint.",
+        parameters: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            dateKey: { type: "string" },
+            maxItems: { type: "integer" },
+          },
+        },
+        handler: (params) =>
+          requestJson(api, "/api/ai/coach/today/plan", {
+            method: "POST",
+            body: cleanObject({
+              date_key:
+                typeof params.dateKey === "string" && params.dateKey.trim()
+                  ? params.dateKey.trim()
+                  : getLocalDateKey(),
+              max_items:
+                Number.isInteger(params.maxItems) ? params.maxItems : undefined,
             }),
           }),
       },

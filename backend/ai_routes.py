@@ -6,11 +6,18 @@ from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 from uuid import uuid4
 
 import httpx
+import pydantic
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 import models
+from ai_coach_service import (
+    CoachPlanConflictError,
+    CoachPlanValidationError,
+    build_today_payload,
+    refresh_today_plan,
+)
 from auth import get_current_user_id
 from database import get_db
 from openclaw_bridge import (
@@ -99,6 +106,11 @@ _load_ai_config()
 
 def get_current_ai_config() -> Dict[str, Any]:
     return _ai_config
+
+
+class CoachPlanRequest(pydantic.BaseModel):
+    date_key: str
+    max_items: Optional[int] = None
 
 
 def _resolve_provider_and_model(
@@ -476,6 +488,56 @@ def _validate_provider_name(provider: str) -> str:
     if normalized not in SUPPORTED_PROVIDERS:
         raise HTTPException(status_code=400, detail="无效的 provider")
     return normalized
+
+
+@router.get("/api/ai/coach/today")
+def get_ai_coach_today(
+    date_key: str,
+    current_user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    try:
+        return build_today_payload(db, current_user_id, date_key)
+    except CoachPlanValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/api/ai/coach/today/plan")
+def generate_ai_coach_today_plan(
+    payload: CoachPlanRequest,
+    raw_request: Request,
+    current_user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    authorization = raw_request.headers.get("authorization", "")
+    auth_token = (
+        authorization.split(" ", 1)[1]
+        if authorization.lower().startswith("bearer ")
+        else None
+    )
+    openclaw_config = get_current_ai_config().get("openclaw", {})
+
+    try:
+        return refresh_today_plan(
+            db,
+            current_user_id=current_user_id,
+            date_key=payload.date_key,
+            max_items=payload.max_items,
+            model=str(openclaw_config.get("model", "rightcodes/gpt-5.4")),
+            thinking=str(openclaw_config.get("thinking", "low")),
+            agent=str(openclaw_config.get("agent", "vibelife")),
+            base_url=str(raw_request.base_url).rstrip("/"),
+            auth_token=auth_token,
+        )
+    except CoachPlanConflictError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except CoachPlanValidationError as exc:
+        db.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except OpenClawBridgeError as exc:
+        db.rollback()
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @router.post("/api/ai/chat")
