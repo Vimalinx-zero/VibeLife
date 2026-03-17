@@ -157,7 +157,7 @@ def _parse_openclaw_output(output: str) -> Any:
 
     for index, line in enumerate(lines):
         stripped = line.lstrip()
-        if not stripped or stripped.startswith("["):
+        if not stripped:
             continue
         if not (stripped.startswith("{") or stripped.startswith("[")):
             continue
@@ -328,6 +328,9 @@ def ensure_openclaw_agent(
         add_result = _run_openclaw_command(add_command, timeout_seconds=timeout_seconds)
         if add_result.returncode != 0:
             error_text = add_result.stderr.strip() or add_result.stdout.strip() or "unknown error"
+            if "already exists" in error_text.lower():
+                _verified_agents.add(normalized_agent)
+                return
             raise OpenClawBridgeError(f"OpenClaw 智能体创建失败: {error_text}")
 
         _verified_agents.add(normalized_agent)
