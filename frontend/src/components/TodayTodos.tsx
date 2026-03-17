@@ -2,6 +2,10 @@ import { useState, useEffect } from "react";
 import { useToast } from "../context/ToastContext";
 import * as workbenchApi from "../utils/workbenchApi";
 import { Todo } from "../utils/workbenchApi";
+import {
+  getTodayTodosVariantConfig,
+  type TodayTodosVariant,
+} from "./todayTodosConfig";
 
 const Icons = {
   Plus: () => <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path fillRule="evenodd" d="M12 3.75a.75.75 0 01.75.75v6.75h6.75a.75.75 0 010 1.5h-6.75v6.75a.75.75 0 01-1.5 0v-6.75H4.5a.75.75 0 010-1.5h6.75V4.5a.75.75 0 01.75-.75z" clipRule="evenodd" /></svg>,
@@ -24,19 +28,37 @@ const convertPriority = (priority: number): keyof typeof PRIORITIES => {
 /**
  * TodayTodos - 今日待办（精简版，用于Dashboard）
  */
-const TodayTodos = () => {
+interface TodayTodosProps {
+  title?: string;
+  description?: string;
+  inputPlaceholder?: string;
+  maxVisible?: number;
+  variant?: TodayTodosVariant;
+}
+
+const TodayTodos = ({
+  title = "今日待办",
+  description,
+  inputPlaceholder,
+  maxVisible,
+  variant = "dashboard",
+}: TodayTodosProps) => {
   const toast = useToast();
   const [todos, setTodos] = useState<Todo[]>([]);
   const [completedCount, setCompletedCount] = useState(0);
   const [inputValue, setInputValue] = useState("");
   const [selectedPriority, setSelectedPriority] = useState<keyof typeof PRIORITIES>('medium');
   const [isLoading, setIsLoading] = useState(true);
+  const variantConfig = getTodayTodosVariantConfig(variant);
+  const visibleLimit = maxVisible ?? variantConfig.maxVisible;
+  const resolvedInputPlaceholder = inputPlaceholder ?? variantConfig.inputPlaceholder;
+  const resolvedDescription = description ?? `完成 ${completedCount} / ${todos.length + completedCount} 个任务`;
 
   const loadTodos = async () => {
     try {
       setIsLoading(true);
       const data = await workbenchApi.getTodos(false);
-      setTodos(data.slice(0, 5));
+      setTodos(data.slice(0, visibleLimit));
 
       const completed = await workbenchApi.getTodos(true);
       setCompletedCount(completed.length);
@@ -60,7 +82,7 @@ const TodayTodos = () => {
     return () => {
       window.removeEventListener('workbench-todos-refresh', handleRefresh);
     };
-  }, []);
+  }, [visibleLimit]);
 
   const addTask = async () => {
     if (!inputValue.trim()) return;
@@ -117,8 +139,8 @@ const TodayTodos = () => {
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="mb-4">
-        <h3 className="text-lg font-semibold dark:text-white text-gray-900 mb-1">今日待办</h3>
-        <p className="text-xs text-gray-500">完成 {completedCount} / {todos.length + completedCount} 个任务</p>
+        <h3 className="text-lg font-semibold dark:text-white text-gray-900 mb-1">{title}</h3>
+        <p className="text-xs text-gray-500">{resolvedDescription}</p>
       </div>
 
       {/* Input Area */}
@@ -132,7 +154,7 @@ const TodayTodos = () => {
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && addTask()}
-            placeholder="添加新任务..."
+            placeholder={resolvedInputPlaceholder}
             className="w-full bg-gray-100/50 dark:bg-[#252525]/50 hover:bg-gray-100/80 dark:hover:bg-[#2a2a2a]/80 focus:bg-white dark:focus:bg-[#2a2a2a] text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 pl-10 pr-20 py-2.5 rounded-lg outline-none transition-colors border border-transparent focus:border-indigo-500/30 dark:focus:border-white/10 text-sm"
             disabled={isLoading}
           />
@@ -212,7 +234,7 @@ const TodayTodos = () => {
       </div>
 
       {/* Footer - View All */}
-      {todos.length >= 5 && (
+      {variantConfig.showViewAllLink && todos.length >= visibleLimit && (
         <div className="mt-3 pt-3 border-t border-gray-200 dark:border-white/10 text-center">
           <button
             onClick={() => window.location.href = '/workbench'}
