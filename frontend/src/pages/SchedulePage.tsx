@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import GlassCard from '../components/GlassCard';
-import TodayTodos from '../components/TodayTodos';
 import { useToast } from '../context/ToastContext';
 import {
   ScheduleEvent,
@@ -21,19 +20,15 @@ import {
   preserveScheduleUiStateOnSubmitFailure,
   resetScheduleUiStateAfterSubmitSuccess,
   ScheduleManualAddDraft,
+  ScheduleSidebarTab,
+  setActiveScheduleSidebarTab,
   toggleManualAddExpanded,
   updateManualAddDraft,
 } from './schedulePageState';
+import ScheduleSidebarPanel from './ScheduleSidebarPanel';
 
 const monthNames = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
 const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
-
-const EVENT_LEGEND_ITEMS: Array<{ label: string; color: string }> = [
-  { label: '会议', color: 'bg-blue-500' },
-  { label: '截止日期', color: 'bg-red-500' },
-  { label: '提醒', color: 'bg-yellow-500' },
-  { label: '任务', color: 'bg-green-500' },
-];
 
 const getTypeColor = (type: ScheduleEvent['type']) => {
   switch (type) {
@@ -65,6 +60,7 @@ const SchedulePage: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
 
   const selectedDate = uiState.selectedDate;
+  const activeSidebarTab = uiState.activeSidebarTab;
   const manualAddDraft = uiState.manualAddDraft;
   const isManualAddExpanded = uiState.isManualAddExpanded;
 
@@ -168,6 +164,14 @@ const SchedulePage: React.FC = () => {
     []
   );
 
+  const handleSidebarTabChange = useCallback((nextTab: ScheduleSidebarTab) => {
+    setUiState((previous) => setActiveScheduleSidebarTab(previous, nextTab));
+  }, []);
+
+  const handleToggleManualAdd = useCallback(() => {
+    setUiState((previous) => toggleManualAddExpanded(previous));
+  }, []);
+
   const prevMonth = useCallback(() => {
     setShowDetailPopup(false);
     setCurrentMonth((previousMonth) => {
@@ -248,12 +252,12 @@ const SchedulePage: React.FC = () => {
       </button>
 
       <main
-        className="mx-auto h-full max-w-[1800px] overflow-hidden p-4 md:p-8"
+        className="mx-auto h-full max-w-[1800px] overflow-auto p-4 md:p-8 xl:overflow-hidden"
         style={{ paddingTop: '8vh' }}
       >
-        <div className="grid h-full grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(380px,1fr)]">
+        <div className="grid grid-cols-1 gap-5 xl:h-full xl:grid-cols-[minmax(0,1.55fr)_minmax(380px,1fr)]">
           <GlassCard
-            className="h-full overflow-auto p-5 md:p-6"
+            className="min-h-[640px] overflow-auto p-5 md:p-6 xl:h-full"
             hoverScale={1.007}
             hoverLift={-2}
             hoverShadow="0 10px 22px rgba(0,0,0,0.15)"
@@ -376,183 +380,28 @@ const SchedulePage: React.FC = () => {
             </div>
           </GlassCard>
 
-          <div className="relative h-full">
+          <div className="relative min-h-[620px] xl:h-full">
             <GlassCard
-              className="h-full overflow-auto p-5 md:p-6"
+              className="min-h-[620px] p-4 md:p-5 xl:h-full xl:overflow-hidden"
               hoverScale={1.007}
               hoverLift={-2}
               hoverShadow="0 10px 22px rgba(0,0,0,0.15)"
             >
-              <div className="space-y-5">
-                <section>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-                      {selectedDateLabel}
-                    </h3>
-                    {isLoading && (
-                      <span className="rounded-full bg-black/5 px-2 py-0.5 text-[11px] text-gray-500 dark:bg-white/10 dark:text-gray-300">
-                        刷新中
-                      </span>
-                    )}
-                  </div>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    先看当天安排，再把今天推进中的事直接勾掉。
-                  </p>
-                </section>
-
-                <section className="rounded-2xl border border-gray-200 bg-white/70 p-4 dark:border-white/10 dark:bg-black/20">
-                  <div className="mb-3 flex items-center justify-between gap-2">
-                    <h4 className="text-sm font-semibold text-gray-900 dark:text-white">
-                      当天安排
-                    </h4>
-                    {hasValidSelectedDate && (
-                      <span className="text-xs text-gray-500 dark:text-gray-400">
-                        {selectedEvents.length} 条
-                      </span>
-                    )}
-                  </div>
-
-                  {isInitialLoading ? (
-                    <div className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
-                      正在加载日程...
-                    </div>
-                  ) : selectedEvents.length > 0 ? (
-                    <div className="space-y-3">
-                      {selectedEvents.map((event) => (
-                        <div
-                          key={event.id}
-                          className="rounded-2xl border border-gray-200 bg-white p-3.5 dark:border-white/10 dark:bg-white/5"
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className={`h-2.5 w-2.5 rounded-full ${getTypeColor(event.type)}`} />
-                            <span className="font-semibold text-gray-900 dark:text-white">
-                              {event.title}
-                            </span>
-                            {event.time && (
-                              <span className="text-xs text-gray-500 dark:text-gray-400">
-                                {event.time}
-                              </span>
-                            )}
-                          </div>
-                          {event.description && (
-                            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                              {event.description}
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
-                      {hasValidSelectedDate
-                        ? '当天还没有安排'
-                        : '当前月份里先选一个日期'}
-                    </div>
-                  )}
-                </section>
-
-                <section className="rounded-2xl border border-gray-200 bg-white/70 p-4 dark:border-white/10 dark:bg-black/20">
-                  <TodayTodos
-                    variant="schedule"
-                    maxVisible={8}
-                    description="把今天要推进的事收在这里，直接勾掉。"
-                  />
-                </section>
-
-                <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white/70 dark:border-white/10 dark:bg-black/20">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setUiState((previous) => toggleManualAddExpanded(previous))
-                    }
-                    className="flex w-full items-start justify-between gap-4 px-4 py-4 text-left"
-                  >
-                    <div>
-                      <h4 className="text-sm font-semibold text-gray-900 dark:text-white">
-                        手动添加进程
-                      </h4>
-                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                        默认收起，需要时再补录，不会清空你已经写好的草稿。
-                      </p>
-                    </div>
-                    <span className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                      {isManualAddExpanded ? '收起' : '展开'}
-                    </span>
-                  </button>
-
-                  {isManualAddExpanded && (
-                    <div className="space-y-3 border-t border-gray-200 px-4 py-4 dark:border-white/10">
-                      <input
-                        value={manualAddDraft.title}
-                        onChange={(event) =>
-                          handleDraftChange({ title: event.target.value })
-                        }
-                        placeholder={hasValidSelectedDate ? '进程标题（必填）' : '请先在左侧选中日期'}
-                        disabled={!hasValidSelectedDate || isSaving}
-                        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-indigo-400 dark:border-white/10 dark:bg-black/20 dark:text-white"
-                      />
-                      <input
-                        value={manualAddDraft.time}
-                        onChange={(event) =>
-                          handleDraftChange({ time: event.target.value })
-                        }
-                        placeholder="时间（可选，如 15:00）"
-                        disabled={!hasValidSelectedDate || isSaving}
-                        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-indigo-400 dark:border-white/10 dark:bg-black/20 dark:text-white"
-                      />
-                      <textarea
-                        value={manualAddDraft.description}
-                        onChange={(event) =>
-                          handleDraftChange({ description: event.target.value })
-                        }
-                        placeholder="进程说明（可选）"
-                        disabled={!hasValidSelectedDate || isSaving}
-                        rows={3}
-                        className="w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-indigo-400 dark:border-white/10 dark:bg-black/20 dark:text-white"
-                      />
-                      <div className="flex items-center gap-2">
-                        <select
-                          value={manualAddDraft.type}
-                          onChange={(event) =>
-                            handleDraftChange({ type: event.target.value })
-                          }
-                          disabled={!hasValidSelectedDate || isSaving}
-                          className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-indigo-400 dark:border-white/10 dark:bg-black/20 dark:text-white"
-                        >
-                          <option value="task">任务</option>
-                          <option value="meeting">会议</option>
-                          <option value="deadline">截止日期</option>
-                          <option value="reminder">提醒</option>
-                        </select>
-                        <button
-                          type="button"
-                          onClick={() => void handleAddProgress()}
-                          disabled={!hasValidSelectedDate || !manualAddDraft.title.trim() || isSaving}
-                          className="rounded-xl bg-indigo-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {isSaving ? '添加中...' : '添加'}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </section>
-
-                <section className="rounded-2xl border border-gray-200 bg-white/70 p-4 dark:border-white/10 dark:bg-black/20">
-                  <h4 className="mb-3 text-sm font-semibold text-gray-900 dark:text-white">
-                    事件类型
-                  </h4>
-                  <div className="space-y-2">
-                    {EVENT_LEGEND_ITEMS.map((item) => (
-                      <div key={item.label} className="flex items-center gap-2">
-                        <span className={`h-3 w-3 rounded-full ${item.color}`} />
-                        <span className="text-sm text-gray-600 dark:text-gray-400">
-                          {item.label}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              </div>
+              <ScheduleSidebarPanel
+                selectedDateLabel={selectedDateLabel}
+                activeSidebarTab={activeSidebarTab}
+                selectedEvents={selectedEvents}
+                hasValidSelectedDate={hasValidSelectedDate}
+                isLoading={isLoading}
+                isInitialLoading={isInitialLoading}
+                isSaving={isSaving}
+                manualAddDraft={manualAddDraft}
+                isManualAddExpanded={isManualAddExpanded}
+                onTabChange={handleSidebarTabChange}
+                onToggleManualAdd={handleToggleManualAdd}
+                onDraftChange={handleDraftChange}
+                onSubmitManualAdd={() => void handleAddProgress()}
+              />
             </GlassCard>
 
             {showDetailPopup && hasValidSelectedDate && selectedDate && (

@@ -135,7 +135,7 @@ const TodayTodos = ({
   });
 
   return (
-    <div className={variant === "schedule" ? "flex flex-col min-h-0" : "flex flex-col h-full"}>
+    <div className={variant === "schedule" ? "flex h-full min-h-0 flex-col" : "flex flex-col h-full"}>
       {/* Header */}
       <div className="mb-4">
         <h3 className="text-lg font-semibold dark:text-white text-gray-900 mb-1">{title}</h3>

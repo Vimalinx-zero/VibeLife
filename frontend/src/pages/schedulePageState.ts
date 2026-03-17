@@ -1,4 +1,6 @@
 export const DEFAULT_SCHEDULE_EVENT_TYPE = "task";
+export type ScheduleSidebarTab = "schedule" | "todos";
+export const DEFAULT_SCHEDULE_SIDEBAR_TAB: ScheduleSidebarTab = "schedule";
 
 export interface ScheduleManualAddDraft {
   title: string;
@@ -9,6 +11,7 @@ export interface ScheduleManualAddDraft {
 
 export interface SchedulePageUiState {
   selectedDate: number | null;
+  activeSidebarTab: ScheduleSidebarTab;
   isManualAddExpanded: boolean;
   manualAddDraft: ScheduleManualAddDraft;
 }
@@ -24,8 +27,17 @@ export const createInitialSchedulePageUiState = (
   selectedDate: number | null
 ): SchedulePageUiState => ({
   selectedDate,
+  activeSidebarTab: DEFAULT_SCHEDULE_SIDEBAR_TAB,
   isManualAddExpanded: false,
   manualAddDraft: createEmptyManualAddDraft(),
+});
+
+export const setActiveScheduleSidebarTab = (
+  state: SchedulePageUiState,
+  nextTab: ScheduleSidebarTab
+): SchedulePageUiState => ({
+  ...state,
+  activeSidebarTab: nextTab,
 });
 
 export const toggleManualAddExpanded = (
