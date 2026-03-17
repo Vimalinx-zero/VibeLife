@@ -12,3 +12,10 @@ export const dispatchWorkbenchDataRefresh = (
 ) => {
   target.dispatchEvent(new Event(WORKBENCH_DATA_REFRESH_EVENT));
 };
+
+export const dispatchWorkbenchAiRefresh = (
+  target: Pick<EventTarget, "dispatchEvent"> = window
+) => {
+  dispatchWorkbenchTodosRefresh(target);
+  dispatchWorkbenchDataRefresh(target);
+};

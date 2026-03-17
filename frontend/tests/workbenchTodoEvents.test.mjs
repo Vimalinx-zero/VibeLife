@@ -37,3 +37,24 @@ test("dispatchWorkbenchDataRefresh emits the shared data refresh event", () => {
 
   assert.equal(seen, true);
 });
+
+test("dispatchWorkbenchAiRefresh emits both shared refresh events", () => {
+  assert.equal(typeof workbenchTodoEvents.dispatchWorkbenchAiRefresh, "function");
+
+  const target = new EventTarget();
+  const seen = [];
+
+  target.addEventListener(workbenchTodoEvents.WORKBENCH_TODOS_REFRESH_EVENT, () => {
+    seen.push(workbenchTodoEvents.WORKBENCH_TODOS_REFRESH_EVENT);
+  });
+  target.addEventListener(workbenchTodoEvents.WORKBENCH_DATA_REFRESH_EVENT, () => {
+    seen.push(workbenchTodoEvents.WORKBENCH_DATA_REFRESH_EVENT);
+  });
+
+  workbenchTodoEvents.dispatchWorkbenchAiRefresh(target);
+
+  assert.deepEqual(seen, [
+    workbenchTodoEvents.WORKBENCH_TODOS_REFRESH_EVENT,
+    workbenchTodoEvents.WORKBENCH_DATA_REFRESH_EVENT,
+  ]);
+});
