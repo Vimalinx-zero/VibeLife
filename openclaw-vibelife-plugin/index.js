@@ -434,6 +434,34 @@ function defineTools(api) {
     ),
     createTool(
       {
+        name: "vibelife_workbench_prepare",
+        label: "VibeLife Workbench Prepare",
+        description: "Prepare the VibeLife workbench with a daily plan refresh and project digest.",
+        parameters: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            dateKey: { type: "string" },
+            maxItems: { type: "integer" },
+          },
+        },
+        handler: (params) =>
+          requestJson(api, "/api/ai/workbench/prepare", {
+            method: "POST",
+            body: cleanObject({
+              date_key:
+                typeof params.dateKey === "string" && params.dateKey.trim()
+                  ? params.dateKey.trim()
+                  : getLocalDateKey(),
+              max_items:
+                Number.isInteger(params.maxItems) ? params.maxItems : undefined,
+            }),
+          }),
+      },
+      api
+    ),
+    createTool(
+      {
         name: "vibelife_todo_update",
         label: "VibeLife Todo Update",
         description: "Update a VibeLife todo by id.",

@@ -44,6 +44,9 @@ def build_vibelife_chat_prompt(
         guidance_lines.append(
             "当用户要求查看或修改 VibeLife 内的待办、笔记、日志、日程、项目数据时，优先调用可用的 VibeLife 工具，而不是口头假设已经完成。"
         )
+        guidance_lines.append(
+            "当用户要求准备工作台、安排今天开工或表达刚回来开始干活时，优先调用一体化的工作台准备工具，而不是分散调用多个工具。"
+        )
     else:
         guidance_lines.append(
             "当前没有可执行工具；如果请求涉及读取或修改 VibeLife 数据，请明确说明当前会话无法直接落库。"
