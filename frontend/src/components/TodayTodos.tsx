@@ -6,6 +6,12 @@ import {
   getTodayTodosVariantConfig,
   type TodayTodosVariant,
 } from "./todayTodosConfig";
+import {
+  createTodayTodoInlineEdit,
+  clearTodayTodoInlineEdit,
+  normalizeTodayTodoInlineEditDraft,
+  type TodayTodoInlineEditDraft,
+} from "./todayTodosInlineEdit";
 
 const Icons = {
   Plus: () => <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path fillRule="evenodd" d="M12 3.75a.75.75 0 01.75.75v6.75h6.75a.75.75 0 010 1.5h-6.75v6.75a.75.75 0 01-1.5 0v-6.75H4.5a.75.75 0 010-1.5h6.75V4.5a.75.75 0 01.75-.75z" clipRule="evenodd" /></svg>,
@@ -49,6 +55,8 @@ const TodayTodos = ({
   const [inputValue, setInputValue] = useState("");
   const [selectedPriority, setSelectedPriority] = useState<keyof typeof PRIORITIES>('medium');
   const [isLoading, setIsLoading] = useState(true);
+  const [editingTodo, setEditingTodo] = useState<TodayTodoInlineEditDraft | null>(null);
+  const [isUpdatingTodo, setIsUpdatingTodo] = useState(false);
   const variantConfig = getTodayTodosVariantConfig(variant);
   const visibleLimit = maxVisible ?? variantConfig.maxVisible;
   const resolvedInputPlaceholder = inputPlaceholder ?? variantConfig.inputPlaceholder;
@@ -111,6 +119,9 @@ const TodayTodos = ({
 
       await workbenchApi.updateTodo(id, { completed: !todo.completed });
       await loadTodos();
+      if (editingTodo?.todoId === id) {
+        setEditingTodo(clearTodayTodoInlineEdit());
+      }
     } catch (error) {
       console.error('Failed to toggle task:', error);
       toast.error('更新任务失败');
@@ -121,10 +132,50 @@ const TodayTodos = ({
     try {
       await workbenchApi.deleteTodo(id);
       await loadTodos();
+      if (editingTodo?.todoId === id) {
+        setEditingTodo(clearTodayTodoInlineEdit());
+      }
       toast.info('任务已删除');
     } catch (error) {
       console.error('Failed to delete task:', error);
       toast.error('删除任务失败');
+    }
+  };
+
+  const startInlineEdit = (todo: Todo) => {
+    setEditingTodo(createTodayTodoInlineEdit(todo));
+  };
+
+  const cancelInlineEdit = () => {
+    if (isUpdatingTodo) {
+      return;
+    }
+
+    setEditingTodo(clearTodayTodoInlineEdit());
+  };
+
+  const saveInlineEdit = async () => {
+    if (!editingTodo || isUpdatingTodo) {
+      return;
+    }
+
+    const normalizedDraft = normalizeTodayTodoInlineEditDraft(editingTodo);
+    if (!normalizedDraft.ok) {
+      toast.error(normalizedDraft.message);
+      return;
+    }
+
+    try {
+      setIsUpdatingTodo(true);
+      await workbenchApi.updateTodo(editingTodo.todoId, { text: normalizedDraft.text });
+      setEditingTodo(clearTodayTodoInlineEdit());
+      await loadTodos();
+      toast.success('任务已更新');
+    } catch (error) {
+      console.error('Failed to save task edit:', error);
+      toast.error('更新任务失败');
+    } finally {
+      setIsUpdatingTodo(false);
     }
   };
 
@@ -184,6 +235,7 @@ const TodayTodos = ({
         ) : (
           sortedTodos.map(todo => {
             const priority = PRIORITIES[convertPriority(todo.priority)] || PRIORITIES.medium;
+            const isEditing = editingTodo?.todoId === todo.id;
             return (
               <div
                 key={todo.id}
@@ -202,22 +254,74 @@ const TodayTodos = ({
                 </button>
 
                 {/* Content */}
-                <div className="flex-1 min-w-0">
-                  <span className={`text-sm block ${
-                    todo.completed
-                      ? 'text-gray-400 dark:text-gray-500 line-through decoration-gray-400 dark:decoration-gray-600'
-                      : 'text-gray-700 dark:text-gray-200'
-                  }`}>
-                    {todo.text}
-                  </span>
-
-                  {/* Priority Badge */}
-                  {!todo.completed && (
-                    <span className={`inline-block mt-0.5 text-[9px] px-1.5 py-0.5 rounded ${priority.bg} ${priority.color}`}>
-                      {priority.label}
+                {isEditing ? (
+                  <div className="flex-1 min-w-0 flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={editingTodo.text}
+                      onChange={(event) =>
+                        setEditingTodo((currentState) =>
+                          currentState
+                            ? {
+                                ...currentState,
+                                text: event.target.value,
+                              }
+                            : currentState
+                        )
+                      }
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault();
+                          void saveInlineEdit();
+                        }
+                        if (event.key === 'Escape') {
+                          event.preventDefault();
+                          cancelInlineEdit();
+                        }
+                      }}
+                      autoFocus
+                      disabled={isUpdatingTodo}
+                      className="flex-1 min-w-0 text-sm bg-white dark:bg-[#2a2a2a] text-gray-900 dark:text-white px-2.5 py-1.5 rounded-lg outline-none border border-indigo-500/30"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void saveInlineEdit()}
+                      disabled={isUpdatingTodo}
+                      className="text-xs text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300 transition-colors flex-shrink-0"
+                    >
+                      {isUpdatingTodo ? '保存中' : '保存'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={cancelInlineEdit}
+                      disabled={isUpdatingTodo}
+                      className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors flex-shrink-0"
+                    >
+                      取消
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => startInlineEdit(todo)}
+                    className="flex-1 min-w-0 text-left"
+                  >
+                    <span className={`text-sm block ${
+                      todo.completed
+                        ? 'text-gray-400 dark:text-gray-500 line-through decoration-gray-400 dark:decoration-gray-600'
+                        : 'text-gray-700 dark:text-gray-200'
+                    }`}>
+                      {todo.text}
                     </span>
-                  )}
-                </div>
+
+                    {/* Priority Badge */}
+                    {!todo.completed && (
+                      <span className={`inline-block mt-0.5 text-[9px] px-1.5 py-0.5 rounded ${priority.bg} ${priority.color}`}>
+                        {priority.label}
+                      </span>
+                    )}
+                  </button>
+                )}
 
                 {/* Delete Button */}
                 <button

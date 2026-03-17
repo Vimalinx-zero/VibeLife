@@ -1,5 +1,13 @@
+import { useEffect, useMemo, useState } from "react";
 import TodayTodos from "../components/TodayTodos";
+import { useToast } from "../context/ToastContext";
 import type { ScheduleEvent } from "../utils/workbenchApi";
+import {
+  clearScheduleEventInlineEdit,
+  createScheduleEventInlineEdit,
+  normalizeScheduleEventInlineEditDraft,
+  type ScheduleEventInlineEditDraft,
+} from "./scheduleEventInlineEdit";
 import type {
   ScheduleManualAddDraft,
   ScheduleSidebarTab,
@@ -46,6 +54,12 @@ interface ScheduleSidebarPanelProps {
   onToggleManualAdd: () => void;
   onDraftChange: (updates: Partial<ScheduleManualAddDraft>) => void;
   onSubmitManualAdd: () => void;
+  onUpdateEvent: (
+    eventId: string,
+    payload: Partial<
+      Pick<ScheduleEvent, "title" | "description" | "time" | "type">
+    >
+  ) => Promise<boolean>;
 }
 
 const ScheduleSidebarPanel = ({
@@ -62,7 +76,65 @@ const ScheduleSidebarPanel = ({
   onToggleManualAdd,
   onDraftChange,
   onSubmitManualAdd,
+  onUpdateEvent,
 }: ScheduleSidebarPanelProps) => {
+  const toast = useToast();
+  const [editingEvent, setEditingEvent] =
+    useState<ScheduleEventInlineEditDraft | null>(null);
+  const [isUpdatingEvent, setIsUpdatingEvent] = useState(false);
+  const selectedEventsVersion = useMemo(
+    () => selectedEvents.map((event) => `${event.id}:${event.updated_at}`).join("|"),
+    [selectedEvents]
+  );
+
+  useEffect(() => {
+    setEditingEvent(clearScheduleEventInlineEdit());
+    setIsUpdatingEvent(false);
+  }, [activeSidebarTab, selectedDateLabel, selectedEventsVersion]);
+
+  const handleStartEventEdit = (event: ScheduleEvent) => {
+    setEditingEvent(createScheduleEventInlineEdit(event));
+  };
+
+  const handleUpdateEditingEvent = (
+    updates: Partial<ScheduleEventInlineEditDraft>
+  ) => {
+    setEditingEvent((current) => {
+      if (!current) {
+        return current;
+      }
+
+      return {
+        ...current,
+        ...updates,
+      };
+    });
+  };
+
+  const handleCancelEventEdit = () => {
+    setEditingEvent(clearScheduleEventInlineEdit());
+  };
+
+  const handleSaveEventEdit = async () => {
+    if (!editingEvent || isUpdatingEvent) {
+      return;
+    }
+
+    const normalized = normalizeScheduleEventInlineEditDraft(editingEvent);
+    if (!normalized.ok) {
+      toast.error(normalized.message);
+      return;
+    }
+
+    setIsUpdatingEvent(true);
+    const succeeded = await onUpdateEvent(editingEvent.eventId, normalized.payload);
+    setIsUpdatingEvent(false);
+
+    if (succeeded) {
+      setEditingEvent(clearScheduleEventInlineEdit());
+    }
+  };
+
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
       <section className="shrink-0">
@@ -124,31 +196,157 @@ const ScheduleSidebarPanel = ({
                   </div>
                 ) : selectedEvents.length > 0 ? (
                   <div className="space-y-3">
-                    {selectedEvents.map((event) => (
-                      <div
-                        key={event.id}
-                        className="rounded-2xl border border-gray-200 bg-white p-3 dark:border-white/10 dark:bg-white/5"
-                      >
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`h-2.5 w-2.5 rounded-full ${getTypeColor(event.type)}`}
-                          />
-                          <span className="font-semibold text-gray-900 dark:text-white">
-                            {event.title}
-                          </span>
-                          {event.time && (
-                            <span className="text-xs text-gray-500 dark:text-gray-400">
-                              {event.time}
+                    {selectedEvents.map((event) => {
+                      const isEditing = editingEvent?.eventId === event.id;
+
+                      if (isEditing && editingEvent) {
+                        return (
+                          <div
+                            key={event.id}
+                            className="rounded-2xl border border-indigo-300 bg-white p-3 shadow-sm dark:border-indigo-400/40 dark:bg-black/20"
+                          >
+                            <div className="space-y-2">
+                              <input
+                                value={editingEvent.title}
+                                onChange={(currentEvent) =>
+                                  handleUpdateEditingEvent({
+                                    title: currentEvent.target.value,
+                                  })
+                                }
+                                onKeyDown={(currentEvent) => {
+                                  if (currentEvent.key === "Enter") {
+                                    currentEvent.preventDefault();
+                                    void handleSaveEventEdit();
+                                  }
+                                  if (currentEvent.key === "Escape") {
+                                    currentEvent.preventDefault();
+                                    handleCancelEventEdit();
+                                  }
+                                }}
+                                autoFocus
+                                placeholder="标题"
+                                disabled={isUpdatingEvent}
+                                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 outline-none transition-colors focus:border-indigo-400 dark:border-white/10 dark:bg-black/20 dark:text-white"
+                              />
+                              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_112px]">
+                                <textarea
+                                  value={editingEvent.description}
+                                  onChange={(currentEvent) =>
+                                    handleUpdateEditingEvent({
+                                      description: currentEvent.target.value,
+                                    })
+                                  }
+                                  onKeyDown={(currentEvent) => {
+                                    if (currentEvent.key === "Escape") {
+                                      currentEvent.preventDefault();
+                                      handleCancelEventEdit();
+                                    }
+                                  }}
+                                  placeholder="说明（可选）"
+                                  rows={2}
+                                  disabled={isUpdatingEvent}
+                                  className="w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-indigo-400 dark:border-white/10 dark:bg-black/20 dark:text-white"
+                                />
+                                <div className="space-y-2">
+                                  <input
+                                    value={editingEvent.time}
+                                    onChange={(currentEvent) =>
+                                      handleUpdateEditingEvent({
+                                        time: currentEvent.target.value,
+                                      })
+                                    }
+                                    onKeyDown={(currentEvent) => {
+                                      if (currentEvent.key === "Enter") {
+                                        currentEvent.preventDefault();
+                                        void handleSaveEventEdit();
+                                      }
+                                      if (currentEvent.key === "Escape") {
+                                        currentEvent.preventDefault();
+                                        handleCancelEventEdit();
+                                      }
+                                    }}
+                                    placeholder="时间"
+                                    disabled={isUpdatingEvent}
+                                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-indigo-400 dark:border-white/10 dark:bg-black/20 dark:text-white"
+                                  />
+                                  <select
+                                    value={editingEvent.type}
+                                    onChange={(currentEvent) =>
+                                      handleUpdateEditingEvent({
+                                        type: currentEvent.target.value,
+                                      })
+                                    }
+                                    disabled={isUpdatingEvent}
+                                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition-colors focus:border-indigo-400 dark:border-white/10 dark:bg-black/20 dark:text-white"
+                                  >
+                                    <option value="task">任务</option>
+                                    <option value="meeting">会议</option>
+                                    <option value="deadline">截止日期</option>
+                                    <option value="reminder">提醒</option>
+                                  </select>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="mt-3 flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                                <span
+                                  className={`h-2.5 w-2.5 rounded-full ${getTypeColor(
+                                    editingEvent.type
+                                  )}`}
+                                />
+                                <span>正在编辑</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={handleCancelEventEdit}
+                                  disabled={isUpdatingEvent}
+                                  className="rounded-lg px-3 py-1.5 text-xs font-medium text-gray-500 transition-colors hover:bg-black/5 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-300 dark:hover:bg-white/10 dark:hover:text-white"
+                                >
+                                  取消
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void handleSaveEventEdit()}
+                                  disabled={isUpdatingEvent}
+                                  className="rounded-lg bg-indigo-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  {isUpdatingEvent ? "保存中..." : "保存"}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <button
+                          type="button"
+                          key={event.id}
+                          onClick={() => handleStartEventEdit(event)}
+                          className="w-full rounded-2xl border border-gray-200 bg-white p-3 text-left transition-colors hover:border-indigo-300 hover:bg-indigo-50/40 dark:border-white/10 dark:bg-white/5 dark:hover:border-indigo-400/40 dark:hover:bg-white/10"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`h-2.5 w-2.5 rounded-full ${getTypeColor(event.type)}`}
+                            />
+                            <span className="font-semibold text-gray-900 dark:text-white">
+                              {event.title}
                             </span>
+                            {event.time && (
+                              <span className="text-xs text-gray-500 dark:text-gray-400">
+                                {event.time}
+                              </span>
+                            )}
+                          </div>
+                          {event.description && (
+                            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                              {event.description}
+                            </p>
                           )}
-                        </div>
-                        {event.description && (
-                          <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                            {event.description}
-                          </p>
-                        )}
-                      </div>
-                    ))}
+                        </button>
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">

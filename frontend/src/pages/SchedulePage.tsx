@@ -6,6 +6,7 @@ import {
   ScheduleEvent,
   createScheduleEvent,
   getScheduleEvents,
+  updateScheduleEvent,
 } from '../utils/workbenchApi';
 import { WORKBENCH_DATA_REFRESH_EVENT } from '../utils/workbenchTodoEvents';
 import {
@@ -238,6 +239,27 @@ const SchedulePage: React.FC = () => {
     toast,
   ]);
 
+  const handleUpdateEvent = useCallback(
+    async (
+      eventId: string,
+      payload: Partial<
+        Pick<ScheduleEvent, 'title' | 'description' | 'time' | 'type'>
+      >
+    ) => {
+      try {
+        await updateScheduleEvent(eventId, payload);
+        toast.success('日程已更新');
+        await loadEvents();
+        return true;
+      } catch (error) {
+        console.error('Failed to update schedule event:', error);
+        toast.error('更新日程失败');
+        return false;
+      }
+    },
+    [loadEvents, toast]
+  );
+
   const isInitialLoading = isLoading && events.length === 0;
 
   return (
@@ -401,6 +423,7 @@ const SchedulePage: React.FC = () => {
                 onToggleManualAdd={handleToggleManualAdd}
                 onDraftChange={handleDraftChange}
                 onSubmitManualAdd={() => void handleAddProgress()}
+                onUpdateEvent={handleUpdateEvent}
               />
             </GlassCard>
 
