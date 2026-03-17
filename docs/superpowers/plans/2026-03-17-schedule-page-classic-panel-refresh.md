@@ -23,6 +23,7 @@
 Add a failing `node:test` case in `frontend/tests/workbenchTodoEvents.test.mjs` that verifies:
 - a new `WORKBENCH_DATA_REFRESH_EVENT` constant exists,
 - `dispatchWorkbenchDataRefresh(target)` emits that event on any `EventTarget`,
+- `dispatchWorkbenchAiRefresh(target)` emits both refresh events on the same `EventTarget`,
 - the existing todo refresh behavior still works.
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -39,7 +40,8 @@ Update `frontend/src/utils/workbenchTodoEvents.ts` to export:
 - `WORKBENCH_TODOS_REFRESH_EVENT` unchanged,
 - new `WORKBENCH_DATA_REFRESH_EVENT`,
 - `dispatchWorkbenchTodosRefresh(...)` unchanged,
-- new `dispatchWorkbenchDataRefresh(...)`.
+- new `dispatchWorkbenchDataRefresh(...)`,
+- new `dispatchWorkbenchAiRefresh(...)` for AI success paths.
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -65,13 +67,11 @@ git commit -m "feat: add shared workbench data refresh event"
 
 - [ ] **Step 1: Add the new refresh import**
 
-Import `dispatchWorkbenchDataRefresh` beside the existing todo refresh dispatcher.
+Import `dispatchWorkbenchAiRefresh` from the shared event utility.
 
 - [ ] **Step 2: Update the OpenClaw success path**
 
-In the successful chat response branch of `handleSend`, dispatch:
-- `dispatchWorkbenchTodosRefresh()`
-- `dispatchWorkbenchDataRefresh()`
+In the successful chat response branch of `handleSend`, dispatch `dispatchWorkbenchAiRefresh()`.
 
 Keep all existing toast behavior, session updates, and failure handling unchanged.
 
@@ -93,7 +93,55 @@ git commit -m "feat: emit schedule data refresh after ai chat"
 
 ## Chunk 2: Schedule Page Layout and In-Place Refresh
 
-### Task 3: Make TodayTodos reusable for the schedule-side panel
+### Task 3: Add executable state tests for schedule-page local behavior
+
+**Files:**
+- Create: `frontend/src/pages/schedulePageState.ts`
+- Create: `frontend/tests/schedulePageState.test.mjs`
+
+- [ ] **Step 1: Write the failing test**
+
+Create `frontend/tests/schedulePageState.test.mjs` as a `node:test` suite for a small pure schedule-page state helper. Cover:
+- manual-add panel starts collapsed,
+- toggling collapsed/open does not clear draft fields,
+- refresh preservation keeps selected date and collapse state,
+- submit failure preserves draft fields,
+- submit success resets draft fields.
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run:
+```bash
+node --test frontend/tests/schedulePageState.test.mjs
+```
+Expected: FAIL because the helper module does not exist yet.
+
+- [ ] **Step 3: Write minimal implementation**
+
+Create `frontend/src/pages/schedulePageState.ts` with pure helper functions/state factories for:
+- initial page-side state,
+- composer toggle,
+- draft update,
+- refresh preservation,
+- draft reset after successful submit.
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run:
+```bash
+node --test frontend/tests/schedulePageState.test.mjs
+```
+Expected: PASS.
+
+- [ ] **Step 5: Commit**
+
+Run:
+```bash
+git add frontend/src/pages/schedulePageState.ts frontend/tests/schedulePageState.test.mjs
+git commit -m "test: cover schedule page local state transitions"
+```
+
+### Task 4: Make TodayTodos reusable for the schedule-side panel
 
 **Files:**
 - Modify: `frontend/src/components/TodayTodos.tsx`
@@ -107,7 +155,7 @@ Before editing, define the prop surface and expected behavior:
 - preserve existing interactions (add, toggle, delete),
 - default behavior remains unchanged for dashboard usage.
 
-Use a red-green change on TypeScript/build verification rather than adding a new UI test harness.
+Use `frontend/tests/schedulePageState.test.mjs` as the executable state safety net plus TypeScript/build verification. Do not add a new browser-test framework for this slice.
 
 - [ ] **Step 2: Implement minimal parameterization**
 
@@ -135,11 +183,12 @@ git add frontend/src/components/TodayTodos.tsx
 git commit -m "feat: parameterize today todos for schedule panel"
 ```
 
-### Task 4: Rebuild SchedulePage into the approved classic panel layout
+### Task 5: Rebuild SchedulePage into the approved classic panel layout
 
 **Files:**
 - Modify: `frontend/src/pages/SchedulePage.tsx`
-- Modify: `frontend/src/components/TodayTodos.tsx` (only if needed from Task 3)
+- Modify: `frontend/src/pages/schedulePageState.ts`
+- Modify: `frontend/src/components/TodayTodos.tsx` (only if needed from Task 4)
 - Reference: `frontend/src/utils/workbenchTodoEvents.ts`
 
 - [ ] **Step 1: Tighten the calendar grid**
@@ -178,16 +227,24 @@ In `frontend/src/pages/SchedulePage.tsx`, listen for `WORKBENCH_DATA_REFRESH_EVE
 
 Do not trigger a full page reload and do not add polling.
 
-- [ ] **Step 5: Run frontend verification**
+- [ ] **Step 5: Implement section-local error handling**
+
+Keep failure handling aligned with the spec:
+- schedule refresh failure should stay local to the schedule page and not reset the page shell,
+- submit failure must preserve draft field contents,
+- AI-triggered refresh failure must not wipe selected date or collapse state.
+
+- [ ] **Step 6: Run frontend verification**
 
 Run:
 ```bash
+node --test frontend/tests/workbenchTodoEvents.test.mjs frontend/tests/schedulePageState.test.mjs
 cd frontend && npx tsc --noEmit
 cd frontend && npm run build
 ```
 Expected: both PASS.
 
-- [ ] **Step 6: Run manual acceptance check on the dev server**
+- [ ] **Step 7: Run manual acceptance check on the dev server**
 
 Use the running app at `http://127.0.0.1:49173/schedule` and verify:
 - month cells are visibly tighter and late-month dates are readable,
@@ -195,32 +252,35 @@ Use the running app at `http://127.0.0.1:49173/schedule` and verify:
 - today todo list is interactive in the right panel,
 - manual add is collapsed on first load,
 - expanding/collapsing the form does not wipe draft text,
+- submit failure does not wipe draft text,
 - a successful AI reply updates schedule-page content in place without a browser refresh.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 Run:
 ```bash
-git add frontend/src/pages/SchedulePage.tsx frontend/src/components/TodayTodos.tsx
+git add frontend/src/pages/SchedulePage.tsx frontend/src/pages/schedulePageState.ts frontend/src/components/TodayTodos.tsx frontend/tests/schedulePageState.test.mjs
 git commit -m "feat: refresh schedule page classic panel layout"
 ```
 
 ## Chunk 3: Final Verification
 
-### Task 5: Verify the complete slice and leave the branch clean
+### Task 6: Verify the complete slice and leave the branch clean
 
 **Files:**
 - Verify: `frontend/src/utils/workbenchTodoEvents.ts`
 - Verify: `frontend/src/components/AIChatWidget.tsx`
 - Verify: `frontend/src/components/TodayTodos.tsx`
+- Verify: `frontend/src/pages/schedulePageState.ts`
 - Verify: `frontend/src/pages/SchedulePage.tsx`
 - Verify: `frontend/tests/workbenchTodoEvents.test.mjs`
+- Verify: `frontend/tests/schedulePageState.test.mjs`
 
 - [ ] **Step 1: Run shared event test**
 
 Run:
 ```bash
-node --test frontend/tests/workbenchTodoEvents.test.mjs
+node --test frontend/tests/workbenchTodoEvents.test.mjs frontend/tests/schedulePageState.test.mjs
 ```
 Expected: PASS.
 
@@ -244,7 +304,9 @@ Expected: PASS. Existing Vite chunk-size warnings are acceptable if exit code is
 
 Record whether:
 - selected date stayed stable after refresh,
+- right-panel scroll position stayed stable after refresh,
 - collapsed state stayed stable after refresh,
+- schedule-page local failure did not wipe drafts,
 - AI-triggered in-place refresh changed data without a full page reload.
 
 - [ ] **Step 5: Commit final integration if additional unstaged changes remain**
@@ -252,6 +314,6 @@ Record whether:
 Run:
 ```bash
 git status --short
-git add frontend/src/utils/workbenchTodoEvents.ts frontend/tests/workbenchTodoEvents.test.mjs frontend/src/components/AIChatWidget.tsx frontend/src/components/TodayTodos.tsx frontend/src/pages/SchedulePage.tsx docs/superpowers/specs/2026-03-17-schedule-page-classic-panel-refresh-design.md docs/superpowers/plans/2026-03-17-schedule-page-classic-panel-refresh.md
+git add frontend/src/utils/workbenchTodoEvents.ts frontend/tests/workbenchTodoEvents.test.mjs frontend/src/components/AIChatWidget.tsx frontend/src/components/TodayTodos.tsx frontend/src/pages/schedulePageState.ts frontend/tests/schedulePageState.test.mjs frontend/src/pages/SchedulePage.tsx
 git commit -m "feat: modernize schedule page refresh workflow"
 ```
