@@ -64,8 +64,7 @@ const TodayTodos = ({
       setCompletedCount(completed.length);
     } catch (error) {
       console.error('Failed to load todos:', error);
-      setTodos([]);
-      setCompletedCount(0);
+      toast.error('加载今日待办失败');
     } finally {
       setIsLoading(false);
     }
@@ -136,7 +135,7 @@ const TodayTodos = ({
   });
 
   return (
-    <div className="flex flex-col h-full">
+    <div className={variant === "schedule" ? "flex flex-col min-h-0" : "flex flex-col h-full"}>
       {/* Header */}
       <div className="mb-4">
         <h3 className="text-lg font-semibold dark:text-white text-gray-900 mb-1">{title}</h3>
