@@ -230,6 +230,53 @@ def run_legacy_cleanup_migrations() -> None:
                         {"sort_order": index, "todo_id": row["id"]},
                     )
 
+        if "quick_note_captures" in tables:
+            capture_columns = {
+                column["name"] for column in inspector.get_columns("quick_note_captures")
+            }
+
+            if "content_kind" not in capture_columns:
+                conn.exec_driver_sql(
+                    "ALTER TABLE quick_note_captures ADD COLUMN content_kind VARCHAR NOT NULL DEFAULT 'collected'"
+                )
+                capture_columns.add("content_kind")
+            if "category" not in capture_columns:
+                conn.exec_driver_sql(
+                    "ALTER TABLE quick_note_captures ADD COLUMN category VARCHAR"
+                )
+                capture_columns.add("category")
+            if "source_capture_ids" not in capture_columns:
+                conn.exec_driver_sql(
+                    "ALTER TABLE quick_note_captures ADD COLUMN source_capture_ids JSON"
+                )
+                capture_columns.add("source_capture_ids")
+            if "source_filter_snapshot" not in capture_columns:
+                conn.exec_driver_sql(
+                    "ALTER TABLE quick_note_captures ADD COLUMN source_filter_snapshot JSON"
+                )
+                capture_columns.add("source_filter_snapshot")
+            if "discussion_metadata" not in capture_columns:
+                conn.exec_driver_sql(
+                    "ALTER TABLE quick_note_captures ADD COLUMN discussion_metadata JSON"
+                )
+                capture_columns.add("discussion_metadata")
+
+            conn.exec_driver_sql(
+                "UPDATE quick_note_captures SET content_kind = 'collected' WHERE content_kind IS NULL OR trim(content_kind) = ''"
+            )
+            conn.exec_driver_sql(
+                "UPDATE quick_note_captures SET category = NULL WHERE trim(COALESCE(category, '')) = ''"
+            )
+            conn.exec_driver_sql(
+                "UPDATE quick_note_captures SET source_capture_ids = '[]' WHERE source_capture_ids IS NULL OR trim(CAST(source_capture_ids AS TEXT)) = ''"
+            )
+            conn.exec_driver_sql(
+                "UPDATE quick_note_captures SET source_filter_snapshot = NULL WHERE trim(COALESCE(CAST(source_filter_snapshot AS TEXT), '')) = ''"
+            )
+            conn.exec_driver_sql(
+                "UPDATE quick_note_captures SET discussion_metadata = NULL WHERE trim(COALESCE(CAST(discussion_metadata AS TEXT), '')) = ''"
+            )
+
 # 依赖项：每个请求创建一个独立的 DB 会话
 def get_db(): 
     db = SessionLocal() 

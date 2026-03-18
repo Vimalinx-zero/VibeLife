@@ -28,6 +28,7 @@ from auth_routes import router as auth_router  # ✨ 新增：认证路由
 from git_routes import router as git_router  # ✨ 新增：Git 管理路由
 from project_routes import router as project_router
 from quick_capture_routes import router as quick_capture_router
+from knowledge_routes import router as knowledge_router
 
 # 1. 数据库初始化：迁移旧表后创建当前表结构
 run_legacy_cleanup_migrations()
@@ -88,6 +89,7 @@ app.include_router(auth_router)
 app.include_router(git_router)
 app.include_router(project_router)
 app.include_router(quick_capture_router)
+app.include_router(knowledge_router)
 
 
 # =======================

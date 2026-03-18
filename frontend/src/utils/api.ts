@@ -151,6 +151,96 @@ export interface QuickCaptureRecordDTO {
   tags: string[];
   project_id: string | null;
   created_at: string;
+  updated_at?: string;
+  content_kind?: "collected" | "generated";
+  category?: string | null;
+  normalized_markdown?: string;
+  source_capture_ids?: string[];
+  source_filter_snapshot?: {
+    content_kind?: "collected" | "generated";
+    project_id?: string | null;
+    category?: string | null;
+    selected_entry_ids?: string[];
+  } | null;
+  discussion_metadata?: {
+    mode?: "entry" | "selection";
+    saved_at?: string;
+    user_prompt_excerpt?: string;
+    assistant_reply_excerpt?: string;
+  } | null;
+}
+
+export interface KnowledgeWorkshopFilters {
+  contentKind?: "collected" | "generated";
+  projectId?: string | null;
+  category?: string | null;
+}
+
+export interface KnowledgeCitationDTO {
+  id: string;
+  title: string;
+  content_kind: "collected" | "generated";
+  project_id: string | null;
+  category: string | null;
+}
+
+export interface KnowledgeDraftDTO {
+  title: string;
+  content_markdown: string;
+  tags: string[];
+  project_id: string | null;
+  category: string | null;
+}
+
+export interface KnowledgeDiscussionMessageDTO {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface KnowledgeSelectionDTO {
+  content_kind: "collected" | "generated";
+  project_id?: string | null;
+  category?: string | null;
+  selected_entry_ids?: string[];
+}
+
+export interface KnowledgeDiscussRequestDTO {
+  mode: "entry" | "selection";
+  message: string;
+  history: KnowledgeDiscussionMessageDTO[];
+  entry_id?: string;
+  selection?: KnowledgeSelectionDTO;
+}
+
+export interface KnowledgeDiscussResponseDTO {
+  reply: string;
+  context_mode: "entry" | "selection";
+  citations: KnowledgeCitationDTO[];
+  draft: KnowledgeDraftDTO | null;
+}
+
+export interface KnowledgeGeneratedPayloadDTO {
+  title: string;
+  content_markdown: string;
+  tags: string[];
+  project_id: string | null;
+  category: string | null;
+  source_capture_ids: string[];
+  source_filter_snapshot: KnowledgeSelectionDTO | null;
+  discussion_metadata: {
+    mode: "entry" | "selection";
+    saved_at: string;
+    user_prompt_excerpt: string;
+    assistant_reply_excerpt: string;
+  } | null;
+}
+
+export interface KnowledgeAppendPayloadDTO {
+  content_markdown: string;
+  tags: string[];
+  source_capture_ids: string[];
+  source_filter_snapshot: KnowledgeSelectionDTO | null;
+  discussion_metadata: KnowledgeGeneratedPayloadDTO["discussion_metadata"];
 }
 
 export const quickCaptureAPI = {
@@ -159,6 +249,8 @@ export const quickCaptureAPI = {
     source_uri: string;
     project_id?: string;
     title?: string;
+    category?: string;
+    tags?: string[];
   }): Promise<QuickCaptureRecordDTO> => {
     return apiClient
       .post<{ success: boolean; capture: QuickCaptureRecordDTO }>("/quick-capture", payload)
@@ -186,6 +278,117 @@ export const quickCaptureAPI = {
       .get<{ results: Array<{ id: string; score: number; title: string; summary: string; tags: string[]; source_type: string; project_id: string | null }> }>(`/quick-capture/search${suffix}`)
       .then((res) => res.data.results || []);
   }
+};
+
+const buildKnowledgeFilterQuery = (filters: KnowledgeWorkshopFilters = {}): string => {
+  const search = new URLSearchParams();
+  if (filters.contentKind) {
+    search.append("content_kind", filters.contentKind);
+  }
+  if (filters.projectId) {
+    search.append("project_id", filters.projectId);
+  }
+  if (filters.category) {
+    search.append("category", filters.category);
+  }
+  return search.toString();
+};
+
+export const knowledgeWorkshopAPI = {
+  listEntries: (filters: KnowledgeWorkshopFilters = {}): Promise<QuickCaptureRecordDTO[]> => {
+    const query = buildKnowledgeFilterQuery(filters);
+    const url = query ? `/quick-capture?${query}` : "/quick-capture";
+    return apiClient
+      .get<{ captures: QuickCaptureRecordDTO[] }>(url)
+      .then((res) => res.data.captures || []);
+  },
+  searchEntries: (
+    query: string,
+    filters: KnowledgeWorkshopFilters = {}
+  ): Promise<
+    Array<{
+      id: string;
+      score: number;
+      title: string;
+      summary: string;
+      tags: string[];
+      source_type: string;
+      project_id: string | null;
+      content_kind?: "collected" | "generated";
+      category?: string | null;
+    }>
+  > => {
+    const search = new URLSearchParams();
+    search.append("query", query);
+    const filterQuery = buildKnowledgeFilterQuery(filters);
+    if (filterQuery) {
+      for (const [key, value] of new URLSearchParams(filterQuery).entries()) {
+        search.append(key, value);
+      }
+    }
+    return apiClient
+      .get<{
+        results: Array<{
+          id: string;
+          score: number;
+          title: string;
+          summary: string;
+          tags: string[];
+          source_type: string;
+          project_id: string | null;
+          content_kind?: "collected" | "generated";
+          category?: string | null;
+        }>;
+      }>(`/quick-capture/search?${search.toString()}`)
+      .then((res) => res.data.results || []);
+  },
+  discuss: (payload: KnowledgeDiscussRequestDTO): Promise<KnowledgeDiscussResponseDTO> =>
+    apiClient
+      .post<KnowledgeDiscussResponseDTO>("/knowledge/discuss", payload)
+      .then((res) => res.data),
+  createGeneratedNote: (payload: KnowledgeGeneratedPayloadDTO): Promise<{ entry: QuickCaptureRecordDTO }> =>
+    apiClient
+      .post<{ entry: QuickCaptureRecordDTO }>("/knowledge/generated", payload)
+      .then((res) => res.data),
+  appendGeneratedNote: (
+    entryId: string,
+    payload: KnowledgeAppendPayloadDTO
+  ): Promise<{ entry: QuickCaptureRecordDTO }> =>
+    apiClient
+      .post<{ entry: QuickCaptureRecordDTO }>(`/knowledge/generated/${entryId}/append`, payload)
+      .then((res) => res.data),
+  uploadEntry: (payload: {
+    file: File;
+    sourceType: string;
+    title?: string;
+    projectId?: string | null;
+    category?: string | null;
+    tags?: string[];
+  }): Promise<QuickCaptureRecordDTO> => {
+    const formData = new FormData();
+    formData.append("file", payload.file);
+    formData.append("source_type", payload.sourceType);
+    if (payload.title?.trim()) {
+      formData.append("title", payload.title.trim());
+    }
+    if (payload.projectId?.trim()) {
+      formData.append("project_id", payload.projectId.trim());
+    }
+    if (payload.category?.trim()) {
+      formData.append("category", payload.category.trim());
+    }
+    if (payload.tags?.length) {
+      formData.append("tags", payload.tags.join(","));
+    }
+
+    return apiClient
+      .post<{ success: boolean; capture: QuickCaptureRecordDTO }>("/quick-capture/upload", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      })
+      .then((res) => res.data.capture);
+  },
 };
 
 export { apiClient };
