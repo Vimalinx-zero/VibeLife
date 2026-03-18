@@ -54,6 +54,14 @@ export interface KnowledgeWorkshopHistoryState {
   draft: KnowledgeDraftDTO | null;
 }
 
+export interface KnowledgeWorkshopNavigationState {
+  filters: KnowledgeWorkshopNormalizedFilters;
+  selectedEntryId: string | null;
+  selectedEntryIds: string[];
+  discussionMode: "entry";
+  searchQuery: string;
+}
+
 const normalizeText = (value: string | null | undefined): string | null => {
   const nextValue = typeof value === "string" ? value.trim() : "";
   return nextValue || null;
@@ -288,6 +296,52 @@ export const buildKnowledgeGeneratedSavePayload = (
     },
   };
 };
+
+const buildKnowledgeWorkshopNavigationState = (input: {
+  id: string | null | undefined;
+  contentKind: "collected" | "generated";
+  projectId?: string | null;
+  category?: string | null;
+}): KnowledgeWorkshopNavigationState => {
+  const selectedEntryId = normalizeText(input.id);
+
+  return {
+    filters: normalizeKnowledgeWorkshopFilters({
+      contentKind: input.contentKind,
+      projectId: input.projectId ?? null,
+      category: input.category ?? null,
+    }),
+    selectedEntryId,
+    selectedEntryIds: selectedEntryId ? [selectedEntryId] : [],
+    discussionMode: "entry",
+    searchQuery: "",
+  };
+};
+
+export const buildKnowledgeCitationNavigationState = (citation: {
+  id: string | null | undefined;
+  content_kind?: "collected" | "generated";
+  project_id?: string | null;
+  category?: string | null;
+}): KnowledgeWorkshopNavigationState =>
+  buildKnowledgeWorkshopNavigationState({
+    id: citation.id,
+    contentKind: citation.content_kind === "generated" ? "generated" : "collected",
+    projectId: citation.project_id ?? null,
+    category: citation.category ?? null,
+  });
+
+export const buildKnowledgeGeneratedEntryNavigationState = (entry: {
+  id: string | null | undefined;
+  project_id?: string | null;
+  category?: string | null;
+}): KnowledgeWorkshopNavigationState =>
+  buildKnowledgeWorkshopNavigationState({
+    id: entry.id,
+    contentKind: "generated",
+    projectId: entry.project_id ?? null,
+    category: entry.category ?? null,
+  });
 
 export const preserveKnowledgeDiscussionStateOnSaveFailure = <T extends KnowledgeDiscussionStateLike>(
   state: T,

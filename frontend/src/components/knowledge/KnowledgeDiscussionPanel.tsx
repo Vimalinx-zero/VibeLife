@@ -33,6 +33,7 @@ interface KnowledgeDiscussionPanelProps {
   onDiscussionInputChange: (value: string) => void;
   onSendDiscussion: () => void;
   onDraftChange: (draft: KnowledgeDraftDTO) => void;
+  onSelectCitation: (citationId: string) => void;
   onAppendTargetChange: (entryId: string | null) => void;
   onCreateGenerated: () => void;
   onAppendGenerated: () => void;
@@ -131,6 +132,7 @@ const KnowledgeDiscussionPanel = ({
   onDiscussionInputChange,
   onSendDiscussion,
   onDraftChange,
+  onSelectCitation,
   onAppendTargetChange,
   onCreateGenerated,
   onAppendGenerated,
@@ -235,15 +237,24 @@ const KnowledgeDiscussionPanel = ({
             <h3 className="text-sm font-semibold text-slate-900 dark:text-white">引用来源</h3>
             <div className="mt-3 space-y-2">
               {citations.map((citation) => (
-                <div
+                <button
                   key={citation.id}
-                  className="rounded-2xl border border-slate-200/80 px-3 py-2 text-sm text-slate-600 dark:border-white/10 dark:text-slate-300"
+                  type="button"
+                  onClick={() => onSelectCitation(citation.id)}
+                  className="w-full rounded-2xl border border-slate-200/80 px-3 py-2 text-left text-sm text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/5"
                 >
-                  <div className="font-medium text-slate-900 dark:text-white">{citation.title}</div>
-                  <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    {citation.project_id ? projectNameById[citation.project_id] ?? citation.project_id : "未归项目"} · {citation.category || "未分类"} · {citation.content_kind === "generated" ? "生成内容" : "收集内容"}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-medium text-slate-900 dark:text-white">{citation.title}</div>
+                      <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        {citation.project_id ? projectNameById[citation.project_id] ?? citation.project_id : "未归项目"} · {citation.category || "未分类"} · {citation.content_kind === "generated" ? "生成内容" : "收集内容"}
+                      </div>
+                    </div>
+                    <span className="shrink-0 text-[11px] font-medium text-slate-400 dark:text-slate-500">
+                      跳转
+                    </span>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           </div>

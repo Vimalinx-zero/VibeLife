@@ -20,6 +20,8 @@ import {
   type QuickCaptureRecordDTO,
 } from "../utils/api";
 import {
+  buildKnowledgeCitationNavigationState,
+  buildKnowledgeGeneratedEntryNavigationState,
   buildKnowledgeGeneratedSavePayload,
   collectKnowledgeWorkshopFacetOptions,
   createKnowledgeSelectionPayload,
@@ -480,6 +482,27 @@ const QuickCapturePage = () => {
     setActiveSearchQuery("");
   };
 
+  const applyNavigationState = ({
+    filters: nextFilters,
+    selectedEntryId: nextSelectedEntryId,
+    selectedEntryIds: nextSelectedEntryIds,
+    discussionMode: nextDiscussionMode,
+    searchQuery,
+  }: {
+    filters: KnowledgeWorkshopNormalizedFilters;
+    selectedEntryId: string | null;
+    selectedEntryIds: string[];
+    discussionMode: "entry";
+    searchQuery: string;
+  }) => {
+    setFilters(nextFilters);
+    setSelectedEntryId(nextSelectedEntryId);
+    setSelectedEntryIds(nextSelectedEntryIds);
+    setDiscussionMode(nextDiscussionMode);
+    setSearchInput(searchQuery);
+    setActiveSearchQuery(searchQuery);
+  };
+
   const handleSelectEntry = (entryId: string) => {
     setSelectedEntryId(entryId);
   };
@@ -491,6 +514,15 @@ const QuickCapturePage = () => {
         : [...current, entryId]
     );
     setSelectedEntryId(entryId);
+  };
+
+  const handleSelectCitation = (citationId: string) => {
+    const citation = discussionState.citations.find((item) => item.id === citationId);
+    if (!citation) {
+      return;
+    }
+
+    applyNavigationState(buildKnowledgeCitationNavigationState(citation));
   };
 
   const handleImportSubmit = async () => {
@@ -707,11 +739,11 @@ const QuickCapturePage = () => {
         pendingAction: null,
         saveError: null,
       }));
+      applyNavigationState(
+        buildKnowledgeGeneratedEntryNavigationState(response.entry)
+      );
+      setListReloadKey((value) => value + 1);
       setGeneratedReloadKey((value) => value + 1);
-      if (filters.contentKind === "generated") {
-        setListReloadKey((value) => value + 1);
-        setSelectedEntryId(response.entry.id);
-      }
       setAppendTargetId(response.entry.id);
       toast.success(`已保存生成笔记：${response.entry.title}`);
     } catch (error) {
@@ -743,7 +775,7 @@ const QuickCapturePage = () => {
     }));
 
     try {
-      await knowledgeWorkshopAPI.appendGeneratedNote(appendTargetId, {
+      const response = await knowledgeWorkshopAPI.appendGeneratedNote(appendTargetId, {
         content_markdown: payload.content_markdown,
         tags: payload.tags,
         source_capture_ids: payload.source_capture_ids,
@@ -758,11 +790,12 @@ const QuickCapturePage = () => {
         pendingAction: null,
         saveError: null,
       }));
+      applyNavigationState(
+        buildKnowledgeGeneratedEntryNavigationState(response.entry)
+      );
+      setListReloadKey((value) => value + 1);
       setGeneratedReloadKey((value) => value + 1);
-      if (filters.contentKind === "generated") {
-        setListReloadKey((value) => value + 1);
-        setSelectedEntryId(appendTargetId);
-      }
+      setAppendTargetId(response.entry.id);
       toast.success("已追加到现有生成笔记");
     } catch (error) {
       const message = getErrorMessage(error, "追加生成笔记失败");
@@ -873,6 +906,7 @@ const QuickCapturePage = () => {
                 saveError: null,
               }))
             }
+            onSelectCitation={handleSelectCitation}
             onAppendTargetChange={setAppendTargetId}
             onCreateGenerated={handleCreateGenerated}
             onAppendGenerated={handleAppendGenerated}

@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  buildKnowledgeCitationNavigationState,
+  buildKnowledgeGeneratedEntryNavigationState,
   buildKnowledgeGeneratedSavePayload,
   collectKnowledgeWorkshopFacetOptions,
   createKnowledgeSelectionPayload,
@@ -135,6 +137,47 @@ test("buildKnowledgeGeneratedSavePayload shapes generated-note payload from the 
       user_prompt_excerpt: "帮我整理成结构化笔记",
       assistant_reply_excerpt: "以下是整理后的结构化草稿",
     },
+  });
+});
+
+test("buildKnowledgeCitationNavigationState jumps back to the cited entry and clears stale search state", () => {
+  const result = buildKnowledgeCitationNavigationState({
+    id: " capture-9 ",
+    content_kind: "collected",
+    project_id: " project-alpha ",
+    category: " research ",
+  });
+
+  assert.deepEqual(result, {
+    filters: {
+      contentKind: "collected",
+      projectId: "project-alpha",
+      category: "research",
+    },
+    selectedEntryId: "capture-9",
+    selectedEntryIds: ["capture-9"],
+    discussionMode: "entry",
+    searchQuery: "",
+  });
+});
+
+test("buildKnowledgeGeneratedEntryNavigationState switches to generated content and focuses the saved result", () => {
+  const result = buildKnowledgeGeneratedEntryNavigationState({
+    id: " generated-4 ",
+    project_id: " project-beta ",
+    category: " synthesis ",
+  });
+
+  assert.deepEqual(result, {
+    filters: {
+      contentKind: "generated",
+      projectId: "project-beta",
+      category: "synthesis",
+    },
+    selectedEntryId: "generated-4",
+    selectedEntryIds: ["generated-4"],
+    discussionMode: "entry",
+    searchQuery: "",
   });
 });
 
