@@ -6,14 +6,15 @@ import { useTheme } from "../context/ThemeContext";
 import { useAuth } from "../context/AuthContext";  // ✅ 导入 AuthContext
 import { useToast } from "../context/ToastContext";
 import TodayTodos from "../components/TodayTodos";
-import { dispatchWorkbenchTodosRefresh } from "../utils/workbenchTodoEvents";
+import { dispatchWorkbenchAiRefresh, WORKBENCH_DATA_REFRESH_EVENT } from "../utils/workbenchTodoEvents";
 import {
   normalizeCoachData,
   type CoachData,
-  type CoachAdaptive,
-  type CoachSuggestion,
-  type CoachSnapshot,
 } from "./dashboardCoachData";
+import {
+  normalizeWorkbenchPrepareData,
+  type WorkbenchPrepareSummary,
+} from "./dashboardWorkbenchPrepareData";
 
 // --- 纯手写 SVG 图标 ---
 const Icons = {
@@ -92,6 +93,7 @@ function Dashboard() {
   const [coachLoading, setCoachLoading] = useState<boolean>(true);
   const [coachGenerating, setCoachGenerating] = useState<boolean>(false);
   const [todayJournalCount, setTodayJournalCount] = useState<number>(0);
+  const [lastPreparedWorkbench, setLastPreparedWorkbench] = useState<WorkbenchPrepareSummary | null>(null);
 
   // 更新时钟
   useEffect(() => {
@@ -113,97 +115,95 @@ function Dashboard() {
     };
   }, []);
 
-  // 获取数据
+  const loadCoach = async () => {
+    const dateKey = getTodayDateKey();
+
+    try {
+      setCoachLoading(true);
+      const response = await apiClient.get('/ai/coach/today', {
+        params: { date_key: dateKey },
+      });
+      if (response.data?.success) {
+        setCoachData(normalizeCoachData(response.data));
+      }
+    } catch (error) {
+      console.error('Failed to load coach data:', error);
+    } finally {
+      setCoachLoading(false);
+    }
+  };
+
+  const fetchDashboardData = async () => {
+    try {
+      const statsRes = await apiClient.get("/dashboard");
+      if(statsRes.data) setStats(statsRes.data);
+
+      const todayStatsRes = await apiClient.get("/dashboard/stats");
+      if(todayStatsRes.data) setTodayStats(todayStatsRes.data);
+
+      const journalRes = await apiClient.get("/workbench/journal", {
+        params: {
+          entry_date: getTodayDateKey(),
+          limit: 200,
+        }
+      });
+      setTodayJournalCount(Array.isArray(journalRes.data) ? journalRes.data.length : 0);
+
+    } catch (error) {
+      console.log("后端未连接或未认证，使用模拟数据");
+      setTodayStats({
+        focus_minutes: 0,
+        notes_created: 0,
+        journal_entries: 0,
+        completed_todos: 0
+      });
+      setTodayJournalCount(0);
+    }
+  };
+
   useEffect(() => {
     if (!token) {
       return;
     }
 
-    const loadCoach = async () => {
-      try {
-        setCoachLoading(true);
-        const response = await apiClient.get('/ai/coach/today', {
-          params: { date_key: getTodayDateKey() },
-        });
-        if (response.data?.success) {
-          setCoachData(normalizeCoachData(response.data));
-        }
-      } catch (error) {
-        console.error('Failed to load coach data:', error);
-      } finally {
-        setCoachLoading(false);
-      }
+    void fetchDashboardData();
+    void loadCoach();
+
+    const handleRefresh = () => {
+      void fetchDashboardData();
+      void loadCoach();
     };
 
-    const fetchData = async () => {
-      try {
-        // 获取基础统计
-        const statsRes = await apiClient.get("/dashboard");
-        if(statsRes.data) setStats(statsRes.data);
-
-        // 获取专注统计
-        const todayStatsRes = await apiClient.get("/dashboard/stats");
-        if(todayStatsRes.data) setTodayStats(todayStatsRes.data);
-
-        const journalRes = await apiClient.get("/workbench/journal", {
-          params: {
-            entry_date: getTodayDateKey(),
-            limit: 200,
-          }
-        });
-        setTodayJournalCount(Array.isArray(journalRes.data) ? journalRes.data.length : 0);
-
-      } catch (error) {
-        console.log("后端未连接或未认证，使用模拟数据");
-
-        // 模拟数据
-        setTodayStats({
-          focus_minutes: 0,
-          notes_created: 0,
-          journal_entries: 0,
-          completed_todos: 0
-        });
-        setTodayJournalCount(0);
-
-      }
+    window.addEventListener(WORKBENCH_DATA_REFRESH_EVENT, handleRefresh);
+    return () => {
+      window.removeEventListener(WORKBENCH_DATA_REFRESH_EVENT, handleRefresh);
     };
+  }, [token]);
 
-    fetchData();
-    loadCoach();
-  }, [token]);  // ✅ 依赖 token
-
-  const handleGenerateTodayPlan = async () => {
+  const handlePrepareWorkbench = async () => {
     const dateKey = getTodayDateKey();
 
     try {
       setCoachGenerating(true);
-      const response = await apiClient.post('/ai/coach/today/plan', {
+      const response = await apiClient.post('/ai/workbench/prepare', {
         date_key: dateKey,
         max_items: coachData?.adaptive?.recommended_plan_items || 3
       });
-      const createdCount = response.data?.created_count || 0;
-      const skippedCount = response.data?.skipped_count || 0;
 
-      if (createdCount > 0) {
-        toast.success(`✅ 已生成 ${createdCount} 条今日任务`);
+      const prepared = normalizeWorkbenchPrepareData(response.data);
+      setLastPreparedWorkbench(prepared);
+      dispatchWorkbenchAiRefresh();
+      await Promise.all([fetchDashboardData(), loadCoach()]);
+
+      if (prepared.dailyPlan.createdCount > 0) {
+        toast.success(`✅ 已准备工作台，生成 ${prepared.dailyPlan.createdCount} 条今日任务`);
       } else {
-        toast.info('ℹ️ 今日任务已存在，无需重复生成');
+        toast.success(`✅ 已准备工作台${prepared.projectDigest.count > 0 ? `，聚焦 ${prepared.projectDigest.count} 个项目` : ''}`);
       }
 
-      if (skippedCount > 0) {
-        console.log(`Skipped ${skippedCount} duplicated tasks`);
-      }
-
-      const coachResponse = await apiClient.get('/ai/coach/today', {
-        params: { date_key: dateKey },
-      });
-      if (coachResponse.data?.success) {
-        setCoachData(normalizeCoachData(coachResponse.data));
-      }
-
-      dispatchWorkbenchTodosRefresh();
+      navigate('/workbench');
     } catch (error: any) {
-      toast.error(`❌ 生成计划失败: ${error?.response?.data?.detail || error?.message || '未知错误'}`);
+      toast.error(`❌ 准备工作台失败: ${error?.response?.data?.detail || error?.message || '未知错误'}`);
     } finally {
       setCoachGenerating(false);
     }
@@ -400,16 +400,16 @@ function Dashboard() {
         <GlassCard className="col-span-1 md:col-span-2 md:row-span-2 p-5 h-[300px] md:h-[320px] overflow-hidden" delay={0.58}>
           <div className="flex items-start justify-between gap-4 mb-4">
             <div>
-              <h3 className="text-lg font-bold dark:text-white text-gray-900">一键生成今日计划</h3>
-              <p className="text-xs text-gray-500 mt-1">基于项目进度和待办自动生成行动建议</p>
+              <h3 className="text-lg font-bold dark:text-white text-gray-900">一键准备工作台</h3>
+              <p className="text-xs text-gray-500 mt-1">自动重排今日待办并汇总当前项目焦点，准备后直接进入工作台</p>
             </div>
             <button
               type="button"
-              onClick={handleGenerateTodayPlan}
+              onClick={handlePrepareWorkbench}
               disabled={coachGenerating || coachLoading}
               className="px-3 py-2 text-xs font-semibold rounded-lg bg-indigo-500 hover:bg-indigo-600 text-white transition-colors disabled:opacity-60"
             >
-              {coachGenerating ? '生成中...' : '生成计划'}
+              {coachGenerating ? '准备中...' : '准备后进入'}
             </button>
           </div>
 
@@ -434,7 +434,7 @@ function Dashboard() {
               </div>
 
               <p className="text-sm text-gray-700 dark:text-gray-200 mb-4">
-                {coachData?.coach_message || '先完成高优先级任务，再做项目推进。'}
+                {lastPreparedWorkbench?.coachMessage || coachData?.coach_message || '先完成高优先级任务，再做项目推进。'}
               </p>
 
               <div className="flex flex-wrap gap-2 mb-4">
@@ -447,33 +447,60 @@ function Dashboard() {
                 <span className="text-xs rounded-full px-3 py-1 bg-sky-500/10 text-sky-600 dark:text-sky-300">
                   日均工作 {coachData?.adaptive?.avg_daily_focus_minutes || 0} min
                 </span>
+                {lastPreparedWorkbench ? (
+                  <span className="text-xs rounded-full px-3 py-1 bg-rose-500/10 text-rose-600 dark:text-rose-300">
+                    本次生成 {lastPreparedWorkbench.dailyPlan.createdCount}
+                  </span>
+                ) : null}
               </div>
 
               <p className="text-xs text-gray-500 mb-4">
                 策略重点：{coachData?.adaptive?.focus || '按优先级完成关键任务'}
               </p>
 
-              <div className="space-y-2">
-                {(coachData?.suggestions || []).slice(0, 3).map((suggestion, index) => (
-                  <div key={suggestion.id} className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2">
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold dark:text-white text-gray-900 truncate">
-                        {index + 1}. {suggestion.title}
-                      </div>
-                      <div className="text-xs text-gray-500 truncate">
-                        {suggestion.reason} · 约 {suggestion.estimated_minutes} 分钟
+              {lastPreparedWorkbench?.projectDigest.projects.length ? (
+                <div className="space-y-2">
+                  {lastPreparedWorkbench.projectDigest.projects.slice(0, 3).map((project, index) => (
+                    <div key={project.projectId || `${project.name}-${index}`} className="rounded-lg border border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold dark:text-white text-gray-900 truncate">
+                            {index + 1}. {project.name}
+                          </div>
+                          <div className="text-xs text-gray-500 truncate">
+                            状态 {project.status || '未标注'} · 下一步 {project.nextAction || '待补充'}
+                          </div>
+                        </div>
+                        <div className="shrink-0 text-[11px] rounded-full px-2.5 py-1 bg-white/60 dark:bg-white/10 text-gray-600 dark:text-gray-300">
+                          未完成 {project.pendingSteps.length}
+                        </div>
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => navigate(suggestion.target)}
-                      className="text-xs px-2.5 py-1.5 rounded-md bg-white/60 dark:bg-white/10 hover:bg-white dark:hover:bg-white/20 transition-colors"
-                    >
-                      去执行
-                    </button>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {(coachData?.suggestions || []).slice(0, 3).map((suggestion, index) => (
+                    <div key={suggestion.id} className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-black/5 dark:bg-white/5 px-3 py-2">
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold dark:text-white text-gray-900 truncate">
+                          {index + 1}. {suggestion.title}
+                        </div>
+                        <div className="text-xs text-gray-500 truncate">
+                          {suggestion.reason} · 约 {suggestion.estimated_minutes} 分钟
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => navigate(suggestion.target)}
+                        className="text-xs px-2.5 py-1.5 rounded-md bg-white/60 dark:bg-white/10 hover:bg-white dark:hover:bg-white/20 transition-colors"
+                      >
+                        去执行
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
               </>
             )}
           </div>
