@@ -17,7 +17,7 @@ import openclaw_bridge  # noqa: E402
 class OpenClawBridgeTest(unittest.TestCase):
     def setUp(self):
         openclaw_bridge._verified_agents.clear()
-        openclaw_bridge._verified_agents.add("main")
+        openclaw_bridge._verified_agents.add(openclaw_bridge._verified_agent_key("main"))
 
     def test_ensure_openclaw_agent_reuses_existing_agent_even_with_warning_prefixed_json(self):
         list_output = (
@@ -41,7 +41,10 @@ class OpenClawBridgeTest(unittest.TestCase):
         with patch("openclaw_bridge._run_openclaw_command", side_effect=fake_run):
             openclaw_bridge.ensure_openclaw_agent("vibelife-u_138603f6", timeout_seconds=5)
 
-        self.assertIn("vibelife-u_138603f6", openclaw_bridge._verified_agents)
+        self.assertIn(
+            openclaw_bridge._verified_agent_key("vibelife-u_138603f6"),
+            openclaw_bridge._verified_agents,
+        )
 
     def test_ensure_openclaw_agent_treats_already_exists_add_error_as_success(self):
         def fake_run(command, *, timeout_seconds):
@@ -65,7 +68,68 @@ class OpenClawBridgeTest(unittest.TestCase):
         with patch("openclaw_bridge._run_openclaw_command", side_effect=fake_run):
             openclaw_bridge.ensure_openclaw_agent("vibelife-u_138603f6", timeout_seconds=5)
 
-        self.assertIn("vibelife-u_138603f6", openclaw_bridge._verified_agents)
+        self.assertIn(
+            openclaw_bridge._verified_agent_key("vibelife-u_138603f6"),
+            openclaw_bridge._verified_agents,
+        )
+
+    def test_ensure_openclaw_agent_updates_existing_agent_model_when_requested_model_differs(self):
+        calls = []
+
+        def fake_run(command, *, timeout_seconds):
+            calls.append(command)
+
+            class Result:
+                def __init__(self, returncode, stdout="", stderr=""):
+                    self.returncode = returncode
+                    self.stdout = stdout
+                    self.stderr = stderr
+
+            if command[:3] == ["openclaw", "agents", "list"]:
+                return Result(
+                    0,
+                    stdout=json.dumps(
+                        [
+                            {
+                                "id": "vibelife-u_138603f6",
+                                "workspace": "/tmp/workspace-vibelife",
+                                "model": "rightcodes/gpt-5.4",
+                            }
+                        ]
+                    ),
+                )
+            if command[:3] == ["openclaw", "config", "set"]:
+                return Result(0, stdout="ok")
+            raise AssertionError(f"unexpected command: {command}")
+
+        with patch("openclaw_bridge._run_openclaw_command", side_effect=fake_run):
+            openclaw_bridge.ensure_openclaw_agent(
+                "vibelife-u_138603f6",
+                model="zai/glm-4.7",
+                timeout_seconds=5,
+            )
+
+        self.assertEqual(
+            calls,
+            [
+                ["openclaw", "agents", "list", "--json"],
+                [
+                    "openclaw",
+                    "config",
+                    "set",
+                    "agents.list[0].model",
+                    '"zai/glm-4.7"',
+                    "--strict-json",
+                ],
+            ],
+        )
+        self.assertIn(
+            openclaw_bridge._verified_agent_key(
+                "vibelife-u_138603f6",
+                "zai/glm-4.7",
+            ),
+            openclaw_bridge._verified_agents,
+        )
 
     def test_run_openclaw_agent_returns_structured_result_with_raw_payloads(self):
         stdout = '{"content":"已创建待办 todo_123","payloads":[{"tool":"vibelife_todo_create","isError":false,"result":{"id":"todo_123","text":"补测试"}}]}'

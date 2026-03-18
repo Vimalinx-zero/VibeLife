@@ -5,6 +5,7 @@ import path from "node:path"
 
 const DEFAULT_BASE_URL = "http://127.0.0.1:49174";
 const DEFAULT_TIMEOUT_MS = 30000;
+const LONG_RUNNING_TIMEOUT_MS = 180000;
 const DEFAULT_OPENCLAW_AGENT = "vibelife"
 const OPENCLAW_STATE_ROOT = path.join(os.homedir(), ".openclaw")
 
@@ -80,8 +81,19 @@ function summarizeErrorPayload(payload, fallbackText) {
 }
 
 async function requestJson(api, path, options = {}) {
-  const { method = "GET", body, query, requireAuth = true } = options;
+  const {
+    method = "GET",
+    body,
+    query,
+    requireAuth = true,
+    minimumTimeoutMs,
+  } = options;
   const config = resolveClientConfig(api);
+  const requestedMinimumTimeoutMs = Number(minimumTimeoutMs);
+  const effectiveTimeoutMs =
+    Number.isFinite(requestedMinimumTimeoutMs) && requestedMinimumTimeoutMs > 0
+      ? Math.max(config.timeoutMs, requestedMinimumTimeoutMs)
+      : config.timeoutMs;
 
   if (requireAuth && !config.authToken) {
     throw new Error(
@@ -90,7 +102,7 @@ async function requestJson(api, path, options = {}) {
   }
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), config.timeoutMs);
+  const timeoutId = setTimeout(() => controller.abort(), effectiveTimeoutMs);
   const headers = {
     Accept: "application/json",
   };
@@ -420,6 +432,7 @@ function defineTools(api) {
         handler: (params) =>
           requestJson(api, "/api/ai/coach/today/plan", {
             method: "POST",
+            minimumTimeoutMs: LONG_RUNNING_TIMEOUT_MS,
             body: cleanObject({
               date_key:
                 typeof params.dateKey === "string" && params.dateKey.trim()
@@ -448,6 +461,7 @@ function defineTools(api) {
         handler: (params) =>
           requestJson(api, "/api/ai/workbench/prepare", {
             method: "POST",
+            minimumTimeoutMs: LONG_RUNNING_TIMEOUT_MS,
             body: cleanObject({
               date_key:
                 typeof params.dateKey === "string" && params.dateKey.trim()

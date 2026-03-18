@@ -317,3 +317,50 @@ test("workbench prepare tool defaults dateKey to the local date", async () => {
     globalThis.fetch = originalFetch
   }
 })
+
+test("long-running AI tools raise the timeout floor above the plugin default", async () => {
+  const calls = []
+  const timeouts = []
+  const originalFetch = globalThis.fetch
+  const originalSetTimeout = globalThis.setTimeout
+  const originalClearTimeout = globalThis.clearTimeout
+
+  globalThis.setTimeout = ((handler, timeout, ...args) => {
+    timeouts.push(timeout)
+    return { fakeTimer: true, handler, args }
+  })
+  globalThis.clearTimeout = () => {}
+  globalThis.fetch = async (url, options = {}) => {
+    calls.push({ url, options })
+    return {
+      ok: true,
+      status: 200,
+      async text() {
+        return JSON.stringify({ success: true })
+      },
+    }
+  }
+
+  try {
+    const tools = collectTools({
+      authToken: "test-token",
+      baseUrl: "http://127.0.0.1:49174",
+      timeoutMs: 45000,
+    })
+    const dailyPlanTool = tools.find((entry) => entry.name === "vibelife_daily_plan_refresh")
+    const workbenchTool = tools.find((entry) => entry.name === "vibelife_workbench_prepare")
+
+    assert.ok(dailyPlanTool, "expected vibelife_daily_plan_refresh to be registered")
+    assert.ok(workbenchTool, "expected vibelife_workbench_prepare to be registered")
+
+    await dailyPlanTool.execute("tool_daily_timeout", {})
+    await workbenchTool.execute("tool_workbench_timeout", {})
+
+    assert.equal(calls.length, 2)
+    assert.deepEqual(timeouts, [180000, 180000])
+  } finally {
+    globalThis.fetch = originalFetch
+    globalThis.setTimeout = originalSetTimeout
+    globalThis.clearTimeout = originalClearTimeout
+  }
+})

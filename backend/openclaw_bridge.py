@@ -14,7 +14,19 @@ OPENCLAW_STATE_ROOT = Path.home() / ".openclaw"
 DEFAULT_OPENCLAW_WORKSPACE = str(Path.home() / ".openclaw" / "workspace")
 DEFAULT_VIBELIFE_WORKSPACE = str(Path.home() / ".openclaw" / "workspace-vibelife")
 DEFAULT_OPENCLAW_MODEL = "rightcodes/gpt-5.4"
-_verified_agents = {"main"}
+
+
+def _verified_agent_key(agent: str, model: Optional[str] = None) -> str:
+    normalized_agent = str(agent).strip() or "main"
+    normalized_model = str(model).strip() if isinstance(model, str) else ""
+    return (
+        normalized_agent
+        if not normalized_model
+        else f"{normalized_agent}::{normalized_model}"
+    )
+
+
+_verified_agents = {_verified_agent_key("main")}
 _verified_agents_lock = threading.Lock()
 
 
@@ -293,11 +305,14 @@ def ensure_openclaw_agent(
     timeout_seconds: int = 30,
 ) -> None:
     normalized_agent = str(agent).strip() or "main"
-    if normalized_agent in _verified_agents:
+    requested_model = str(model).strip() if isinstance(model, str) and model.strip() else None
+    requested_key = _verified_agent_key(normalized_agent, requested_model)
+
+    if requested_key in _verified_agents:
         return
 
     with _verified_agents_lock:
-        if normalized_agent in _verified_agents:
+        if requested_key in _verified_agents:
             return
 
         list_result = _run_openclaw_command(
@@ -310,9 +325,29 @@ def ensure_openclaw_agent(
 
         parsed_agents = _parse_openclaw_output(list_result.stdout)
         if isinstance(parsed_agents, list):
-            for item in parsed_agents:
+            for index, item in enumerate(parsed_agents):
                 if isinstance(item, dict) and str(item.get("id", "")).strip() == normalized_agent:
-                    _verified_agents.add(normalized_agent)
+                    current_model = str(item.get("model", "")).strip()
+                    if requested_model and current_model and current_model != requested_model:
+                        update_result = _run_openclaw_command(
+                            [
+                                "openclaw",
+                                "config",
+                                "set",
+                                f"agents.list[{index}].model",
+                                json.dumps(requested_model, ensure_ascii=False),
+                                "--strict-json",
+                            ],
+                            timeout_seconds=timeout_seconds,
+                        )
+                        if update_result.returncode != 0:
+                            error_text = (
+                                update_result.stderr.strip()
+                                or update_result.stdout.strip()
+                                or "unknown error"
+                            )
+                            raise OpenClawBridgeError(f"OpenClaw 智能体模型更新失败: {error_text}")
+                    _verified_agents.add(requested_key)
                     return
 
         workspace = _resolve_openclaw_workspace(normalized_agent)
@@ -353,7 +388,7 @@ def ensure_openclaw_agent(
                 return
             raise OpenClawBridgeError(f"OpenClaw 智能体创建失败: {error_text}")
 
-        _verified_agents.add(normalized_agent)
+        _verified_agents.add(requested_key)
 
 
 def _read_latest_session_reply(agent: str, user_message: str) -> str:
