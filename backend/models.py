@@ -62,6 +62,7 @@ class TodoItem(Base):
     created_at = Column(String, default=lambda: datetime.datetime.utcnow().isoformat())
     completed_at = Column(String, nullable=True)
     due_date = Column(String, nullable=True)
+    sort_order = Column(Integer, nullable=True)
 
 
 class ActivityCheckpoint(Base):

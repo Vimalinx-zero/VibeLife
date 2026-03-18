@@ -110,7 +110,72 @@ def _serialize_todo(todo: models.TodoItem) -> dict:
         "created_at": todo.created_at,
         "completed_at": todo.completed_at,
         "due_date": todo.due_date,
+        "sort_order": todo.sort_order,
     }
+
+
+def _todo_legacy_sort_key(todo: models.TodoItem) -> tuple:
+    due_date = (todo.due_date or "").strip()
+    created_at = (todo.created_at or "").strip()
+    priority = int(todo.priority or 0)
+    return (-priority, due_date == "", due_date, created_at, todo.id)
+
+
+def _normalize_incomplete_todo_order(db: Session, user_id: str) -> list[models.TodoItem]:
+    todos = (
+        db.query(models.TodoItem)
+        .filter(
+            models.TodoItem.user_id == user_id,
+            models.TodoItem.completed == False,  # noqa: E712
+        )
+        .all()
+    )
+
+    if not todos:
+        return []
+
+    current_orders = [todo.sort_order for todo in todos]
+    valid_orders = [
+        int(value)
+        for value in current_orders
+        if isinstance(value, int) and value > 0
+    ]
+    has_invalid_order = (
+        len(valid_orders) != len(todos)
+        or len(set(valid_orders)) != len(valid_orders)
+        or sorted(valid_orders) != list(range(1, len(todos) + 1))
+    )
+
+    if has_invalid_order:
+        ordered = sorted(todos, key=_todo_legacy_sort_key)
+        for index, todo in enumerate(ordered, start=1):
+            todo.sort_order = index
+        db.commit()
+        for todo in ordered:
+            db.refresh(todo)
+        return ordered
+
+    return sorted(
+        todos,
+        key=lambda todo: (int(todo.sort_order or 0), (todo.created_at or "").strip(), todo.id),
+    )
+
+
+def _get_completed_todos(
+    db: Session,
+    user_id: str,
+    subject: Optional[str] = None,
+) -> list[models.TodoItem]:
+    query = db.query(models.TodoItem).filter(
+        models.TodoItem.user_id == user_id,
+        models.TodoItem.completed == True,  # noqa: E712
+    )
+    if subject:
+        query = query.filter(models.TodoItem.subject == subject)
+    return query.order_by(
+        models.TodoItem.completed_at.desc(),
+        models.TodoItem.created_at.desc(),
+    ).all()
 
 # ========================
 # Schemas
@@ -130,6 +195,13 @@ class TodoItemCreate(pydantic.BaseModel):
             raise ValueError("Todo text cannot be empty")
         return text
 
+    @pydantic.field_validator("due_date")
+    @classmethod
+    def validate_due_date(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        return _validate_iso_date(value, "due_date")
+
 class TodoItemUpdate(pydantic.BaseModel):
     text: Optional[str] = None
     completed: Optional[bool] = None
@@ -146,6 +218,27 @@ class TodoItemUpdate(pydantic.BaseModel):
         if not text:
             raise ValueError("Todo text cannot be empty")
         return text
+
+    @pydantic.field_validator("due_date")
+    @classmethod
+    def validate_due_date(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        return _validate_iso_date(value, "due_date")
+
+
+class TodoReorderRequest(pydantic.BaseModel):
+    ordered_ids: List[str]
+
+    @pydantic.field_validator("ordered_ids")
+    @classmethod
+    def validate_ordered_ids(cls, value: List[str]) -> List[str]:
+        normalized = [item.strip() for item in value if isinstance(item, str) and item.strip()]
+        if not normalized:
+            raise ValueError("ordered_ids cannot be empty")
+        if len(normalized) != len(set(normalized)):
+            raise ValueError("ordered_ids cannot contain duplicates")
+        return normalized
 
 class FocusSessionCreate(pydantic.BaseModel):
     duration_minutes: int
@@ -306,15 +399,17 @@ async def get_todos(
     db: Session = Depends(get_db)
 ):
     """获取所有任务（带用户隔离）"""
-    query = db.query(models.TodoItem).filter(models.TodoItem.user_id == current_user_id)  # ✅ 用户隔离
-
-    if completed is not None:
-        query = query.filter(models.TodoItem.completed == completed)
-
+    incomplete_todos = _normalize_incomplete_todo_order(db, current_user_id)
     if subject:
-        query = query.filter(models.TodoItem.subject == subject)
+        incomplete_todos = [todo for todo in incomplete_todos if todo.subject == subject]
+    completed_todos = _get_completed_todos(db, current_user_id, subject)
 
-    todos = query.order_by(models.TodoItem.created_at.desc()).all()
+    if completed is True:
+        todos = completed_todos
+    elif completed is False:
+        todos = incomplete_todos
+    else:
+        todos = [*incomplete_todos, *completed_todos]
 
     return [_serialize_todo(t) for t in todos if isinstance(t.text, str) and t.text.strip()]
 
@@ -327,6 +422,8 @@ async def create_todo(
     """创建新任务（带用户隔离）"""
     import time
     todo_id = f"todo_{int(time.time() * 1000)}"
+    incomplete_todos = _normalize_incomplete_todo_order(db, current_user_id)
+    next_sort_order = len(incomplete_todos) + 1
 
     new_todo = models.TodoItem(
         id=todo_id,
@@ -337,6 +434,7 @@ async def create_todo(
         source="manual",
         plan_batch_id=None,
         plan_date=None,
+        sort_order=next_sort_order,
         user_id=current_user_id  # ✅ 关联到当前用户
     )
 
@@ -371,17 +469,48 @@ async def update_todo(
             todo.completed_at = datetime.utcnow().isoformat()
         elif not todo_update.completed:
             todo.completed_at = None
+            if todo.sort_order is None:
+                incomplete_todos = _normalize_incomplete_todo_order(db, current_user_id)
+                todo.sort_order = len(incomplete_todos) + 1
     if todo_update.priority is not None:
         todo.priority = todo_update.priority
     if todo_update.subject is not None:
         todo.subject = todo_update.subject
-    if todo_update.due_date is not None:
+    if "due_date" in todo_update.model_fields_set:
         todo.due_date = todo_update.due_date
 
     db.commit()
     db.refresh(todo)
 
     return _serialize_todo(todo)
+
+
+@router.post("/api/workbench/todos/reorder")
+async def reorder_todos(
+    payload: TodoReorderRequest,
+    current_user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """批量重排未完成任务（带用户隔离）"""
+    incomplete_todos = _normalize_incomplete_todo_order(db, current_user_id)
+    current_ids = [todo.id for todo in incomplete_todos]
+
+    if len(payload.ordered_ids) != len(current_ids) or set(payload.ordered_ids) != set(current_ids):
+        raise HTTPException(status_code=400, detail="ordered_ids must match all current incomplete todos")
+
+    todo_map = {todo.id: todo for todo in incomplete_todos}
+    reordered = [todo_map[todo_id] for todo_id in payload.ordered_ids]
+    for index, todo in enumerate(reordered, start=1):
+        todo.sort_order = index
+
+    db.commit()
+    for todo in reordered:
+        db.refresh(todo)
+
+    return {
+        "success": True,
+        "todos": [_serialize_todo(todo) for todo in reordered],
+    }
 
 @router.delete("/api/workbench/todos/{todo_id}")
 async def delete_todo(

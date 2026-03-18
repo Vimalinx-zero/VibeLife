@@ -3,6 +3,7 @@
 
 import os
 from pathlib import Path
+from collections import defaultdict
 
 from sqlalchemy import create_engine, inspect
 from sqlalchemy.ext.declarative import declarative_base
@@ -154,6 +155,7 @@ def run_legacy_cleanup_migrations() -> None:
             todo_columns = {
                 column["name"] for column in inspector.get_columns("todo_items")
             }
+            added_sort_order = False
 
             if "source" not in todo_columns:
                 conn.exec_driver_sql(
@@ -170,6 +172,12 @@ def run_legacy_cleanup_migrations() -> None:
                     "ALTER TABLE todo_items ADD COLUMN plan_date VARCHAR"
                 )
                 todo_columns.add("plan_date")
+            if "sort_order" not in todo_columns:
+                conn.exec_driver_sql(
+                    "ALTER TABLE todo_items ADD COLUMN sort_order INTEGER"
+                )
+                todo_columns.add("sort_order")
+                added_sort_order = True
 
             conn.exec_driver_sql(
                 "UPDATE todo_items SET source = 'manual' WHERE source IS NULL OR trim(source) = ''"
@@ -180,6 +188,47 @@ def run_legacy_cleanup_migrations() -> None:
             conn.exec_driver_sql(
                 "UPDATE todo_items SET plan_date = NULL WHERE trim(COALESCE(plan_date, '')) = ''"
             )
+
+            todo_rows = conn.exec_driver_sql(
+                """
+                SELECT id, user_id, completed, priority, due_date, created_at, sort_order
+                FROM todo_items
+                """
+            ).mappings().all()
+
+            incomplete_by_user: dict[str, list[dict]] = defaultdict(list)
+            for row in todo_rows:
+                if row["completed"]:
+                    continue
+                incomplete_by_user[row["user_id"]].append(dict(row))
+
+            def _legacy_sort_key(row: dict) -> tuple:
+                due_date = (row.get("due_date") or "").strip()
+                created_at = (row.get("created_at") or "").strip()
+                priority = int(row.get("priority") or 0)
+                return (-priority, due_date == "", due_date, created_at, row["id"])
+
+            for user_rows in incomplete_by_user.values():
+                existing_orders = [row.get("sort_order") for row in user_rows]
+                existing_values = [
+                    int(value)
+                    for value in existing_orders
+                    if isinstance(value, int) and value > 0
+                ]
+                has_invalid_order = (
+                    len(existing_values) != len(user_rows)
+                    or len(set(existing_values)) != len(existing_values)
+                    or sorted(existing_values) != list(range(1, len(user_rows) + 1))
+                )
+                if not added_sort_order and not has_invalid_order:
+                    continue
+
+                ordered_rows = sorted(user_rows, key=_legacy_sort_key)
+                for index, row in enumerate(ordered_rows, start=1):
+                    conn.exec_driver_sql(
+                        "UPDATE todo_items SET sort_order = :sort_order WHERE id = :todo_id",
+                        {"sort_order": index, "todo_id": row["id"]},
+                    )
 
 # 依赖项：每个请求创建一个独立的 DB 会话
 def get_db(): 

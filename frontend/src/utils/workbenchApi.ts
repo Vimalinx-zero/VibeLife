@@ -20,6 +20,7 @@ export interface Todo {
   created_at: string;
   completed_at?: string | null;
   updated_at?: string;
+  sort_order?: number | null;
 }
 
 export interface FocusSession {
@@ -125,6 +126,13 @@ export async function createTodo(
 export async function updateTodo(todoId: string | number, updates: Partial<Todo>): Promise<Todo> {
   const response = await apiClient.put<Todo>(`/workbench/todos/${todoId}`, updates);
   return response.data; // 后端返回更新后的todo对象
+}
+
+export async function reorderTodos(orderedIds: string[]): Promise<Todo[]> {
+  const response = await apiClient.post<{ success: boolean; todos: Todo[] }>(`/workbench/todos/reorder`, {
+    ordered_ids: orderedIds
+  });
+  return response.data.todos || [];
 }
 
 export async function deleteTodo(todoId: string | number): Promise<void> {
