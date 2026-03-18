@@ -6,7 +6,15 @@ import WorkbenchProjectPanel from "../components/WorkbenchProjectPanel";
 import { useTheme } from "../context/ThemeContext";
 import { useMedia } from "../context/MediaContext";
 import { useToast } from "../context/ToastContext";
+import { useAuth } from "../context/AuthContext";
 import ContextMenu from "../components/ContextMenu";
+import { aiAPI } from "../utils/api";
+import { dispatchWorkbenchAiRefresh } from "../utils/workbenchTodoEvents";
+import {
+  buildWorkbenchAiSuccessToast,
+  getWorkbenchAiRefreshTargets,
+  shouldOpenProjectsPanel,
+} from "./workbenchAiCommandState";
 
 // --- Icons ---
 const Icons = {
@@ -14,9 +22,19 @@ const Icons = {
   ArrowRight: () => <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path fillRule="evenodd" d="M12.97 3.97a.75.75 0 011.06 0l7.5 7.5a.75.75 0 010 1.06l-7.5 7.5a.75.75 0 11-1.06-1.06l6.22-6.22H3a.75.75 0 010-1.5h16.19l-6.22-6.22a.75.75 0 010-1.06z" clipRule="evenodd" /></svg>,
 };
 
+interface WorkbenchAiMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+}
+
+const createWorkbenchAiMessageId = (prefix: string) =>
+  `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+
 function WorkbenchPage() {
   const { isDark, toggleDarkMode } = useTheme();
   const toast = useToast();
+  const { logout } = useAuth();
 
   // ✅ 使用全局媒体状态
   const { isMusicPlaying, audioData } = useMedia();
@@ -24,6 +42,13 @@ function WorkbenchPage() {
   const [currentTask, setCurrentTask] = useState<any>(null);
   const [aiInput, setAiInput] = useState('');
   const [isAiLoading, setIsAiLoading] = useState(false);
+  const [aiMessages, setAiMessages] = useState<WorkbenchAiMessage[]>([
+    {
+      id: "workbench-ai-welcome",
+      role: "assistant",
+      content: "告诉我你现在要准备什么、更新什么，或者直接让我整理工作台。",
+    },
+  ]);
   const [panelView, setPanelView] = useState<'workbench' | 'projects'>('workbench');
   const [isPanelAnimating, setIsPanelAnimating] = useState(false);
 
@@ -54,17 +79,77 @@ function WorkbenchPage() {
     const userInput = aiInput.trim();
     if (!userInput || isAiLoading) return;
 
+    const nextUserMessage: WorkbenchAiMessage = {
+      id: createWorkbenchAiMessageId("workbench_ai_user"),
+      role: "user",
+      content: userInput,
+    };
+    const nextHistory = [...aiMessages, nextUserMessage].slice(-6);
+
+    setAiMessages(nextHistory);
     setIsAiLoading(true);
-
-    window.dispatchEvent(
-      new CustomEvent<{ text: string }>('workbench-direct-add-todo', {
-        detail: { text: userInput },
-      })
-    );
-
     setAiInput('');
-    toast.success('已添加到待办');
-    setIsAiLoading(false);
+
+    try {
+      const response = await aiAPI.chatForProjectPanel({
+        message: userInput,
+        provider: "openclaw",
+        history: nextHistory
+          .filter((message) => message.content.trim().length > 0)
+          .map((message) => ({
+            role: message.role,
+            content: message.content.trim(),
+          })),
+        context: {
+          surface: "workbench",
+          panelView,
+          currentTask: currentTask
+            ? {
+                id: currentTask.id ?? null,
+                title: currentTask.text ?? currentTask.title ?? "",
+              }
+            : null,
+        },
+      });
+
+      const refreshTargets = getWorkbenchAiRefreshTargets(response.refreshHints || []);
+      if (refreshTargets.length > 0) {
+        dispatchWorkbenchAiRefresh();
+      }
+
+      if (shouldOpenProjectsPanel(refreshTargets) && panelView !== "projects" && !isPanelAnimating) {
+        setIsPanelAnimating(true);
+        setPanelView("projects");
+        window.setTimeout(() => setIsPanelAnimating(false), 520);
+      }
+
+      setAiMessages((previousMessages) =>
+        [...previousMessages, {
+          id: createWorkbenchAiMessageId("workbench_ai_assistant"),
+          role: "assistant" as const,
+          content: response.reply?.trim() || "我这次没有拿到可用回复。",
+        } satisfies WorkbenchAiMessage].slice(-6)
+      );
+
+      toast.success(buildWorkbenchAiSuccessToast(response));
+    } catch (error: any) {
+      if (error?.response?.status === 401) {
+        logout();
+        return;
+      }
+
+      const message = `抱歉，这次没有连上 OpenClaw：${error?.response?.data?.detail || error?.message || '未知错误'}`;
+      setAiMessages((previousMessages) =>
+        [...previousMessages, {
+          id: createWorkbenchAiMessageId("workbench_ai_assistant"),
+          role: "assistant" as const,
+          content: message,
+        } satisfies WorkbenchAiMessage].slice(-6)
+      );
+      toast.error(message);
+    } finally {
+      setIsAiLoading(false);
+    }
   };
 
   // Force navigation
@@ -305,21 +390,60 @@ function WorkbenchPage() {
               <TodoList onTaskSelect={handleTaskSelect} />
             </div>
 
-            <div className="pt-3">
-              <input
-                type="text"
-                value={aiInput}
-                onChange={(e) => setAiInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleAiInputSubmit();
-                  }
-                }}
-                placeholder={isAiLoading ? '正在添加待办...' : '输入需求，按 Enter 直接添加到待办'}
-                className="w-full bg-gray-100/50 dark:bg-[#252525]/50 hover:bg-gray-100/80 dark:hover:bg-[#2a2a2a]/80 focus:bg-white dark:focus:bg-[#2a2a2a] text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 px-3 py-2.5 rounded-lg outline-none transition-colors border border-transparent focus:border-indigo-500/30 dark:focus:border-white/10 text-sm"
-                disabled={isAiLoading}
-              />
+            <div className="pt-3 border-t border-gray-200/40 dark:border-white/10">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-[11px] font-semibold tracking-wide text-gray-700 dark:text-gray-200 uppercase">
+                    AI 工作台入口
+                  </div>
+                  <div className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
+                    直接告诉我你要准备什么、更新什么，或者让我整理工作台。
+                  </div>
+                </div>
+                <div className="shrink-0 rounded-full bg-indigo-500/10 px-2.5 py-1 text-[10px] font-semibold text-indigo-600 dark:text-indigo-300">
+                  OpenClaw
+                </div>
+              </div>
+
+              <div className="mb-3 max-h-28 space-y-2 overflow-y-auto custom-scrollbar pr-1">
+                {aiMessages.slice(-3).map((message) => (
+                  <div
+                    key={message.id}
+                    className={`rounded-xl px-3 py-2 text-[12px] leading-5 ${
+                      message.role === "assistant"
+                        ? "bg-white/60 dark:bg-white/10 text-gray-700 dark:text-gray-200"
+                        : "bg-indigo-500 text-white"
+                    }`}
+                  >
+                    {message.content}
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={aiInput}
+                  onChange={(e) => setAiInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      void handleAiInputSubmit();
+                    }
+                  }}
+                  placeholder={isAiLoading ? 'OpenClaw 正在处理...' : '例如：帮我准备工作台，先把今天最该做的排好'}
+                  className="flex-1 min-w-0 bg-gray-100/50 dark:bg-[#252525]/50 hover:bg-gray-100/80 dark:hover:bg-[#2a2a2a]/80 focus:bg-white dark:focus:bg-[#2a2a2a] text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 px-3 py-2.5 rounded-lg outline-none transition-colors border border-transparent focus:border-indigo-500/30 dark:focus:border-white/10 text-sm"
+                  disabled={isAiLoading}
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleAiInputSubmit()}
+                  disabled={isAiLoading || !aiInput.trim()}
+                  className="shrink-0 rounded-lg bg-indigo-500 px-3 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isAiLoading ? '处理中' : '交给 AI'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

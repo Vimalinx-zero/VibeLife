@@ -125,6 +125,7 @@ export const aiAPI = {
     message: string;
     provider: string;
     history: Array<{ role: "user" | "assistant"; content: string }>;
+    context?: unknown;
   }): Promise<ProjectPanelChatResponseDTO> => {
     return apiClient.post<ProjectPanelChatResponseDTO>("/ai/chat", payload).then((res) => res.data);
   },
