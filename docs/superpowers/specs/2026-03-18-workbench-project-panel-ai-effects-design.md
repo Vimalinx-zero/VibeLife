@@ -115,20 +115,42 @@ Cons:
 
 推荐语义：
 
-- `effects`: `[{ entity, action, count, ids, summary }]`
-- `refreshHints`: `["todo", "insights", "status"]`
-- `runMeta`: `{ provider, executedAt, success }`
+- `effects`: `[{ entity, action, count, ids?, summary }]`
+- `refreshHints`: `["todo", "insights"]`
+- `runMeta`: `{ executedAt, outcome }`
 
-第一轮支持的 `entity/action` 组合只覆盖当前已知的 VibeLife 工具域：
+这里保留顶层 `provider` 作为唯一 provider 来源；`runMeta` 不再重复携带 provider。
+
+第一轮只对会影响当前项目页可见内容的工具域做确定性标准化：
 
 - `todo/create`
 - `todo/update`
+- `todo/delete`
+- `todo/clear`
 - `project/create`
 - `project/update`
 - `project_step/create`
 - `project_step/update`
-- `note/create`
-- `note/update`
+
+精确 schema：
+
+- `entity`: 必填，枚举值仅允许 `todo | project | project_step`
+- `action`: 必填，枚举值仅允许 `create | update | delete | clear`
+- `count`: 必填，正整数
+- `ids`: 可选，字符串数组；若存在，按首次出现顺序去重
+- `summary`: 必填，给前端直接展示的简短中文摘要
+
+`refreshHints` 去重并保持固定顺序：
+
+1. `todo`
+2. `insights`
+
+从 `effects` 到 `refreshHints` 的映射是确定的：
+
+- 任一 `todo/*` effect -> `todo`
+- 任一 `project/*` 或 `project_step/*` effect -> `insights`
+
+`代理状态总览` 不再由后端 `refreshHint` 驱动，而是由前端根据当前 assistant 回包本地更新。因此第一轮不返回 `status` hint，避免出现“本地面板却被当作远端刷新区块”的双重所有权冲突。
 
 如果本次 OpenClaw 没有产出结构化动作，则：
 
@@ -137,11 +159,37 @@ Cons:
 - `refreshHints` 返回空数组；
 - 前端不做额外刷新。
 
+HTTP / 语义约束：
+
+- 当后端拿到了可展示 `reply` 时，`/api/ai/chat` 返回 `200`
+- 当后端没有可展示 `reply`，且也没有可用结构化结果可转成保底回复时，返回 `502`
+- 当有 `reply` 但结构化提取失败时，仍返回 `200`
+- `runMeta.outcome` 仅允许：
+  - `success`: AI 执行成功，且结构化回执可用或明确为空
+  - `partial`: AI 有可展示回复，但结构化提取失败或只能部分提取
+  - `failed`: 前端本地保留的失败态；该值不由成功的 `/api/ai/chat` 响应返回
+
 ### 2. OpenClaw 结构化结果不再被压扁
 
 [openclaw_bridge.py](/home/vimalinx/Projects/VibeLifes/VibeLife/backend/openclaw_bridge.py) 当前已经能看到 `payloads`，但最后只返回清洗后的文本。
 
-这一轮不去“从自然语言里反推动作”，而是直接保留底层结构化信息：
+这一轮不去“从自然语言里反推动作”，而是直接保留底层结构化信息。
+
+第一轮的标准化来源只认成功的 VibeLife 工具结果：
+
+- `vibelife_todo_create`
+- `vibelife_todo_update`
+- `vibelife_todo_delete`
+- `vibelife_todo_clear_completed`
+- `vibelife_todo_clear_all`
+- `vibelife_project_create`
+- `vibelife_project_update`
+- `vibelife_project_step_create`
+- `vibelife_project_step_update`
+
+其他工具结果即使存在，也不要求本轮转成 effect；最多保留在原始结果里供日志或未来扩展。
+
+具体改造：
 
 - Bridge 层新增一个更高层的返回结构，至少包含：
   - `reply`
@@ -167,12 +215,14 @@ Cons:
 
 从占位文案升级为真实项目摘要面板，数据源来自 `/api/projects`。
 
+这轮会顺手把 `/api/projects` 列表响应补齐 `createdAt` / `updatedAt` 字段，避免洞察排序依赖不存在的数据。
+
 内容固定为：
 
 - 顶部 3 个小统计：
-  - 活跃项目数
-  - `需关注/有阻塞` 项目数
-  - 未完成步骤数
+  - 活跃项目数：`/api/projects` 返回的项目总数
+  - `需关注/有阻塞` 项目数：`status` 精确等于 `需关注` 或 `有阻塞` 的项目数
+  - 未完成步骤数：所有项目中 `done !== true` 的步骤总数
 - 下方 `重点项目列表`：
   - 项目名
   - 状态
@@ -182,9 +232,18 @@ Cons:
 重点项目的排序按“更值得优先看”而不是按创建顺序：
 
 1. 有 `nextAction`
-2. 状态非“正常推进”
+2. `statusWeight` 更高
 3. 未完成步骤更多
 4. 更新时间更新
+
+第一轮精确状态权重：
+
+- `有阻塞` -> 2
+- `需关注` -> 1
+- `正常推进` -> 0
+- 其他未知状态 -> 0
+
+`重点项目列表` 只展示前 5 条。
 
 #### `代理状态总览`
 
@@ -199,7 +258,7 @@ Cons:
 - 上次变更摘要
 - 上次刷新结果
 
-数据完全来自本页本地状态，不新增后端接口。
+所有数据都属于“当前激活会话”的最新一次 assistant 运行结果，不是整页全局最后一次。切换会话时，这个面板随当前会话一起切换。
 
 ### 4. 右侧聊天气泡增加“操作回执区”
 
@@ -212,8 +271,14 @@ assistant 消息保持两层：
 
 - 第一行：`本次变更`
 - 内容：例如 `创建待办 2 条，更新项目 1 个`
-- 第二行：`已刷新`
-- 内容：例如 `我的Todo、项目洞察、代理状态总览`
+- 第二行：`刷新结果`
+- 内容：例如 `我的Todo 已刷新，项目洞察 已刷新`
+
+这里只有真正刷新成功的区块才显示为 `已刷新`。若某个区块刷新失败，则显示：
+
+- `项目洞察 刷新失败`
+
+因此回执区表达的是实际结果，不是“计划刷新”。
 
 如果这次没有结构化动作，则不显示回执区，避免普通聊天界面噪声过多。
 
@@ -223,7 +288,6 @@ assistant 消息保持两层：
 
 - `todo` -> reload todo groups
 - `insights` -> reload project summary
-- `status` -> 更新本页 AI 活动状态
 
 刷新原则：
 
@@ -231,6 +295,8 @@ assistant 消息保持两层：
 - 不一次性刷新所有 tab；
 - 不靠解析中文自然语言决定刷新；
 - 即使刷新失败，也不吞掉聊天回复本身。
+
+`代理状态总览` 的更新不走 refresh hint，而是在收到 assistant 成功或失败结果后，本地立即更新。
 
 ### 6. 仍然保持诚实占位的区块
 
@@ -252,7 +318,7 @@ assistant 消息保持两层：
 4. Bridge 保留文本 + 结构化 payload；
 5. `ai_routes.py` 归一化为 `reply + effects + refreshHints + runMeta`；
 6. 前端把 assistant 消息写入当前会话；
-7. 前端根据 `refreshHints` 精准刷新左侧真实区块；
+7. 前端根据 `refreshHints` 精准刷新左侧真实区块，并记录每个区块的刷新成功/失败结果；
 8. 右侧消息下显示本次回执。
 
 ### AI 只是普通聊天，没有动作
@@ -261,21 +327,38 @@ assistant 消息保持两层：
 2. `effects` 为空；
 3. `refreshHints` 为空；
 4. 左侧不刷新；
-5. 回执区不显示。
+5. `代理状态总览` 仍记录这次为上次成功运行；
+6. 回执区不显示。
 
 ### AI 调用失败
 
 1. 右侧继续显示失败消息；
-2. `代理状态总览` 记录为上次失败；
+2. 当前激活会话的 `代理状态总览` 记录为上次失败；
 3. 左侧真实数据区块不做刷新；
 4. 不伪造任何 effect。
 
 ## Error Handling
 
 - OpenClaw 返回异常但已有文本时，仍返回文本，同时 `effects` 为空。
-- OpenClaw 返回文本为空但有 payloads 时，允许后端生成保底提示文本，但仍保留结构化动作。
+- OpenClaw 返回文本为空但有 payloads 时，允许后端生成保底提示文本；若能提炼动作则保留 `effects`，否则 `effects` 为空。
 - 如果结构化 payload 无法识别，则只返回 `reply`，不生成伪造 effect。
 - 左侧某个区块刷新失败时，不影响聊天主回复；只在 `代理状态总览` 中记录刷新结果失败。
+
+## Persistence
+
+当前项目页多会话历史保存在本地 `projectPanelState` 中。这轮需要扩展 assistant message 结构：
+
+- `effects?: ProjectPanelEffect[]`
+- `refreshHints?: ProjectPanelRefreshHint[]`
+- `runMeta?: ProjectPanelRunMeta`
+- `refreshResults?: ProjectPanelRefreshResult[]`
+
+兼容策略：
+
+- 旧历史消息没有这些字段时，按 `undefined` 处理；
+- `parseStoredProjectPanelState(...)` 必须向后兼容旧结构；
+- `serializeProjectPanelState(...)` 只在新消息存在这些字段时写出；
+- `代理状态总览` 只读取当前激活会话中“最近一条带 `runMeta` 的 assistant 消息”。
 
 ## Testing Strategy
 
