@@ -1,4 +1,9 @@
-import axios, { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse } from "axios";
+import axios from "axios";
+import type {
+  AxiosInstance,
+  AxiosResponse,
+  InternalAxiosRequestConfig,
+} from "axios";
 
 /**
  * API 服务层
@@ -21,6 +26,8 @@ const getApiOrigin = (): string => {
 const apiClient: AxiosInstance = axios.create({
   timeout: 10000,
 });
+
+const AI_CHAT_TIMEOUT_MS = 180000;
 
 // ✨ 新增：请求拦截器 - 自动添加 JWT token
 apiClient.interceptors.request.use(
@@ -127,7 +134,11 @@ export const aiAPI = {
     history: Array<{ role: "user" | "assistant"; content: string }>;
     context?: unknown;
   }): Promise<ProjectPanelChatResponseDTO> => {
-    return apiClient.post<ProjectPanelChatResponseDTO>("/ai/chat", payload).then((res) => res.data);
+    return apiClient
+      .post<ProjectPanelChatResponseDTO>("/ai/chat", payload, {
+        timeout: AI_CHAT_TIMEOUT_MS,
+      })
+      .then((res) => res.data);
   },
 };
 
