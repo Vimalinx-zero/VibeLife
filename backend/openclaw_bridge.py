@@ -22,6 +22,14 @@ class OpenClawBridgeError(RuntimeError):
     """Raised when an OpenClaw invocation fails."""
 
 
+class OpenClawAgentResult(dict):
+    """Structured OpenClaw result that still stringifies to the assistant reply."""
+
+    def __str__(self) -> str:
+        return str(self.get("reply", ""))
+
+
+
 def build_vibelife_chat_prompt(
     user_message: str,
     history: Optional[List[Dict[str, Any]]] = None,
@@ -215,6 +223,18 @@ def _clean_assistant_reply(text: str) -> str:
     cleaned = str(text or "").replace("[[reply_to_current]]", "").strip()
     cleaned = re.sub(r"^(?:\[\[)+", "", cleaned).strip()
     return cleaned
+
+
+def _build_openclaw_result(reply: str, parsed: Any) -> OpenClawAgentResult:
+    raw_payloads = parsed.get("payloads") if isinstance(parsed, dict) else []
+    if not isinstance(raw_payloads, list):
+        raw_payloads = []
+
+    return OpenClawAgentResult(
+        reply=str(reply or "").strip(),
+        raw_payloads=raw_payloads,
+        parsed=parsed,
+    )
 
 
 def _resolve_openclaw_agent_id(agent: str, current_user_id: Optional[str]) -> str:
@@ -444,7 +464,7 @@ def run_openclaw_agent(
     auth_token: Optional[str] = None,
     current_user_id: Optional[str] = None,
     timeout_seconds: int = 120,
-) -> str:
+) -> OpenClawAgentResult:
     target_agent = _resolve_openclaw_agent_id(agent, current_user_id)
     ensure_openclaw_agent(target_agent, model=model)
 
@@ -498,7 +518,7 @@ def run_openclaw_agent(
         recovered_text = _read_latest_session_reply(target_agent, message)
         if recovered_text:
             _terminate_openclaw_process(process)
-            return recovered_text
+            return _build_openclaw_result(recovered_text, None)
 
         if process.poll() is not None:
             stdout, stderr = process.communicate()
@@ -508,13 +528,13 @@ def run_openclaw_agent(
     else:
         recovered_text = _read_latest_session_reply(target_agent, message)
         stdout, stderr = _terminate_openclaw_process(process)
-        if recovered_text:
-            return recovered_text
-
         parsed = _parse_openclaw_output(stdout)
+        if recovered_text:
+            return _build_openclaw_result(recovered_text, parsed)
+
         text = _clean_assistant_reply(_extract_assistant_text(parsed))
         if text:
-            return text
+            return _build_openclaw_result(text, parsed)
 
         raise OpenClawBridgeError("OpenClaw 调用超时")
 
@@ -524,25 +544,27 @@ def run_openclaw_agent(
 
     if process.returncode != 0:
         if recovered_text:
-            return recovered_text
+            parsed = _parse_openclaw_output(stdout)
+            return _build_openclaw_result(recovered_text, parsed)
         error_text = stderr or stdout or "unknown error"
         raise OpenClawBridgeError(f"OpenClaw 调用失败: {error_text}")
 
     if not stdout:
         if recovered_text:
-            return recovered_text
+            return _build_openclaw_result(recovered_text, None)
         raise OpenClawBridgeError("OpenClaw 未返回内容")
 
-    if recovered_text:
-        return recovered_text
-
     parsed = _parse_openclaw_output(stdout)
+
+    if recovered_text:
+        return _build_openclaw_result(recovered_text, parsed)
+
     text = _clean_assistant_reply(_extract_assistant_text(parsed))
     if text:
-        return text
+        return _build_openclaw_result(text, parsed)
 
     fallback = _build_openclaw_fallback(parsed)
     if fallback:
-        return fallback
+        return _build_openclaw_result(fallback, parsed)
 
-    return stdout
+    return _build_openclaw_result(stdout, parsed)

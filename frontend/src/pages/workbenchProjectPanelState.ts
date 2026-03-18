@@ -3,11 +3,40 @@ import type { Todo } from "../utils/workbenchApi";
 export type ProjectPanelMessageRole = "user" | "assistant";
 export type ProjectTodoCategory = "成长" | "工作" | "生活" | "娱乐" | "其他";
 
+export type ProjectPanelEffectEntity = "todo" | "project" | "project_step";
+export type ProjectPanelEffectAction = "create" | "update" | "delete" | "clear";
+export type ProjectPanelRefreshHint = "todo" | "insights";
+export type ProjectPanelRunOutcome = "success" | "partial" | "failed";
+
+export interface ProjectPanelEffect {
+  entity: ProjectPanelEffectEntity;
+  action: ProjectPanelEffectAction;
+  count: number;
+  ids?: string[];
+  summary: string;
+}
+
+export interface ProjectPanelRunMeta {
+  executedAt: string;
+  outcome: ProjectPanelRunOutcome;
+}
+
+export interface ProjectPanelRefreshResult {
+  target: ProjectPanelRefreshHint;
+  success: boolean;
+  label: string;
+}
+
 export interface ProjectPanelMessage {
   id: string;
   role: ProjectPanelMessageRole;
   content: string;
   timestamp: Date;
+  provider?: string;
+  effects?: ProjectPanelEffect[];
+  refreshHints?: ProjectPanelRefreshHint[];
+  runMeta?: ProjectPanelRunMeta;
+  refreshResults?: ProjectPanelRefreshResult[];
 }
 
 interface StoredProjectPanelMessage {
@@ -15,6 +44,11 @@ interface StoredProjectPanelMessage {
   role: ProjectPanelMessageRole;
   content: string;
   timestamp: string;
+  provider?: string;
+  effects?: ProjectPanelEffect[];
+  refreshHints?: ProjectPanelRefreshHint[];
+  runMeta?: ProjectPanelRunMeta;
+  refreshResults?: ProjectPanelRefreshResult[];
 }
 
 export interface ProjectPanelSession {
@@ -110,6 +144,20 @@ const parseStoredMessages = (value: unknown): ProjectPanelMessage[] => {
       role: message.role,
       content: message.content.trim(),
       timestamp: new Date(message.timestamp),
+      provider: typeof message.provider === "string" && message.provider.trim() ? message.provider.trim() : undefined,
+      effects: Array.isArray(message.effects) ? message.effects : undefined,
+      refreshHints: Array.isArray(message.refreshHints) ? message.refreshHints : undefined,
+      runMeta:
+        message.runMeta &&
+        typeof message.runMeta === "object" &&
+        typeof message.runMeta.executedAt === "string" &&
+        (message.runMeta.outcome === "success" || message.runMeta.outcome === "partial" || message.runMeta.outcome === "failed")
+          ? {
+              executedAt: message.runMeta.executedAt,
+              outcome: message.runMeta.outcome,
+            }
+          : undefined,
+      refreshResults: Array.isArray(message.refreshResults) ? message.refreshResults : undefined,
     }))
     .filter((message) => !Number.isNaN(message.timestamp.getTime()));
 
@@ -211,9 +259,33 @@ export const serializeProjectPanelState = (state: ProjectPanelState): StoredProj
       role: message.role,
       content: message.content,
       timestamp: message.timestamp.toISOString(),
+      provider: message.provider,
+      effects: message.effects,
+      refreshHints: message.refreshHints,
+      runMeta: message.runMeta,
+      refreshResults: message.refreshResults,
     })),
   })),
 });
+
+
+export const getLatestProjectPanelRunMessage = (
+  state: ProjectPanelState
+): ProjectPanelMessage | null => {
+  const activeSession = state.sessions.find((session) => session.id === state.activeSessionId);
+  if (!activeSession) {
+    return null;
+  }
+
+  for (let index = activeSession.messages.length - 1; index >= 0; index -= 1) {
+    const message = activeSession.messages[index];
+    if (message.role === "assistant" && message.runMeta) {
+      return message;
+    }
+  }
+
+  return null;
+};
 
 export const buildProjectPanelHistory = (
   messages: readonly ProjectPanelMessage[]

@@ -31,6 +31,30 @@ from openclaw_bridge import (
 
 router = APIRouter()
 
+EFFECT_TOOL_MAP: Dict[str, Tuple[str, str]] = {
+    "vibelife_todo_create": ("todo", "create"),
+    "vibelife_todo_update": ("todo", "update"),
+    "vibelife_todo_delete": ("todo", "delete"),
+    "vibelife_todo_clear_completed": ("todo", "clear"),
+    "vibelife_todo_clear_all": ("todo", "clear"),
+    "vibelife_project_create": ("project", "create"),
+    "vibelife_project_update": ("project", "update"),
+    "vibelife_project_step_create": ("project_step", "create"),
+    "vibelife_project_step_update": ("project_step", "update"),
+}
+ENTITY_LABELS = {
+    "todo": "待办",
+    "project": "项目",
+    "project_step": "项目步骤",
+}
+ACTION_LABELS = {
+    "create": "创建了",
+    "update": "更新了",
+    "delete": "删除了",
+    "clear": "清理了",
+}
+REFRESH_HINT_ORDER = ("todo", "insights")
+
 SUPPORTED_PROVIDERS = {
     "local",
     "ollama",
@@ -237,6 +261,171 @@ def _generate_local_reply(user_message: str, context: Any = None) -> str:
     return "我可以帮你拆任务、整理笔记、梳理项目、规划今天安排。你直接说要我做什么即可。"
 
 
+def _build_effect_summary(entity: str, action: str, count: int) -> str:
+    return f"{ACTION_LABELS[action]} {count} 个{ENTITY_LABELS[entity]}"
+
+
+def _dedupe_strings(values: List[str]) -> List[str]:
+    seen: set[str] = set()
+    deduped: List[str] = []
+    for value in values:
+        normalized = str(value or "").strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        deduped.append(normalized)
+    return deduped
+
+
+def _extract_ids_from_result(value: Any) -> List[str]:
+    collected: List[str] = []
+
+    def walk(node: Any) -> None:
+        if isinstance(node, dict):
+            node_id = node.get("id")
+            if isinstance(node_id, str) and node_id.strip():
+                collected.append(node_id.strip())
+
+            node_ids = node.get("ids")
+            if isinstance(node_ids, list):
+                for item in node_ids:
+                    if isinstance(item, str) and item.strip():
+                        collected.append(item.strip())
+
+            for child in node.values():
+                if isinstance(child, (dict, list)):
+                    walk(child)
+        elif isinstance(node, list):
+            for child in node:
+                if isinstance(child, (dict, list)):
+                    walk(child)
+
+    walk(value)
+    return _dedupe_strings(collected)
+
+
+def _extract_effect_material(value: Any) -> Tuple[Optional[int], List[str], bool]:
+    if isinstance(value, dict):
+        ids = _extract_ids_from_result(value)
+        count_candidates = [
+            value.get("count"),
+            value.get("createdCount"),
+            value.get("updatedCount"),
+            value.get("deletedCount"),
+            value.get("clearedCount"),
+        ]
+        count = 0
+        for candidate in count_candidates:
+            try:
+                count = max(count, int(candidate or 0))
+            except (TypeError, ValueError):
+                continue
+
+        if ids:
+            count = max(count, len(ids))
+
+        if count <= 0:
+            count = 1
+
+        return count, ids, True
+
+    return None, [], False
+
+
+def _normalize_openclaw_chat_result(result: Any) -> Dict[str, Any]:
+    if isinstance(result, dict):
+        raw_payloads = result.get("raw_payloads")
+        return {
+            "reply": str(result.get("reply") or "").strip(),
+            "raw_payloads": raw_payloads if isinstance(raw_payloads, list) else [],
+            "parsed": result.get("parsed"),
+        }
+
+    return {
+        "reply": str(result or "").strip(),
+        "raw_payloads": [],
+        "parsed": None,
+    }
+
+
+def _normalize_chat_effects(raw_payloads: Any) -> Tuple[List[Dict[str, Any]], List[str], bool]:
+    if not isinstance(raw_payloads, list):
+        return [], [], False
+
+    effects_by_key: Dict[Tuple[str, str], Dict[str, Any]] = {}
+    effect_order: List[Tuple[str, str]] = []
+    incomplete = False
+
+    for payload in raw_payloads:
+        if not isinstance(payload, dict):
+            continue
+
+        tool_name = str(
+            payload.get("tool") or payload.get("toolName") or payload.get("name") or ""
+        ).strip()
+        if not tool_name:
+            continue
+
+        effect_spec = EFFECT_TOOL_MAP.get(tool_name)
+        if effect_spec is None:
+            if tool_name.startswith(
+                (
+                    "vibelife_todo_",
+                    "vibelife_project_",
+                    "vibelife_project_step_",
+                )
+            ):
+                incomplete = True
+            continue
+
+        if payload.get("isError"):
+            incomplete = True
+            continue
+
+        count, ids, ok = _extract_effect_material(payload.get("result"))
+        if not ok or count is None or count <= 0:
+            incomplete = True
+            continue
+
+        entity, action = effect_spec
+        effect_key = (entity, action)
+        if effect_key not in effects_by_key:
+            effects_by_key[effect_key] = {
+                "entity": entity,
+                "action": action,
+                "count": 0,
+                "ids": [],
+            }
+            effect_order.append(effect_key)
+
+        effect = effects_by_key[effect_key]
+        effect["count"] += count
+        effect["ids"] = _dedupe_strings([*effect["ids"], *ids])
+
+    effects: List[Dict[str, Any]] = []
+    for effect_key in effect_order:
+        effect = dict(effects_by_key[effect_key])
+        effect["summary"] = _build_effect_summary(
+            effect["entity"],
+            effect["action"],
+            effect["count"],
+        )
+        if not effect["ids"]:
+            effect.pop("ids")
+        effects.append(effect)
+
+    refresh_hints: List[str] = []
+    for hint in REFRESH_HINT_ORDER:
+        if hint == "todo" and any(effect["entity"] == "todo" for effect in effects):
+            refresh_hints.append(hint)
+        if hint == "insights" and any(
+            effect["entity"] in {"project", "project_step"} for effect in effects
+        ):
+            refresh_hints.append(hint)
+
+    return effects, refresh_hints, incomplete
+
+
 async def _call_ollama(
     config: Dict[str, Any],
     messages: List[Dict[str, str]],
@@ -349,7 +538,7 @@ async def _generate_provider_reply(
     model_override: Optional[str] = None,
     raw_request: Optional[Request] = None,
     current_user_id: Optional[str] = None,
-) -> str:
+) -> Any:
     normalized_provider = str(provider or "").strip().lower()
 
     if normalized_provider == "local":
@@ -424,7 +613,7 @@ async def _generate_quick_qa_reply(
         )
 
         try:
-            return await asyncio.to_thread(
+            result = await asyncio.to_thread(
                 run_openclaw_agent,
                 str(question or "").strip(),
                 model=model_override or openclaw_config.get("model", "rightcodes/gpt-5.4"),
@@ -434,6 +623,9 @@ async def _generate_quick_qa_reply(
                 auth_token=auth_token,
                 current_user_id=current_user_id,
             )
+            if isinstance(result, dict):
+                return str(result.get("reply") or "").strip()
+            return str(result or "").strip()
         except OpenClawBridgeError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -595,7 +787,7 @@ async def chat_with_ai(
         raise HTTPException(status_code=400, detail="消息不能为空")
 
     provider, model_override = _resolve_provider_and_model(request.get("provider"))
-    reply = await _generate_provider_reply(
+    provider_result = await _generate_provider_reply(
         provider=provider,
         user_message=user_message,
         history=request.get("history", []),
@@ -604,8 +796,41 @@ async def chat_with_ai(
         raw_request=raw_request,
         current_user_id=current_user_id,
     )
+    executed_at = (
+        datetime.datetime.now(datetime.timezone.utc)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
 
-    return {"success": True, "reply": reply, "provider": provider}
+    effects: List[Dict[str, Any]] = []
+    refresh_hints: List[str] = []
+    extraction_incomplete = False
+
+    if provider == "openclaw":
+        openclaw_result = _normalize_openclaw_chat_result(provider_result)
+        reply = openclaw_result["reply"]
+        effects, refresh_hints, extraction_incomplete = _normalize_chat_effects(
+            openclaw_result["raw_payloads"]
+        )
+    else:
+        reply = str(provider_result or "").strip()
+
+    if not reply:
+        raise HTTPException(status_code=502, detail="AI 未返回可展示内容")
+
+    outcome = "partial" if extraction_incomplete else "success"
+
+    return {
+        "success": True,
+        "reply": reply,
+        "provider": provider,
+        "effects": effects,
+        "refreshHints": refresh_hints,
+        "runMeta": {
+            "executedAt": executed_at,
+            "outcome": outcome,
+        },
+    }
 
 
 @router.get("/api/ai/config")

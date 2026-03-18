@@ -69,6 +69,10 @@ class ProjectCreateApiTest(unittest.TestCase):
         self.assertEqual(len(listed_projects), 1)
         self.assertEqual(listed_projects[0]["id"], payload["project"]["id"])
         self.assertEqual(listed_projects[0]["name"], "Launch OpenClaw channel")
+        self.assertIn("createdAt", listed_projects[0])
+        self.assertIn("updatedAt", listed_projects[0])
+        self.assertTrue(listed_projects[0]["createdAt"])
+        self.assertTrue(listed_projects[0]["updatedAt"])
 
     def test_create_project_applies_defaults_and_returns_serialized_shape(self):
         headers = self.register_user()

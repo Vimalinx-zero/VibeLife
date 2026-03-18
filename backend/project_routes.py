@@ -360,6 +360,8 @@ async def get_projects(
             "subtitle": p.subtitle,
             "status": p.status,
             "nextAction": p.next_action,
+            "createdAt": p.created_at,
+            "updatedAt": p.updated_at,
             "steps": step_map.get(p.id, []),
             "resources": resource_map.get(p.id, []),
             "emails": email_map.get(p.id, []),

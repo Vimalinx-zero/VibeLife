@@ -84,6 +84,8 @@ export interface ProjectRecordDTO {
   subtitle: string;
   status: '正常推进' | '需关注' | '有阻塞' | string;
   nextAction: string;
+  createdAt: string;
+  updatedAt: string;
   steps: ProjectStepDTO[];
   resources: ProjectResourceDTO[];
   emails: ProjectEmailDTO[];
@@ -94,6 +96,38 @@ export const projectsAPI = {
     const suffix = category ? `?category=${encodeURIComponent(category)}` : '';
     return apiClient.get<{ projects: ProjectRecordDTO[] }>(`/projects${suffix}`).then((res) => res.data.projects || []);
   }
+};
+
+export interface ProjectPanelChatEffectDTO {
+  entity: "todo" | "project" | "project_step";
+  action: "create" | "update" | "delete" | "clear";
+  count: number;
+  ids?: string[];
+  summary: string;
+}
+
+export interface ProjectPanelChatRunMetaDTO {
+  executedAt: string;
+  outcome: "success" | "partial";
+}
+
+export interface ProjectPanelChatResponseDTO {
+  success: true;
+  reply: string;
+  provider: string;
+  effects: ProjectPanelChatEffectDTO[];
+  refreshHints: Array<"todo" | "insights">;
+  runMeta: ProjectPanelChatRunMetaDTO;
+}
+
+export const aiAPI = {
+  chatForProjectPanel: (payload: {
+    message: string;
+    provider: string;
+    history: Array<{ role: "user" | "assistant"; content: string }>;
+  }): Promise<ProjectPanelChatResponseDTO> => {
+    return apiClient.post<ProjectPanelChatResponseDTO>("/ai/chat", payload).then((res) => res.data);
+  },
 };
 
 export interface QuickCaptureRecordDTO {

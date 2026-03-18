@@ -4,9 +4,11 @@ import assert from "node:assert/strict";
 import {
   buildProjectPanelHistory,
   getProjectPanelHistoryStorageKey,
+  getLatestProjectPanelRunMessage,
   groupTodosByCategory,
   limitProjectPanelMessages,
   parseStoredProjectPanelState,
+  serializeProjectPanelState,
 } from "../src/pages/workbenchProjectPanelState.ts";
 
 test("getProjectPanelHistoryStorageKey scopes history by user id", () => {
@@ -124,4 +126,142 @@ test("groupTodosByCategory filters blank todos and groups live items", () => {
   assert.equal(grouped.工作.length, 1);
   assert.equal(grouped.成长.length, 1);
   assert.equal(grouped.其他.length, 0);
+});
+
+test("parseStoredProjectPanelState keeps optional assistant receipt metadata and remains backward-compatible", () => {
+  const parsed = parseStoredProjectPanelState(
+    JSON.stringify({
+      version: 1,
+      activeSessionId: "session-2",
+      sessions: [
+        {
+          id: "session-1",
+          messages: [
+            {
+              id: "legacy-1",
+              role: "assistant",
+              content: "旧消息",
+              timestamp: "2026-03-18T08:00:00.000Z",
+            },
+          ],
+        },
+        {
+          id: "session-2",
+          title: "项目回执",
+          createdAt: "2026-03-18T09:00:00.000Z",
+          updatedAt: "2026-03-18T09:05:00.000Z",
+          messages: [
+            {
+              id: "m-1",
+              role: "assistant",
+              content: "已更新项目",
+              timestamp: "2026-03-18T09:05:00.000Z",
+              provider: "openclaw",
+              effects: [{ entity: "project", action: "update", count: 1, summary: "更新项目 1 个" }],
+              refreshHints: ["insights"],
+              refreshResults: [{ target: "insights", success: true, label: "项目洞察" }],
+              runMeta: { executedAt: "2026-03-18T09:05:00.000Z", outcome: "success" },
+            },
+          ],
+        },
+      ],
+    })
+  );
+
+  assert.equal(parsed.activeSessionId, "session-2");
+  assert.equal(parsed.sessions[0].messages[0].content, "旧消息");
+  assert.deepEqual(parsed.sessions[1].messages[0].effects, [
+    { entity: "project", action: "update", count: 1, summary: "更新项目 1 个" },
+  ]);
+  assert.deepEqual(parsed.sessions[1].messages[0].refreshHints, ["insights"]);
+  assert.deepEqual(parsed.sessions[1].messages[0].refreshResults, [
+    { target: "insights", success: true, label: "项目洞察" },
+  ]);
+  assert.deepEqual(parsed.sessions[1].messages[0].runMeta, {
+    executedAt: "2026-03-18T09:05:00.000Z",
+    outcome: "success",
+  });
+});
+
+test("serializeProjectPanelState only writes optional assistant metadata when present", () => {
+  const serialized = serializeProjectPanelState({
+    activeSessionId: "session-1",
+    sessions: [
+      {
+        id: "session-1",
+        title: "项目回执",
+        createdAt: new Date("2026-03-18T09:00:00.000Z"),
+        updatedAt: new Date("2026-03-18T09:05:00.000Z"),
+        messages: [
+          {
+            id: "m-1",
+            role: "assistant",
+            content: "普通回复",
+            timestamp: new Date("2026-03-18T09:01:00.000Z"),
+          },
+          {
+            id: "m-2",
+            role: "assistant",
+            content: "已创建待办",
+            timestamp: new Date("2026-03-18T09:05:00.000Z"),
+            provider: "openclaw",
+            effects: [{ entity: "todo", action: "create", count: 1, summary: "创建待办 1 条" }],
+            refreshHints: ["todo"],
+            refreshResults: [{ target: "todo", success: true, label: "我的Todo" }],
+            runMeta: { executedAt: "2026-03-18T09:05:00.000Z", outcome: "success" },
+          },
+        ],
+      },
+    ],
+  });
+
+  assert.equal(serialized.sessions[0].messages[0].effects, undefined);
+  assert.equal(serialized.sessions[0].messages[0].runMeta, undefined);
+  assert.deepEqual(serialized.sessions[0].messages[1].effects, [
+    { entity: "todo", action: "create", count: 1, summary: "创建待办 1 条" },
+  ]);
+  assert.deepEqual(serialized.sessions[0].messages[1].refreshHints, ["todo"]);
+  assert.deepEqual(serialized.sessions[0].messages[1].runMeta, {
+    executedAt: "2026-03-18T09:05:00.000Z",
+    outcome: "success",
+  });
+});
+
+test("getLatestProjectPanelRunMessage reads the latest assistant run from the active session only", () => {
+  const state = parseStoredProjectPanelState(
+    JSON.stringify({
+      version: 1,
+      activeSessionId: "session-2",
+      sessions: [
+        {
+          id: "session-1",
+          messages: [
+            {
+              id: "m-1",
+              role: "assistant",
+              content: "旧会话最近一次成功",
+              timestamp: "2026-03-18T08:00:00.000Z",
+              runMeta: { executedAt: "2026-03-18T08:00:00.000Z", outcome: "success" },
+            },
+          ],
+        },
+        {
+          id: "session-2",
+          messages: [
+            {
+              id: "m-2",
+              role: "assistant",
+              content: "当前会话最近一次部分成功",
+              timestamp: "2026-03-18T09:00:00.000Z",
+              runMeta: { executedAt: "2026-03-18T09:00:00.000Z", outcome: "partial" },
+            },
+          ],
+        },
+      ],
+    })
+  );
+
+  const latest = getLatestProjectPanelRunMessage(state);
+  assert.equal(latest?.content, "当前会话最近一次部分成功");
+  assert.equal(latest?.runMeta?.outcome, "partial");
 });
