@@ -106,12 +106,16 @@ async function requestJson(api, path, options = {}) {
   const headers = {
     Accept: "application/json",
   };
+  const currentOpenClawAgentId = resolveOpenClawAgentId(api)
 
   if (body !== undefined) {
     headers["Content-Type"] = "application/json";
   }
   if (config.authToken) {
     headers.Authorization = `Bearer ${config.authToken}`;
+  }
+  if (currentOpenClawAgentId) {
+    headers["X-VibeLife-OpenClaw-Agent-Id"] = currentOpenClawAgentId
   }
 
   try {
@@ -201,12 +205,32 @@ function getLocalDateKey(date = new Date()) {
 
 function resolveCurrentUserId(api) {
   const pluginConfig = api?.pluginConfig ?? {}
+  const toolContext = api?.toolContext ?? {}
+  const runtimeAgentId =
+    typeof toolContext.agentId === "string" ? toolContext.agentId.trim() : ""
+  if (runtimeAgentId.startsWith("vibelife-u_")) {
+    return runtimeAgentId.slice("vibelife-".length)
+  }
   const userId = process.env.VIBELIFE_CURRENT_USER_ID ?? pluginConfig.currentUserId ?? ""
   return typeof userId === "string" ? userId.trim() : ""
 }
 
 function resolveOpenClawAgentId(api) {
   const pluginConfig = api?.pluginConfig ?? {}
+  const toolContext = api?.toolContext ?? {}
+  const runtimeAgentId =
+    typeof toolContext.agentId === "string" ? toolContext.agentId.trim() : ""
+  if (runtimeAgentId) {
+    return runtimeAgentId
+  }
+
+  const sessionKey =
+    typeof toolContext.sessionKey === "string" ? toolContext.sessionKey.trim() : ""
+  const sessionAgentMatch = sessionKey.match(/^agent:([^:]+):/)
+  if (sessionAgentMatch?.[1]) {
+    return sessionAgentMatch[1]
+  }
+
   const explicitAgentId =
     process.env.VIBELIFE_OPENCLAW_AGENT_ID ?? pluginConfig.openclawAgentId ?? ""
   if (typeof explicitAgentId === "string" && explicitAgentId.trim()) {
@@ -1661,7 +1685,10 @@ function defineTools(api) {
 }
 
 export default function register(api) {
-  for (const tool of defineTools(api)) {
-    api.registerTool(tool);
-  }
+  api.registerTool((toolContext) =>
+    defineTools({
+      ...api,
+      toolContext,
+    })
+  );
 }

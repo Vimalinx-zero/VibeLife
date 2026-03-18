@@ -3,12 +3,20 @@ import assert from "node:assert/strict"
 
 import register from "../index.js"
 
-function collectTools(pluginConfig = {}) {
+function collectTools(pluginConfig = {}, toolContext = {}) {
   const tools = []
   register({
     pluginConfig,
     registerTool(tool) {
-      tools.push(tool)
+      const resolved = typeof tool === "function" ? tool(toolContext) : tool
+      if (!resolved) {
+        return
+      }
+      if (Array.isArray(resolved)) {
+        tools.push(...resolved.filter(Boolean))
+        return
+      }
+      tools.push(resolved)
     },
   })
   return tools
@@ -243,6 +251,8 @@ test("workbench prepare tool posts to unified prepare endpoint", async () => {
     const tools = collectTools({
       authToken: "test-token",
       baseUrl: "http://127.0.0.1:49174",
+    }, {
+      agentId: "vibelife-u_138603f6",
     })
     const tool = tools.find((entry) => entry.name === "vibelife_workbench_prepare")
 
@@ -260,6 +270,10 @@ test("workbench prepare tool posts to unified prepare endpoint", async () => {
       date_key: "2026-03-17",
       max_items: 5,
     })
+    assert.equal(
+      calls[0].options.headers["X-VibeLife-OpenClaw-Agent-Id"],
+      "vibelife-u_138603f6"
+    )
     assert.equal(
       calls[0].options.headers.Authorization,
       "Bearer test-token"

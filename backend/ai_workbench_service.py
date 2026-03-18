@@ -107,6 +107,7 @@ def prepare_workbench(
     agent: str,
     base_url: Optional[str],
     auth_token: Optional[str],
+    invoking_openclaw_agent_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     normalized_date_key = validate_date_key(date_key)
     daily_plan = refresh_today_plan(
@@ -119,6 +120,7 @@ def prepare_workbench(
         agent=agent,
         base_url=base_url,
         auth_token=auth_token,
+        invoking_openclaw_agent_id=invoking_openclaw_agent_id,
     )
     project_digest = build_project_digest(db, current_user_id)
 

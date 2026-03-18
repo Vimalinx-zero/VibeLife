@@ -427,6 +427,7 @@ def refresh_today_plan(
     agent: str,
     base_url: Optional[str],
     auth_token: Optional[str],
+    invoking_openclaw_agent_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     normalized_date_key = validate_date_key(date_key)
     normalized_max_items = normalize_max_items(max_items)
@@ -451,6 +452,7 @@ def refresh_today_plan(
             base_url=base_url,
             auth_token=auth_token,
             current_user_id=current_user_id,
+            invoking_agent_id=invoking_openclaw_agent_id,
         )
         parsed = _parse_json_object(raw_response)
         todos = _normalize_plan_todos(

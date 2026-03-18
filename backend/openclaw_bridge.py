@@ -261,6 +261,31 @@ def _resolve_openclaw_agent_id(agent: str, current_user_id: Optional[str]) -> st
     return f"{base_agent}-{suffix}"
 
 
+def _resolve_nested_openclaw_agent_id(agent_id: str) -> str:
+    normalized_agent_id = str(agent_id).strip() or "main"
+    if normalized_agent_id.endswith("-planner"):
+        return f"{normalized_agent_id}-worker"
+    return f"{normalized_agent_id}-planner"
+
+
+def _resolve_execution_openclaw_agent_id(
+    agent: str,
+    current_user_id: Optional[str],
+    invoking_agent_id: Optional[str] = None,
+) -> str:
+    target_agent = _resolve_openclaw_agent_id(agent, current_user_id)
+    normalized_invoking_agent_id = (
+        str(invoking_agent_id).strip()
+        if isinstance(invoking_agent_id, str) and invoking_agent_id.strip()
+        else ""
+    )
+
+    if normalized_invoking_agent_id and normalized_invoking_agent_id == target_agent:
+        return _resolve_nested_openclaw_agent_id(target_agent)
+
+    return target_agent
+
+
 def _resolve_openclaw_workspace(agent: str) -> str:
     normalized_agent = str(agent).strip()
     if normalized_agent == "vibelife" or normalized_agent.startswith("vibelife-"):
@@ -498,9 +523,14 @@ def run_openclaw_agent(
     base_url: Optional[str] = None,
     auth_token: Optional[str] = None,
     current_user_id: Optional[str] = None,
+    invoking_agent_id: Optional[str] = None,
     timeout_seconds: int = 120,
 ) -> OpenClawAgentResult:
-    target_agent = _resolve_openclaw_agent_id(agent, current_user_id)
+    target_agent = _resolve_execution_openclaw_agent_id(
+        agent,
+        current_user_id,
+        invoking_agent_id,
+    )
     ensure_openclaw_agent(target_agent, model=model)
 
     command = [

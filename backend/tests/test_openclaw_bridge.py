@@ -131,6 +131,31 @@ class OpenClawBridgeTest(unittest.TestCase):
             openclaw_bridge._verified_agents,
         )
 
+    def test_run_openclaw_agent_uses_shadow_agent_when_invoked_from_same_agent(self):
+        class FakeProcess:
+            def __init__(self):
+                self.returncode = 0
+
+            def poll(self):
+                return 0
+
+            def communicate(self):
+                return '{"content":"ok"}', ""
+
+        with patch("openclaw_bridge.ensure_openclaw_agent") as ensure_mock, patch(
+            "openclaw_bridge.subprocess.Popen", return_value=FakeProcess()
+        ), patch(
+            "openclaw_bridge._read_latest_session_reply", return_value=""
+        ):
+            openclaw_bridge.run_openclaw_agent(
+                "test message",
+                agent="vibelife",
+                current_user_id="u_138603f6",
+                invoking_agent_id="vibelife-u_138603f6",
+            )
+
+        ensure_mock.assert_called_once_with("vibelife-u_138603f6-planner", model=None)
+
     def test_run_openclaw_agent_returns_structured_result_with_raw_payloads(self):
         stdout = '{"content":"已创建待办 todo_123","payloads":[{"tool":"vibelife_todo_create","isError":false,"result":{"id":"todo_123","text":"补测试"}}]}'
 

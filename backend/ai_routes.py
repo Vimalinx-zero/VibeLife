@@ -688,6 +688,11 @@ def _validate_provider_name(provider: str) -> str:
     return normalized
 
 
+def _get_invoking_openclaw_agent_id(raw_request: Request) -> Optional[str]:
+    value = str(raw_request.headers.get("x-vibelife-openclaw-agent-id", "")).strip()
+    return value or None
+
+
 @router.get("/api/ai/coach/today")
 def get_ai_coach_today(
     date_key: str,
@@ -714,6 +719,7 @@ def generate_ai_coach_today_plan(
         else None
     )
     openclaw_config = get_current_ai_config().get("openclaw", {})
+    invoking_openclaw_agent_id = _get_invoking_openclaw_agent_id(raw_request)
 
     try:
         return refresh_today_plan(
@@ -726,6 +732,7 @@ def generate_ai_coach_today_plan(
             agent=str(openclaw_config.get("agent", "vibelife")),
             base_url=str(raw_request.base_url).rstrip("/"),
             auth_token=auth_token,
+            invoking_openclaw_agent_id=invoking_openclaw_agent_id,
         )
     except CoachPlanConflictError as exc:
         db.rollback()
@@ -752,6 +759,7 @@ def prepare_ai_workbench(
         else None
     )
     openclaw_config = get_current_ai_config().get("openclaw", {})
+    invoking_openclaw_agent_id = _get_invoking_openclaw_agent_id(raw_request)
 
     try:
         return prepare_workbench(
@@ -764,6 +772,7 @@ def prepare_ai_workbench(
             agent=str(openclaw_config.get("agent", "vibelife")),
             base_url=str(raw_request.base_url).rstrip("/"),
             auth_token=auth_token,
+            invoking_openclaw_agent_id=invoking_openclaw_agent_id,
         )
     except CoachPlanConflictError as exc:
         db.rollback()

@@ -268,6 +268,37 @@ class WorkbenchPrepareApiTest(unittest.TestCase):
         self.assertEqual(after.next_action, "保留原 next action")
         self.assertEqual(after.updated_at, "2026-03-17T08:00:00")
 
+    def test_prepare_forwards_invoking_openclaw_agent_id_from_header(self):
+        _user_id, headers = self.register_user()
+        headers = {
+            **headers,
+            "X-VibeLife-OpenClaw-Agent-Id": "vibelife-u_138603f6",
+        }
+
+        with patch(
+            "ai_routes.prepare_workbench",
+            return_value={
+                "success": True,
+                "date_key": "2026-03-18",
+                "daily_plan": {"success": True, "created_count": 0},
+                "project_digest": {"count": 0, "projects": []},
+                "coach_message": "",
+                "provider": "openclaw",
+            },
+        ) as prepare_mock:
+            response = self.client.post(
+                "/api/ai/workbench/prepare",
+                headers=headers,
+                json={"date_key": "2026-03-18", "max_items": 3},
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        prepare_mock.assert_called_once()
+        self.assertEqual(
+            prepare_mock.call_args.kwargs["invoking_openclaw_agent_id"],
+            "vibelife-u_138603f6",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
