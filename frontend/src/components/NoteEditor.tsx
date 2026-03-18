@@ -12,6 +12,10 @@ import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
 import SmartLink from './SmartLink';
 import TagInput from './TagInput';
 import ImageEditor from './ImageEditor';
+import {
+  getCompactNoteTags,
+  shouldCollapseNoteHeader,
+} from "../pages/noteDensityState";
 import 'katex/dist/katex.min.css';
 
 // ==================== Type Definitions ====================
@@ -49,6 +53,7 @@ interface PreviewSectionProps {
   fontFamily: string;
   renderers: Components;
   processContent: (text: string) => string;
+  onScroll?: (scrollTop: number) => void;
 }
 
 interface CachedSmartLinkProps {
@@ -107,9 +112,12 @@ const Icons = {
 // ✅ 新增：将预览区提取为独立组件，并使用 memo 包裹
 // 只有当 content, fontSize, fontFamily 发生变化时，这里才会重新渲染
 // 点击光标、父组件刷新等操作，统统会被拦截在外！
-const PreviewSection = memo<PreviewSectionProps>(({ content, fontSize, fontFamily, renderers, processContent }) => {
+const PreviewSection = memo<PreviewSectionProps>(({ content, fontSize, fontFamily, renderers, processContent, onScroll }) => {
     return (
-        <div className="w-full h-full overflow-y-auto scroll-smooth custom-scrollbar">
+        <div
+            className="w-full h-full overflow-y-auto scroll-smooth custom-scrollbar"
+            onScroll={(event) => onScroll?.(event.currentTarget.scrollTop)}
+        >
             <div className="px-4 py-4">
                 <div
                     className="w-full min-w-[300px] prose prose-slate dark:prose-invert"
@@ -158,6 +166,8 @@ const NoteEditor = ({
   const [tags, setTags] = useState<string[]>(info?.tags || []); // ✨ 新增：标签状态
   const [imageEditorOpen, setImageEditorOpen] = useState(false); // ✨ 新增：图片编辑器状态
   const [linkCache, setLinkCache] = useState<Record<string, LinkCacheData>>({}); // ✅ 新增：链接数据缓存，避免闪烁
+  const [showMetaEditor, setShowMetaEditor] = useState(false);
+  const [isHeaderCollapsed, setIsHeaderCollapsed] = useState(false);
 
   // ✅ 新增：右键菜单状态
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
@@ -242,7 +252,14 @@ const NoteEditor = ({
   useEffect(() => {
       setTitle(info?.name || "");
       setTags(info?.tags || []); // ✨ 新增：同步标签状态
+      setShowMetaEditor(false);
+      setIsHeaderCollapsed(false);
   }, [info?.name, info?.tags]);
+
+  const compactTags = useMemo(
+    () => getCompactNoteTags(tags, isHeaderCollapsed ? 1 : 2),
+    [isHeaderCollapsed, tags]
+  );
 
   // 映射字体
   const getFontFamily = () => {
@@ -453,21 +470,96 @@ const NoteEditor = ({
       </div>
 
       {/* 2. 标题区域 */}
-      <div className="px-8 pt-8 pb-2 shrink-0 z-10 w-full overflow-hidden">
-         {/* 因为外框已经变窄了，这里直接 w-full 即可，不需要 max-w-3xl 再次限制 */}
-         <div className="w-full">
-             <input
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="w-full bg-transparent font-black text-4xl outline-none text-slate-800 dark:text-slate-100 border-none p-0 placeholder-gray-300 dark:placeholder-gray-700 truncate"
-                placeholder="Untitled Note"
-             />
-             <div className="h-px w-full bg-gray-200 dark:bg-white/5 mt-4"></div>
+      <div
+        className={[
+          "shrink-0 z-10 w-full overflow-hidden border-b border-gray-200/50 dark:border-white/5 bg-white/45 dark:bg-white/[0.03] backdrop-blur-md transition-all duration-300",
+          isHeaderCollapsed ? "px-6 py-3" : "px-8 pt-8 pb-4",
+        ].join(" ")}
+      >
+        <div className="w-full">
+          <div className={isHeaderCollapsed ? "flex items-center gap-4" : ""}>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className={[
+                "min-w-0 flex-1 bg-transparent outline-none text-slate-800 dark:text-slate-100 border-none p-0 placeholder-gray-300 dark:placeholder-gray-700 transition-all duration-300",
+                isHeaderCollapsed ? "truncate text-2xl font-black" : "truncate text-4xl font-black",
+              ].join(" ")}
+              placeholder="Untitled Note"
+            />
 
-              {/* ✨ 新增：标签输入区域 */}
-               {info.type !== undefined && (
-                <div className="mt-4">
+            {isHeaderCollapsed && (
+              <div className="hidden shrink-0 items-center gap-2 lg:flex">
+                {compactTags.visibleTags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="rounded-full bg-blue-500/10 px-2.5 py-1 text-xs font-semibold text-blue-600 dark:bg-blue-500/15 dark:text-blue-300"
+                  >
+                    {tag}
+                  </span>
+                ))}
+                {compactTags.overflowCount > 0 && (
+                  <span className="rounded-full bg-black/5 px-2.5 py-1 text-xs font-semibold text-slate-500 dark:bg-white/10 dark:text-slate-300">
+                    +{compactTags.overflowCount}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowMetaEditor((previous) => !previous)}
+                  className="rounded-full border border-gray-200/80 bg-white/80 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:bg-white dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+                >
+                  {showMetaEditor ? "收起标签" : "编辑标签"}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {!isHeaderCollapsed && (
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              {compactTags.visibleTags.map((tag) => (
+                <span
+                  key={tag}
+                  className="rounded-full bg-blue-500/10 px-2.5 py-1 text-xs font-semibold text-blue-600 dark:bg-blue-500/15 dark:text-blue-300"
+                >
+                  {tag}
+                </span>
+              ))}
+              {compactTags.overflowCount > 0 && (
+                <span className="rounded-full bg-black/5 px-2.5 py-1 text-xs font-semibold text-slate-500 dark:bg-white/10 dark:text-slate-300">
+                  +{compactTags.overflowCount}
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => setShowMetaEditor((previous) => !previous)}
+                className="rounded-full border border-gray-200/80 bg-white/80 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:bg-white dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+              >
+                {showMetaEditor ? "收起标签编辑" : "展开标签编辑"}
+              </button>
+            </div>
+          )}
+
+          <AnimatePresence initial={false}>
+            {showMetaEditor && info.type !== undefined && (
+              <motion.div
+                initial={{ opacity: 0, height: 0, y: -8 }}
+                animate={{ opacity: 1, height: "auto", y: 0 }}
+                exit={{ opacity: 0, height: 0, y: -8 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                className="overflow-hidden"
+              >
+                <div className="mt-4 rounded-2xl border border-white/40 bg-white/75 p-4 shadow-sm dark:border-white/10 dark:bg-slate-900/45">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
+                        Tags
+                      </p>
+                      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                        标签弱化显示，完整编辑放在这里。
+                      </p>
+                    </div>
+                  </div>
                   <TagInput
                     tags={tags}
                     onChange={setTags}
@@ -475,8 +567,10 @@ const NoteEditor = ({
                     autoMode={autoTag}
                   />
                 </div>
-              )}
-         </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
 
       {/* 3. 编辑/预览 分栏区域 */}
@@ -504,6 +598,11 @@ const NoteEditor = ({
                             id="note-textarea"
                             value={content}
                             onChange={(e) => setContent(e.target.value)}
+                            onScroll={(event) =>
+                              setIsHeaderCollapsed(
+                                shouldCollapseNoteHeader(event.currentTarget.scrollTop)
+                              )
+                            }
                             className="w-full h-full bg-transparent outline-none resize-none leading-loose placeholder-gray-400/50 text-gray-800 dark:text-gray-200 border-none focus:ring-0 p-0 block"
                             placeholder="# Start writing..."
                             style={{
@@ -536,6 +635,9 @@ const NoteEditor = ({
                     fontFamily={getFontFamily()}
                     renderers={renderers}
                     processContent={processContent}
+                    onScroll={(scrollTop) =>
+                      setIsHeaderCollapsed(shouldCollapseNoteHeader(scrollTop))
+                    }
                 />
             </div>
         </motion.div>

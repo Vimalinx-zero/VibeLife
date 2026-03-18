@@ -11,6 +11,10 @@ import BacklinksPanel from "../components/BacklinksPanel";
 import NoteSearch from "../components/NoteSearch";
 import TagSettings from "../components/TagSettings";
 import { quickCaptureAPI } from "../utils/api";
+import {
+  getNextNotesUtilityPanel,
+  type NotesUtilityPanel,
+} from "./noteDensityState";
 
 interface NoteItem {
   id: string;
@@ -80,6 +84,9 @@ const Icons = {
   Trash: ({className}: {className?: string}) => <svg viewBox="0 0 24 24" fill="currentColor" className={className}><path fillRule="evenodd" d="M16.5 4.478v.227a48.816 48.816 0 013.878.512.75.75 0 11-.256 1.478l-.209-.035-1.005 13.07a3 3 0 01-2.991 2.77H8.084a3 3 0 01-2.991-2.77L4.087 6.66l-.209.035a.75.75 0 01-.256-1.478A48.567 48.567 0 017.5 4.705v-.227c0-1.564 1.213-2.9 2.816-2.951a52.662 52.662 0 013.369 0c1.603.051 2.815 1.387 2.815 2.951zm-6.136-1.452a51.196 51.196 0 013.273 0C14.39 3.05 15 3.684 15 4.478v.113a49.488 49.488 0 00-6 0v-.113c0-.794.609-1.428 1.364-1.452zm-.355 5.945a.75.75 0 10-1.5.058l.347 9a.75.75 0 101.499-.058l-.346-9zm5.48.058a.75.75 0 10-1.498-.058l-.347 9a.75.75 0 001.5.058l.345-9z" clipRule="evenodd" /></svg>,
   FolderArrow: ({className}: {className?: string}) => <svg viewBox="0 0 24 24" fill="currentColor" className={className}><path d="M19.5 21a3 3 0 003-3v-4.5a3 3 0 00-3-3h-15a3 3 0 00-3 3V18a3 3 0 003 3h15zM1.5 10.146V6a3 3 0 013-3h5.379a2.25 2.25 0 011.59.659l2.122 2.121c.14.141.331.22.53.22H19.5a3 3 0 013 3v1.146A4.483 4.483 0 0019.5 9h-15a4.483 4.483 0 00-3 1.146z" /></svg>,
   Knowledge: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>,
+  Link: ({className}: {className?: string}) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={className}><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 13.5l3-3m-6.75 7.5l-1.5 1.5a3.182 3.182 0 11-4.5-4.5l3-3a3.182 3.182 0 014.5 0m3 3a3.182 3.182 0 014.5 0l3 3a3.182 3.182 0 11-4.5 4.5l-1.5-1.5" /></svg>,
+  Tag: ({className}: {className?: string}) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={className}><path strokeLinecap="round" strokeLinejoin="round" d="M7.5 7.5h.01M3 10.5l7.586-7.586A2 2 0 0112 2.328h6a2 2 0 012 2v6a2 2 0 01-.586 1.414L11.828 19.33a2 2 0 01-2.828 0L3 13.328a2 2 0 010-2.828z" /></svg>,
+  Close: ({className}: {className?: string}) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={className}><path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6L6 18" /></svg>,
 };
 
 const NotesPage = () => {
@@ -180,6 +187,7 @@ const NotesPage = () => {
     breadcrumbs: []
   });
   const [isMoveLoading, setIsMoveLoading] = useState<boolean>(false);
+  const [activeUtilityPanel, setActiveUtilityPanel] = useState<NotesUtilityPanel>(null);
 
   // Ref Picker States
   const [showRefModal, setShowRefModal] = useState<boolean>(false);
@@ -241,6 +249,17 @@ const NotesPage = () => {
   };
 
   useEffect(() => { loadNode("root"); }, []);
+
+  useEffect(() => {
+    if (!activeFile) {
+      setActiveUtilityPanel(null);
+      return;
+    }
+
+    if (activeUtilityPanel === "tags" && !tagSettings.showTagCloud) {
+      setActiveUtilityPanel(null);
+    }
+  }, [activeFile, activeUtilityPanel, tagSettings.showTagCloud]);
 
   // ✨ 新增：监听自定义事件（从 SmartLink 跳转）
   useEffect(() => {
@@ -512,6 +531,19 @@ const NotesPage = () => {
       setShowRefModal(true); 
   }; 
 
+  const handleToggleUtilityPanel = (panel: Exclude<NotesUtilityPanel, null>) => {
+    setActiveUtilityPanel((currentPanel) =>
+      getNextNotesUtilityPanel(currentPanel, panel)
+    );
+  };
+
+  const utilityButtonClassName = (active: boolean) =>
+    `rounded-full border px-3 py-2 text-sm font-bold transition-all ${
+      active
+        ? "border-blue-500 bg-blue-500 text-white shadow-lg shadow-blue-500/25"
+        : "border-white/20 bg-white/80 text-slate-600 hover:bg-white dark:border-white/10 dark:bg-slate-800/80 dark:text-slate-300 dark:hover:bg-slate-700"
+    }`;
+
   return (
     <div 
       className="fixed inset-0 bg-transparent text-slate-800 dark:text-slate-100 font-sans overflow-hidden flex flex-col"
@@ -534,6 +566,35 @@ const NotesPage = () => {
 
         {/* 右侧：AI Assist + 设置按钮 */}
         <div className="ml-auto flex items-center gap-3 pointer-events-auto">
+          {activeFile && (
+            <button
+              onClick={() => handleToggleUtilityPanel('links')}
+              className={utilityButtonClassName(activeUtilityPanel === "links")}
+            >
+              <span className="flex items-center gap-2">
+                <Icons.Link className="w-4 h-4" />
+                <span>反链</span>
+              </span>
+            </button>
+          )}
+
+          {activeFile && tagSettings.showTagCloud && (
+            <button
+              onClick={() => handleToggleUtilityPanel('tags')}
+              className={utilityButtonClassName(activeUtilityPanel === "tags")}
+            >
+              <span className="flex items-center gap-2">
+                <Icons.Tag className="w-4 h-4" />
+                <span>标签</span>
+                {selectedTags.length > 0 && (
+                  <span className="rounded-full bg-white/20 px-1.5 py-0.5 text-[10px] text-current">
+                    {selectedTags.length}
+                  </span>
+                )}
+              </span>
+            </button>
+          )}
+
           <button
             onClick={() => setAiOpen(!aiOpen)}
             className={`px-4 py-2 rounded-full border border-white/20 transition-all duration-300 backdrop-blur-md shadow-sm flex items-center gap-2 group font-bold ${
@@ -556,7 +617,7 @@ const NotesPage = () => {
       </div>
 
       {/* Main Layout */}
-      <div className="flex-1 flex pt-24 pb-6 px-6 gap-6 overflow-hidden items-start">
+      <div className="flex-1 flex pt-24 pb-6 px-6 gap-6 overflow-hidden items-stretch">
         {/* ✨ 修改：侧边栏容器 - 可滚动 */}
         <div className="shrink-0 h-[calc(100vh-10rem)] flex flex-col gap-3 overflow-y-auto custom-scrollbar pr-1">
             {/* 文件浏览器 - 限制高度 */}
@@ -578,37 +639,10 @@ const NotesPage = () => {
                   }}
               />
             </div>
-
-            {/* ✨ 新增：双向链接面板 */}
-            {activeFile && (
-              <div className="shrink-0 w-72 p-4 bg-white/60 dark:bg-[#1e293b]/60 backdrop-blur-2xl border border-white/40 dark:border-white/10 rounded-3xl shadow-xl overflow-hidden">
-                <BacklinksPanel
-                  currentNoteId={activeFile.id}
-                  onLoadNode={loadNode}
-                />
-              </div>
-            )}
-
-            {/* ✨ 标签云面板（根据设置显示/隐藏） */}
-            {tagSettings.showTagCloud && (
-              <div className="shrink-0 w-72 p-4 bg-white/60 dark:bg-[#1e293b]/60 backdrop-blur-2xl border border-white/40 dark:border-white/10 rounded-3xl shadow-xl overflow-hidden">
-                <TagCloud
-                  tags={allTags.map(tag => ({ name: tag, count: 0 }))}
-                  selectedTags={selectedTags}
-                  onTagClick={(tag) => {
-                    if (selectedTags.includes(tag)) {
-                      setSelectedTags(selectedTags.filter(t => t !== tag));
-                    } else {
-                      setSelectedTags([...selectedTags, tag]);
-                    }
-                  }}
-                  onClear={() => setSelectedTags([])}
-                />
-              </div>
-            )}
         </div>
+        <div className="min-w-0 h-full flex flex-1 gap-4 overflow-hidden">
         {/* --- 编辑器区域：移除 AnimatePresence，避免不必要的重挂载 --- */}
-        <div className="h-full w-full overflow-hidden flex justify-center">
+        <div className="h-full min-w-0 flex-1 overflow-hidden flex justify-center">
             <motion.div
                 // ✅ 修复：使用 activeFile?.id 作为 key，但只在真正切换笔记时才变化
                 key={activeFile?.id}
@@ -822,7 +856,61 @@ const NotesPage = () => {
                 )}
             </AnimatePresence>
         </div>
+        <AnimatePresence initial={false}>
+          {activeFile && activeUtilityPanel && (
+            <motion.aside
+              initial={{ opacity: 0, x: 24, width: 0 }}
+              animate={{ opacity: 1, x: 0, width: 320 }}
+              exit={{ opacity: 0, x: 24, width: 0 }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
+              className="h-full shrink-0 overflow-hidden"
+            >
+              <div className="flex h-full w-80 flex-col overflow-hidden rounded-3xl border border-white/40 bg-white/70 shadow-xl backdrop-blur-2xl dark:border-white/10 dark:bg-[#1e293b]/70">
+                <div className="flex h-14 items-center justify-between border-b border-gray-200/50 bg-white/40 px-4 dark:border-white/10 dark:bg-white/5">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
+                      Utility
+                    </p>
+                    <p className="text-sm font-bold text-slate-800 dark:text-white">
+                      {activeUtilityPanel === "links" ? "双向链接" : "标签筛选"}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setActiveUtilityPanel(null)}
+                    className="rounded-full p-2 text-slate-500 transition hover:bg-black/5 hover:text-slate-800 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
+                  >
+                    <Icons.Close className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                  {activeUtilityPanel === "links" ? (
+                    <BacklinksPanel
+                      currentNoteId={activeFile.id}
+                      onLoadNode={loadNode}
+                    />
+                  ) : (
+                    <TagCloud
+                      tags={allTags.map(tag => ({ name: tag, count: 0 }))}
+                      selectedTags={selectedTags}
+                      onTagClick={(tag) => {
+                        if (selectedTags.includes(tag)) {
+                          setSelectedTags(selectedTags.filter(t => t !== tag));
+                        } else {
+                          setSelectedTags([...selectedTags, tag]);
+                        }
+                      }}
+                      onClear={() => setSelectedTags([])}
+                    />
+                  )}
+                </div>
+              </div>
+            </motion.aside>
+          )}
+        </AnimatePresence>
         <AIAssistant isOpen={aiOpen} context={activeFile ? { type: 'note', id: activeFile.id } : null} />
+        </div>
       </div>
 
       {/* --- Modals --- */}
