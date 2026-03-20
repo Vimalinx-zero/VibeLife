@@ -19,6 +19,7 @@ import json
 
 # 引入本地模块
 import models, crud
+from cors_config import get_allowed_origins
 from database import engine, get_db, run_legacy_cleanup_migrations
 from auth import get_current_user_id  # ✅ 新增：用户认证依赖
 from workbench_routes import router as workbench_router
@@ -29,6 +30,7 @@ from git_routes import router as git_router  # ✨ 新增：Git 管理路由
 from project_routes import router as project_router
 from quick_capture_routes import router as quick_capture_router
 from knowledge_routes import router as knowledge_router
+from gaokao_routes import router as gaokao_router  # 高考学习核心路由
 
 # 1. 数据库初始化：迁移旧表后创建当前表结构
 run_legacy_cleanup_migrations()
@@ -58,10 +60,7 @@ async def log_requests(request, call_next):
 
 
 # ✅ 安全修复：CORS 配置从环境变量读取，限制允许的来源
-allowed_origins_str = os.getenv(
-    "ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"
-)
-allowed_origins = [origin.strip() for origin in allowed_origins_str.split(",")]
+allowed_origins = get_allowed_origins(os.getenv("ALLOWED_ORIGINS"))
 
 app.add_middleware(
     CORSMiddleware,
