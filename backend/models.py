@@ -179,6 +179,25 @@ class QuickNoteCapture(Base):
     updated_at = Column(String, default=lambda: datetime.datetime.utcnow().isoformat())
 
 
+class MusicTrack(Base):
+    __tablename__ = "music_tracks"
+
+    id = Column(String, primary_key=True, index=True)
+    user_id = Column(String, index=True, nullable=False)
+    title = Column(String, nullable=False)
+    artist = Column(String, default="")
+    album = Column(String, default="")
+    duration_seconds = Column(Integer, nullable=True)
+    mime_type = Column(String, nullable=False)
+    file_size = Column(Integer, nullable=False)
+    stored_filename = Column(String, nullable=False)
+    stored_path = Column(String, nullable=False)
+    original_filename = Column(String, nullable=False)
+    source_kind = Column(String, default="imported")
+    created_at = Column(String, default=lambda: datetime.datetime.utcnow().isoformat())
+    updated_at = Column(String, default=lambda: datetime.datetime.utcnow().isoformat())
+
+
 # ============================================================
 # 高考学习核心数据模型
 # 设计原则：服务真实学习场景，不堆花哨字段

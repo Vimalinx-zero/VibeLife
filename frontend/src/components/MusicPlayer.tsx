@@ -1,6 +1,7 @@
 import { useState, useEffect, memo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useMedia } from "../context/MediaContext";
+import type { FocusCompanionSceneId } from "../context/focusCompanionState";
 
 const Icons = {
   Play: () => <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6"><path fillRule="evenodd" d="M4.5 5.653c0-1.426 1.529-2.33 2.779-1.643l11.54 6.348c1.295.712 1.295 2.573 0 3.285L7.28 19.991c-1.25.687-2.779-.217-2.779-1.643V5.653z" clipRule="evenodd" /></svg>,
@@ -12,90 +13,105 @@ const Icons = {
   List: () => <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path fillRule="evenodd" d="M2.625 6.75a1.125 1.125 0 112.25 0 1.125 1.125 0 01-2.25 0zm4.875 0A.75.75 0 018.25 6h12a.75.75 0 010 1.5h-12a.75.75 0 01-.75-.75zM2.625 12a1.125 1.125 0 112.25 0 1.125 1.125 0 01-2.25 0zM7.5 12a.75.75 0 01.75-.75h12a.75.75 0 010 1.5h-12A.75.75 0 017.5 12zm-4.875 5.25a1.125 1.125 0 112.25 0 1.125 1.125 0 01-2.25 0zm4.875 0a.75.75 0 01.75-.75h12a.75.75 0 010 1.5h-12a.75.75 0 01-.75-.75z" clipRule="evenodd" /></svg>,
 };
 
+const SCENE_LABELS: Record<FocusCompanionSceneId, string> = {
+  "deep-focus": "深度专注",
+  "light-work": "轻工作流",
+  "reset-break": "休息恢复",
+  "night-wind": "夜间收口",
+};
+
+const AUDIO_FILE_PATTERN = /\.(mp3|m4a|wav|ogg|flac)$/i;
+
 const MusicPlayer = memo(() => {
-  const [volume, setVolume] = useState<number>(0.5);
-  const [progress, setProgress] = useState<number>(0);
   const [showPlaylist, setShowPlaylist] = useState<boolean>(false);
-  const [currentTrackIndex, setCurrentTrackIndex] = useState<number>(0);
   const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [isImporting, setIsImporting] = useState<boolean>(false);
+  const [importFeedback, setImportFeedback] = useState<string>("");
   const progressBarRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
 
-  // ✅ 使用全局音乐状态
-  const { isMusicPlaying, toggleMusic, isMusicMuted, toggleMusicMute, setMusicVolume, setMusicSource } = useMedia();
+  const {
+    activeSceneId,
+    currentTrackIndex,
+    getCurrentTrack,
+    hasImportedTracks,
+    importMusicFiles,
+    isMusicMuted,
+    isMusicPlaying,
+    isMusicLibraryLoading,
+    musicCurrentTime,
+    musicDuration,
+    musicVolume,
+    playNext,
+    playPrevious,
+    playTrack,
+    seekMusic,
+    setMusicVolume,
+    toggleMusic,
+    toggleMusicMute,
+    tracks,
+  } = useMedia();
 
-  // ✅ 无版权音乐列表（使用稳定的免费音频源）
-  const tracks: Array<{
-    id: number;
-    title: string;
-    artist: string;
-    url: string;
-    duration: string;
-  }> = [
-    {
-      id: 1,
-      title: "Deep Focus",
-      artist: "FASSounds",
-      url: "https://cdn.pixabay.com/audio/2022/05/27/audio_1808fbf07a.mp3",
-      duration: "3:19"
-    },
-    // Temporarily using one working track - others will be replaced later
-    {
-      id: 2,
-      title: "Chill Lofi",
-      artist: "FASSounds",
-      url: "https://cdn.pixabay.com/audio/2022/05/27/audio_1808fbf07a.mp3",
-      duration: "2:54"
-    },
-    {
-      id: 3,
-      title: "Lofi Chill",
-      artist: "FASSounds",
-      url: "https://cdn.pixabay.com/audio/2022/05/27/audio_1808fbf07a.mp3",
-      duration: "3:06"
-    },
-  ];
-
-  const currentTrack = tracks[currentTrackIndex];
-
-  // Initialize volume on mount
-  useEffect(() => {
-    setMusicVolume(volume);
-  }, []);
-
-  // Update audio source when track changes
-  useEffect(() => {
-    setMusicSource(currentTrack.url);
-    setProgress(0);
-  }, [currentTrackIndex, currentTrack.url, setMusicSource]);
-
-  // Simulate progress
-  useEffect(() => {
-    let interval;
-    if (isMusicPlaying) {
-      interval = setInterval(() => {
-        setProgress(p => (p >= 100 ? 0 : p + 0.3));
-      }, 500);
-    }
-    return () => clearInterval(interval);
-  }, [isMusicPlaying]);
+  const currentTrack = getCurrentTrack();
+  const progress = musicDuration > 0 ? (musicCurrentTime / musicDuration) * 100 : 0;
 
   // Handlers
   const handlePrevious = () => {
-    const newIndex = (currentTrackIndex - 1 + tracks.length) % tracks.length;
-    setCurrentTrackIndex(newIndex);
-    setProgress(0);
+    playPrevious();
   };
 
   const handleNext = () => {
-    const newIndex = (currentTrackIndex + 1) % tracks.length;
-    setCurrentTrackIndex(newIndex);
-    setProgress(0);
+    playNext();
   };
 
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newVolume = parseFloat(e.target.value);
-    setVolume(newVolume);
-    setMusicVolume(newVolume); // Sync with MediaContext
+    setMusicVolume(newVolume);
+  };
+
+  const isAudioFile = (file: File): boolean => {
+    if (String(file.type || "").startsWith("audio/")) {
+      return true;
+    }
+    return AUDIO_FILE_PATTERN.test(file.name);
+  };
+
+  const handleImportSelection = async (files: FileList | null) => {
+    const selectedFiles = Array.from(files || []).filter(isAudioFile);
+    if (selectedFiles.length === 0) {
+      setImportFeedback("没找到可导入的音频文件");
+      return;
+    }
+
+    setIsImporting(true);
+    setImportFeedback("");
+    try {
+      const importedCount = await importMusicFiles(selectedFiles);
+      setImportFeedback(importedCount > 0 ? `已导入 ${importedCount} 首音乐` : "没有新增音乐");
+      setShowPlaylist(true);
+    } catch (error) {
+      console.error("Failed to import music files:", error);
+      setImportFeedback(error instanceof Error ? error.message : "导入失败");
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const openFilePicker = () => {
+    if (!fileInputRef.current) {
+      return;
+    }
+    fileInputRef.current.value = "";
+    fileInputRef.current.click();
+  };
+
+  const openFolderPicker = () => {
+    if (!folderInputRef.current) {
+      return;
+    }
+    folderInputRef.current.value = "";
+    folderInputRef.current.click();
   };
 
   // Progress bar drag handlers
@@ -119,7 +135,9 @@ const MusicPlayer = memo(() => {
     const rect = progressBarRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const percentage = Math.max(0, Math.min(100, (x / rect.width) * 100));
-    setProgress(percentage);
+    if (musicDuration > 0) {
+      seekMusic((percentage / 100) * musicDuration);
+    }
   };
 
   // Global mouse events for dragging
@@ -135,17 +153,47 @@ const MusicPlayer = memo(() => {
     return undefined;
   }, [isDragging]);
 
+  useEffect(() => {
+    const input = folderInputRef.current;
+    if (!input) {
+      return;
+    }
+    input.setAttribute("webkitdirectory", "");
+    input.setAttribute("directory", "");
+  }, []);
+
   // Format progress
-  const formatProgress = (val: number): string => {
-    const totalSeconds = 180; // Approximate 3 minutes
-    const currentSeconds = (val / 100) * totalSeconds;
-    const minutes = Math.floor(currentSeconds / 60);
-    const seconds = Math.floor(currentSeconds % 60);
+  const formatProgress = (secondsTotal: number): string => {
+    const safeSeconds = Math.max(0, Math.floor(secondsTotal));
+    const minutes = Math.floor(safeSeconds / 60);
+    const seconds = Math.floor(safeSeconds % 60);
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  return (
+    return (
     <div className="relative w-full">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".mp3,.m4a,.wav,.ogg,.flac,audio/*"
+        multiple
+        className="hidden"
+        onChange={(event) => {
+          void handleImportSelection(event.target.files);
+          event.target.value = "";
+        }}
+      />
+      <input
+        ref={folderInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={(event) => {
+          void handleImportSelection(event.target.files);
+          event.target.value = "";
+        }}
+      />
+
       {/* Music Player Bar */}
       <div className="flex items-center gap-6 px-6 py-4 bg-white/60 dark:bg-black/60 backdrop-blur-2xl border border-gray-300/50 dark:border-white/10 shadow-2xl rounded-2xl relative overflow-hidden">
 
@@ -174,13 +222,16 @@ const MusicPlayer = memo(() => {
         <div className="relative group z-10">
           <div className="w-16 h-16 rounded-lg bg-gradient-to-br from-gray-800 to-gray-900 dark:from-gray-200 dark:to-gray-300 flex items-center justify-center shadow-lg">
             <span className="text-2xl font-bold text-white dark:text-gray-900">
-              {(currentTrackIndex + 1).toString().padStart(2, '0')}
+              {currentTrack.cover}
             </span>
           </div>
         </div>
 
         {/* Track Info */}
         <div className="min-w-0 flex-1 z-10">
+          <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-500 dark:text-gray-400">
+            {hasImportedTracks ? "本地音乐库" : "专注陪伴"} · {SCENE_LABELS[activeSceneId]}
+          </div>
           <div className="text-base font-semibold text-gray-900 dark:text-white truncate">
             {currentTrack.title}
           </div>
@@ -215,7 +266,7 @@ const MusicPlayer = memo(() => {
 
         {/* Time Display */}
         <div className="text-sm text-gray-600 dark:text-gray-400 font-mono tabular-nums min-w-[100px] text-center z-10">
-          {formatProgress(progress)} / {currentTrack.duration}
+          {formatProgress(musicCurrentTime)} / {musicDuration > 0 ? formatProgress(musicDuration) : currentTrack.duration}
         </div>
 
         {/* Progress Bar */}
@@ -242,7 +293,7 @@ const MusicPlayer = memo(() => {
             onClick={toggleMusicMute}
             className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-all hover:scale-110 active:scale-95"
           >
-            {isMusicMuted || volume === 0 ? <Icons.VolumeX /> : <Icons.Volume />}
+            {isMusicMuted || musicVolume === 0 ? <Icons.VolumeX /> : <Icons.Volume />}
           </button>
 
           <div className="w-24 relative group">
@@ -251,14 +302,14 @@ const MusicPlayer = memo(() => {
               min="0"
               max="1"
               step="0.01"
-              value={isMusicMuted ? 0 : volume}
+              value={isMusicMuted ? 0 : musicVolume}
               onChange={handleVolumeChange}
               className="w-full h-1.5 bg-gray-300 dark:bg-white/20 rounded-full appearance-none cursor-pointer accent-gray-900 dark:accent-white"
             />
             {/* Volume fill effect */}
             <div
               className="absolute top-1/2 left-0 h-1.5 bg-gray-600 dark:bg-gray-400 rounded-full pointer-events-none transition-all"
-              style={{ width: `${(isMusicMuted ? 0 : volume) * 100}%` }}
+              style={{ width: `${(isMusicMuted ? 0 : musicVolume) * 100}%` }}
             ></div>
           </div>
         </div>
@@ -287,30 +338,57 @@ const MusicPlayer = memo(() => {
             className="absolute bottom-full left-0 right-0 mb-4 max-h-[400px] overflow-y-auto bg-white/95 dark:bg-[#1a1a1a]/95 backdrop-blur-xl rounded-t-lg border border-gray-300 dark:border-white/10 shadow-2xl z-50 custom-scrollbar"
           >
             <div className="p-2">
+              <div className="flex items-center justify-between gap-3 px-3 py-2 border-b border-gray-200 dark:border-white/10">
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-gray-900 dark:text-white">
+                    {hasImportedTracks ? "本地音乐库" : "默认专注曲库"}
+                  </div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                    {isMusicLibraryLoading || isImporting
+                      ? "正在整理音乐库..."
+                      : `${tracks.length} 首可播放音乐`}
+                    {importFeedback ? ` · ${importFeedback}` : ""}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={openFolderPicker}
+                    disabled={isImporting || isMusicLibraryLoading}
+                    className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-white/5 dark:text-gray-200 dark:hover:bg-white/10"
+                  >
+                    选择文件夹
+                  </button>
+                  <button
+                    onClick={openFilePicker}
+                    disabled={isImporting || isMusicLibraryLoading}
+                    className="rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-black dark:hover:bg-gray-200"
+                  >
+                    选择文件
+                  </button>
+                </div>
+              </div>
               <div className="space-y-0">
                 {tracks.map((track, index) => (
                   <button
                     key={track.id}
                     onClick={() => {
-                      setCurrentTrackIndex(index);
-                      setProgress(0);
-                      if (index !== currentTrackIndex && isMusicPlaying) {
-                        // Track change logic here
-                      }
+                      playTrack(index);
                     }}
                     className={`w-full flex items-center gap-3 px-3 py-2 transition-colors border-b border-gray-200 dark:border-white/5 last:border-0 ${
                       index === currentTrackIndex
                         ? 'bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-white'
                         : 'hover:bg-gray-50 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300'
                     }`}
-                  >
-                    <div className="w-8 h-8 rounded-l-full rounded-r bg-gray-900 dark:bg-white text-white dark:text-black text-xs font-bold flex-shrink-0 flex items-center justify-center">
-                      {(index + 1).toString().padStart(2, '0')}
-                    </div>
-                    <div className="flex-1 min-w-0 text-left">
-                      <div className="text-sm font-medium truncate">{track.title}</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{track.artist}</div>
-                    </div>
+                    >
+                      <div className="w-8 h-8 rounded-l-full rounded-r bg-gray-900 dark:bg-white text-white dark:text-black text-xs font-bold flex-shrink-0 flex items-center justify-center">
+                        {track.cover}
+                      </div>
+                      <div className="flex-1 min-w-0 text-left">
+                        <div className="text-sm font-medium truncate">{track.title}</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                          {SCENE_LABELS[track.sceneId]} · {track.artist}
+                        </div>
+                      </div>
                     <div className="text-xs text-gray-400 dark:text-gray-500 tabular-nums flex-shrink-0">
                       {track.duration}
                     </div>

@@ -30,6 +30,7 @@ from git_routes import router as git_router  # ✨ 新增：Git 管理路由
 from project_routes import router as project_router
 from quick_capture_routes import router as quick_capture_router
 from knowledge_routes import router as knowledge_router
+from music_routes import router as music_router
 from gaokao_routes import router as gaokao_router  # 高考学习核心路由
 
 # 1. 数据库初始化：迁移旧表后创建当前表结构
@@ -89,6 +90,7 @@ app.include_router(git_router)
 app.include_router(project_router)
 app.include_router(quick_capture_router)
 app.include_router(knowledge_router)
+app.include_router(music_router)
 
 
 # =======================
@@ -684,5 +686,4 @@ async def get_note_preview(
         "body": summary,
         "tags": ["Note", note.type],
     }
-
 

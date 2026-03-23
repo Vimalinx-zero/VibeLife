@@ -4,6 +4,7 @@ import type {
   AxiosResponse,
   InternalAxiosRequestConfig,
 } from "axios";
+import { resolveApiOrigin } from "./apiOrigin";
 
 /**
  * API 服务层
@@ -12,14 +13,10 @@ import type {
  */
 
 const getApiOrigin = (): string => {
-  const configuredOrigin = window.__VIBELIFE_API_ORIGIN__;
-  if (configuredOrigin && configuredOrigin.trim()) {
-    return configuredOrigin.replace(/\/+$/, "");
-  }
-
-  return window.location.port === "49173"
-    ? "http://127.0.0.1:49174"
-    : "http://localhost:8000";
+  return resolveApiOrigin({
+    configuredOrigin: window.__VIBELIFE_API_ORIGIN__,
+    port: window.location.port,
+  });
 };
 
 // ✨ 新增：创建 axios 实例
@@ -28,6 +25,7 @@ const apiClient: AxiosInstance = axios.create({
 });
 
 const AI_CHAT_TIMEOUT_MS = 180000;
+const MUSIC_IMPORT_TIMEOUT_MS = 120000;
 
 // ✨ 新增：请求拦截器 - 自动添加 JWT token
 apiClient.interceptors.request.use(
@@ -67,6 +65,45 @@ export interface ProjectStepDTO {
   due: string;
   done: boolean;
 }
+
+export interface MusicLibraryTrackDTO {
+  id: string;
+  user_id: string;
+  title: string;
+  artist: string;
+  album: string;
+  duration_seconds: number | null;
+  mime_type: string;
+  file_size: number;
+  stored_filename: string;
+  original_filename: string;
+  source_kind: string;
+  stream_path: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export const musicLibraryAPI = {
+  list: (): Promise<MusicLibraryTrackDTO[]> =>
+    apiClient
+      .get<{ tracks: MusicLibraryTrackDTO[] }>("/music/library")
+      .then((res) => res.data.tracks || []),
+  importFiles: (files: File[]): Promise<MusicLibraryTrackDTO[]> => {
+    const formData = new FormData();
+    for (const file of files) {
+      formData.append("files", file);
+    }
+
+    return apiClient
+      .post<{ tracks: MusicLibraryTrackDTO[] }>("/music/import", formData, {
+        timeout: MUSIC_IMPORT_TIMEOUT_MS,
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      })
+      .then((res) => res.data.tracks || []);
+  },
+};
 
 export interface ProjectResourceDTO {
   id: string;
