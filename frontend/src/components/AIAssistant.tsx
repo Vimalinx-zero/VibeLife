@@ -63,7 +63,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ isOpen, context = null }) => 
     try {
       // 调用后端API
       const token = localStorage.getItem('token');
-      const response = await axios.post('http://localhost:8000/api/ai/chat', {
+      const response = await axios.post(`${window.__VIBELIFE_API_ORIGIN__}/api/ai/chat`, {
         message: userMessage.content,
         context: context, // 传递当前笔记上下文
         history: messages.slice(-5).map(m => ({ // 只发送最近5条消息作为上下文
