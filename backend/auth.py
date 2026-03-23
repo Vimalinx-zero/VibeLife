@@ -18,6 +18,11 @@ JWT_KEY_FILE = Path(__file__).with_name("jwt_key.txt")
 def _load_secret_key() -> str:
     env_secret = os.getenv("JWT_SECRET_KEY")
     if env_secret:
+        current_file_secret = ""
+        if JWT_KEY_FILE.exists():
+            current_file_secret = JWT_KEY_FILE.read_text(encoding="utf-8").strip()
+        if current_file_secret != env_secret:
+            JWT_KEY_FILE.write_text(env_secret, encoding="utf-8")
         return env_secret
 
     if JWT_KEY_FILE.exists():
