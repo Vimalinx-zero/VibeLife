@@ -1,306 +1,270 @@
-import MarkdownCard from "../MarkdownCard";
-import type { QuickCaptureRecordDTO } from "../../utils/api";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import type {
+  KnowledgeDiscussionMessageDTO,
+  QuickCaptureRecordDTO,
+} from "../../utils/api";
+import { getKnowledgeCenterPanelState } from "../../pages/knowledgeWorkspaceShellState";
 
-interface KnowledgeBrowserProps {
-  listTitle: string;
-  entries: QuickCaptureRecordDTO[];
-  visibleEntries: QuickCaptureRecordDTO[];
-  selectedEntryId: string | null;
-  selectedEntryIds: string[];
-  selectedEntry: QuickCaptureRecordDTO | null;
-  projectNameById: Record<string, string>;
-  searchInput: string;
-  activeSearchQuery: string;
-  isLoading: boolean;
-  loadError: string | null;
-  onSearchInputChange: (value: string) => void;
-  onApplySearch: () => void;
-  onClearSearch: () => void;
-  onRefresh: () => void;
-  onSelectEntry: (entryId: string) => void;
-  onToggleEntrySelection: (entryId: string) => void;
+interface KnowledgeBrowserCitationLike {
+  id: string;
+  title: string;
+  content_kind?: "collected" | "generated";
 }
 
-const panelClassName =
-  "rounded-[28px] border border-white/45 bg-white/82 p-5 shadow-[0_30px_90px_rgba(15,23,42,0.14)] backdrop-blur-2xl dark:border-white/12 dark:bg-slate-950/72";
+interface KnowledgeBrowserProps {
+  selectedEntryId: string | null;
+  selectedEntry: QuickCaptureRecordDTO | null;
+  selectedEntries: QuickCaptureRecordDTO[];
+  projectNameById: Record<string, string>;
+  activeSearchQuery: string;
+  mode: "entry" | "selection";
+  messages: KnowledgeDiscussionMessageDTO[];
+  citations: KnowledgeBrowserCitationLike[];
+  discussionInput: string;
+  isDiscussing: boolean;
+  onDiscussionInputChange: (value: string) => void;
+  onSendDiscussion: () => void;
+  onSelectCitation: (citationId: string) => void;
+}
 
-const inputClassName =
-  "w-full rounded-2xl border border-slate-200/80 bg-white px-3.5 py-2.5 text-sm text-slate-700 outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200 dark:border-white/10 dark:bg-white/5 dark:text-slate-100 dark:focus:border-white/25 dark:focus:ring-white/10";
+const shellClassName =
+  "flex h-full min-h-0 flex-col overflow-hidden rounded-[24px] border border-[#31343b] bg-[#1d2025] text-white shadow-[0_24px_70px_rgba(0,0,0,0.28)]";
 
-const formatTime = (value: string | undefined) => {
-  if (!value) {
-    return "刚刚";
-  }
+const composerClassName =
+  "w-full rounded-[18px] border border-[#353840] bg-[#252931] px-4 py-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-[#565b66] focus:bg-[#2a2f38]";
 
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "刚刚";
-  }
-
-  return date.toLocaleString("zh-CN", {
-    month: "numeric",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+const markdownComponents = {
+  p: (props: React.HTMLAttributes<HTMLParagraphElement>) => (
+    <p className="mb-3 last:mb-0 leading-7" {...props} />
+  ),
+  ul: (props: React.HTMLAttributes<HTMLUListElement>) => (
+    <ul className="mb-3 list-disc space-y-1 pl-5" {...props} />
+  ),
+  ol: (props: React.HTMLAttributes<HTMLOListElement>) => (
+    <ol className="mb-3 list-decimal space-y-1 pl-5" {...props} />
+  ),
+  li: (props: React.HTMLAttributes<HTMLLIElement>) => <li className="pl-1" {...props} />,
+  strong: (props: React.HTMLAttributes<HTMLElement>) => (
+    <strong className="font-semibold text-white" {...props} />
+  ),
+  code: ({
+    className,
+    children,
+    ...props
+  }: React.HTMLAttributes<HTMLElement> & { className?: string }) =>
+    className ? (
+      <code
+        className="mb-3 block overflow-x-auto rounded-[16px] bg-black/40 px-4 py-3 text-sm text-slate-100"
+        {...props}
+      >
+        {children}
+      </code>
+    ) : (
+      <code className="rounded bg-black/30 px-1.5 py-0.5 text-[0.92em]" {...props}>
+        {children}
+      </code>
+    ),
+  pre: (props: React.HTMLAttributes<HTMLPreElement>) => (
+    <pre className="mb-3 overflow-x-auto" {...props} />
+  ),
+  a: (props: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
+    <a
+      className="underline decoration-current/30 underline-offset-4"
+      target="_blank"
+      rel="noreferrer"
+      {...props}
+    />
+  ),
 };
 
-const getEntryContent = (entry: QuickCaptureRecordDTO | null) => {
+const formatEntryContext = (
+  entry: QuickCaptureRecordDTO | null,
+  projectNameById: Record<string, string>
+) => {
+  if (!entry) {
+    return "当前基于已选来源对话";
+  }
+
+  const projectLabel = entry.project_id
+    ? projectNameById[entry.project_id] ?? entry.project_id
+    : "未归项目";
+  return `${projectLabel}${entry.category ? ` · ${entry.category}` : ""}`;
+};
+
+const getEntryExcerpt = (entry: QuickCaptureRecordDTO | null) => {
   if (!entry) {
     return "";
   }
 
-  return (
-    entry.normalized_markdown ||
+  const raw =
     entry.summary ||
+    entry.normalized_markdown ||
     entry.discussion_metadata?.assistant_reply_excerpt ||
-    ""
-  );
+    "";
+
+  return raw.replace(/\s+/g, " ").slice(0, 220);
 };
 
 const KnowledgeBrowser = ({
-  listTitle,
-  entries,
-  visibleEntries,
   selectedEntryId,
-  selectedEntryIds,
   selectedEntry,
+  selectedEntries,
   projectNameById,
-  searchInput,
   activeSearchQuery,
-  isLoading,
-  loadError,
-  onSearchInputChange,
-  onApplySearch,
-  onClearSearch,
-  onRefresh,
-  onSelectEntry,
-  onToggleEntrySelection,
+  mode,
+  messages,
+  citations,
+  discussionInput,
+  isDiscussing,
+  onDiscussionInputChange,
+  onSendDiscussion,
+  onSelectCitation,
 }: KnowledgeBrowserProps) => {
-  const selectedCount = selectedEntryIds.length;
-  const totalCount = entries.length;
-  const showingSearch = activeSearchQuery.trim().length > 0;
+  const centerState = getKnowledgeCenterPanelState({
+    selectedEntryId,
+    messageCount: messages.length,
+  });
+  const canSend = discussionInput.trim().length > 0 && !isDiscussing;
+  const lastAssistantIndex = [...messages]
+    .map((message, index) => (message.role === "assistant" ? index : -1))
+    .filter((index) => index >= 0);
+  const latestAssistantIndex =
+    lastAssistantIndex.length > 0 ? lastAssistantIndex[lastAssistantIndex.length - 1] : undefined;
+  const contextText =
+    mode === "selection" || selectedEntries.length > 1
+      ? `基于 ${selectedEntries.length || "当前范围内的"} 个来源`
+      : formatEntryContext(selectedEntry, projectNameById);
+  const selectedExcerpt = getEntryExcerpt(selectedEntry);
 
   return (
-    <section className={`${panelClassName} flex h-full min-h-0 flex-col gap-4`}>
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-slate-200/80 bg-white/90 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500 dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
-            Browser
+    <section className={shellClassName}>
+      <div className="border-b border-[#2b2f36] px-5 py-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold tracking-tight text-white">对话</h2>
+            <div className="mt-1 text-xs text-slate-500">
+              {activeSearchQuery ? `${contextText} · 检索：${activeSearchQuery}` : contextText}
+            </div>
           </div>
-          <h2 className="mt-3 text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">
-            {listTitle}
-          </h2>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            当前 {visibleEntries.length} 条，已选 {selectedCount} 条
-            {showingSearch ? `，检索词「${activeSearchQuery}」` : `，总库存 ${totalCount} 条`}
-          </p>
+          <button
+            type="button"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-[14px] border border-[#353840] bg-[#252931] text-slate-400 transition hover:border-[#4b505c] hover:text-white"
+            title="更多"
+          >
+            ⋮
+          </button>
         </div>
-
-        <button
-          type="button"
-          onClick={onRefresh}
-          className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
-        >
-          刷新列表
-        </button>
-      </header>
-
-      <div className="flex flex-wrap gap-2">
-        <input
-          value={searchInput}
-          onChange={(event) => onSearchInputChange(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              onApplySearch();
-            }
-          }}
-          placeholder="在当前知识范围内检索..."
-          className={`${inputClassName} min-w-[220px] flex-1`}
-        />
-        <button
-          type="button"
-          onClick={onApplySearch}
-          className="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200"
-        >
-          检索
-        </button>
-        <button
-          type="button"
-          onClick={onClearSearch}
-          className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
-        >
-          清空
-        </button>
       </div>
 
-      {loadError ? (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-200">
-          {loadError}
+      {selectedEntry ? (
+        <div className="border-b border-[#2b2f36] px-5 py-4">
+          <div className="rounded-[18px] border border-[#30343c] bg-[#23262c] px-4 py-4">
+            <div className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">
+              当前来源
+            </div>
+            <div className="mt-2 text-base font-semibold text-white">{selectedEntry.title}</div>
+            {selectedExcerpt ? (
+              <p className="mt-2 text-sm leading-6 text-slate-400">{selectedExcerpt}</p>
+            ) : null}
+          </div>
         </div>
       ) : null}
 
-      <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1.1fr)_minmax(260px,0.95fr)] gap-4">
-        <div className="min-h-0 overflow-y-auto rounded-[24px] border border-slate-200/80 bg-slate-50/90 p-3 dark:border-white/10 dark:bg-white/[0.04]">
-          {isLoading ? (
-            <div className="flex h-full items-center justify-center text-sm text-slate-500 dark:text-slate-400">
-              正在加载知识条目...
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+        {centerState === "empty" ? (
+          <div className="flex h-full min-h-[220px] items-center justify-center text-center">
+            <div className="max-w-[420px]">
+              <div className="text-sm font-medium text-slate-400">先从左边挑一批来源</div>
+              <p className="mt-2 text-sm leading-7 text-slate-500">
+                这里会像 NotebookLM 一样连续承接对话，不再分成独立的阅读页和聊天页。
+              </p>
             </div>
-          ) : visibleEntries.length === 0 ? (
-            <div className="flex h-full items-center justify-center rounded-[20px] border border-dashed border-slate-300/80 px-6 text-center text-sm leading-6 text-slate-500 dark:border-white/10 dark:text-slate-400">
-              当前范围内还没有内容。你可以先从左边导入文本、链接或文件。
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="flex h-full min-h-[220px] items-center justify-center text-center">
+            <div className="max-w-[480px]">
+              <div className="text-base font-medium text-slate-200">{contextText}</div>
+              <p className="mt-2 text-sm leading-7 text-slate-500">
+                直接提问就行，我会基于当前来源范围继续往下聊。
+              </p>
             </div>
-          ) : (
-            <div className="space-y-3">
-              {visibleEntries.map((entry) => {
-                const active = entry.id === selectedEntryId;
-                const checked = selectedEntryIds.includes(entry.id);
-                const projectLabel =
-                  entry.project_id ? projectNameById[entry.project_id] ?? entry.project_id : "未归项目";
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {messages.map((message, index) => {
+              const isUser = message.role === "user";
+              const showCitations = !isUser && index === latestAssistantIndex && citations.length > 0;
 
-                return (
-                  <button
-                    key={entry.id}
-                    type="button"
-                    onClick={() => onSelectEntry(entry.id)}
-                    className={`w-full rounded-[22px] border p-4 text-left transition ${
-                      active
-                        ? "border-slate-900 bg-slate-900 text-white shadow-lg shadow-slate-900/20 dark:border-white dark:bg-white dark:text-slate-950"
-                        : "border-slate-200/80 bg-white/95 text-slate-700 hover:border-slate-300 hover:bg-white dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-100 dark:hover:bg-white/[0.08]"
+              return (
+                <div
+                  key={`${message.role}-${index}-${message.content.slice(0, 20)}`}
+                  className={`rounded-[20px] border px-4 py-4 ${
+                    isUser
+                      ? "ml-auto max-w-[82%] border-[#48505d] bg-[#313743]"
+                      : "max-w-[92%] border-[#2f333b] bg-[#23262c]"
+                  }`}
+                >
+                  <div
+                    className={`mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] ${
+                      isUser ? "text-slate-400" : "text-slate-500"
                     }`}
                   >
-                    <div className="flex items-start gap-3">
-                      <label
-                        className={`mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${
-                          active
-                            ? "border-white/50 bg-white/10 dark:border-slate-300 dark:bg-slate-200/60"
-                            : "border-slate-300 bg-white dark:border-white/20 dark:bg-white/5"
-                        }`}
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => onToggleEntrySelection(entry.id)}
-                          className="h-3.5 w-3.5 accent-slate-900 dark:accent-white"
-                        />
-                      </label>
+                    {isUser ? "You" : "AI"}
+                  </div>
 
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="truncate text-sm font-semibold">{entry.title}</p>
-                          <span
-                            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                              active
-                                ? "bg-white/15 text-white dark:bg-slate-900/10 dark:text-slate-800"
-                                : "bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-slate-300"
-                            }`}
-                          >
-                            {entry.content_kind === "generated" ? "生成" : entry.source_type}
-                          </span>
-                          {entry.category ? (
-                            <span
-                              className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                                active
-                                  ? "bg-white/15 text-white/80 dark:bg-slate-900/10 dark:text-slate-700"
-                                  : "bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-slate-300"
-                              }`}
-                            >
-                              {entry.category}
-                            </span>
-                          ) : null}
-                        </div>
+                  <div className={`text-sm leading-7 ${isUser ? "text-slate-100" : "text-slate-200"}`}>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                      {message.content}
+                    </ReactMarkdown>
+                  </div>
 
-                        <p className={`mt-2 line-clamp-3 text-sm leading-6 ${active ? "text-white/80 dark:text-slate-700" : "text-slate-500 dark:text-slate-400"}`}>
-                          {entry.summary || "暂无摘要"}
-                        </p>
-
-                        <div className={`mt-3 flex flex-wrap items-center gap-2 text-[11px] ${active ? "text-white/70 dark:text-slate-600" : "text-slate-400 dark:text-slate-500"}`}>
-                          <span>{projectLabel}</span>
-                          <span>·</span>
-                          <span>{formatTime(entry.updated_at || entry.created_at)}</span>
-                          {entry.content_kind === "generated" && entry.source_capture_ids?.length ? (
-                            <>
-                              <span>·</span>
-                              <span>来源 {entry.source_capture_ids.length} 条</span>
-                            </>
-                          ) : null}
-                        </div>
-
-                        {entry.tags?.length ? (
-                          <div className="mt-3 flex flex-wrap gap-1.5">
-                            {entry.tags.slice(0, 4).map((tag) => (
-                              <span
-                                key={tag}
-                                className={`rounded-full px-2 py-0.5 text-[11px] ${
-                                  active
-                                    ? "bg-white/15 text-white/85 dark:bg-slate-900/10 dark:text-slate-700"
-                                    : "bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-slate-300"
-                                }`}
-                              >
-                                {tag}
-                              </span>
-                            ))}
-                          </div>
-                        ) : null}
-                      </div>
+                  {showCitations ? (
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {citations.map((citation) => (
+                        <button
+                          key={citation.id}
+                          type="button"
+                          onClick={() => onSelectCitation(citation.id)}
+                          className="rounded-full border border-[#3b4049] bg-[#2b3038] px-3 py-1.5 text-xs text-slate-300 transition hover:border-[#545a66] hover:text-white"
+                        >
+                          {citation.title}
+                        </button>
+                      ))}
                     </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        <div className="min-h-0 overflow-y-auto rounded-[24px] border border-slate-200/80 bg-slate-50/90 p-5 dark:border-white/10 dark:bg-white/[0.04]">
-          {selectedEntry ? (
-            <div className="space-y-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
-                    Preview
-                  </p>
-                  <h3 className="mt-2 text-xl font-semibold text-slate-900 dark:text-white">
-                    {selectedEntry.title}
-                  </h3>
+                  ) : null}
                 </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
-                <div className="text-right text-xs leading-6 text-slate-500 dark:text-slate-400">
-                  <div>{selectedEntry.project_id ? projectNameById[selectedEntry.project_id] ?? selectedEntry.project_id : "未归项目"}</div>
-                  <div>{selectedEntry.category || "未分类"}</div>
-                </div>
-              </div>
+      <div className="border-t border-[#2b2f36] px-5 py-4">
+        <div className="flex items-end gap-3">
+          <textarea
+            value={discussionInput}
+            onChange={(event) => onDiscussionInputChange(event.target.value)}
+            onKeyDown={(event) => {
+              if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                event.preventDefault();
+                onSendDiscussion();
+              }
+            }}
+            rows={2}
+            placeholder="开始输入..."
+            className={`${composerClassName} min-h-[72px] resize-none`}
+          />
 
-              <div className="flex flex-wrap gap-2 text-xs text-slate-500 dark:text-slate-400">
-                <span className="rounded-full bg-slate-100 px-2.5 py-1 dark:bg-white/10">
-                  {selectedEntry.content_kind === "generated" ? "生成内容" : selectedEntry.source_type}
-                </span>
-                <span className="rounded-full bg-slate-100 px-2.5 py-1 dark:bg-white/10">
-                  更新时间 {formatTime(selectedEntry.updated_at || selectedEntry.created_at)}
-                </span>
-                {selectedEntry.tags?.map((tag) => (
-                  <span key={tag} className="rounded-full bg-slate-100 px-2.5 py-1 dark:bg-white/10">
-                    {tag}
-                  </span>
-                ))}
-              </div>
-
-              {getEntryContent(selectedEntry) ? (
-                <div className="rounded-[22px] border border-slate-200/80 bg-white p-5 dark:border-white/10 dark:bg-slate-950/55">
-                  <MarkdownCard content={getEntryContent(selectedEntry)} />
-                </div>
-              ) : (
-                <div className="rounded-[22px] border border-dashed border-slate-300/80 px-5 py-10 text-sm text-slate-500 dark:border-white/10 dark:text-slate-400">
-                  这条内容还没有可展示的正文，当前只保留了摘要信息。
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="flex h-full items-center justify-center rounded-[22px] border border-dashed border-slate-300/80 px-6 text-center text-sm leading-6 text-slate-500 dark:border-white/10 dark:text-slate-400">
-              从上面的列表里选一条内容，就可以在这里查看详细内容并送去右侧讨论。
-            </div>
-          )}
+          <button
+            type="button"
+            onClick={onSendDiscussion}
+            disabled={!canSend}
+            className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white text-slate-950 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-40"
+            title="发送"
+          >
+            →
+          </button>
         </div>
       </div>
     </section>

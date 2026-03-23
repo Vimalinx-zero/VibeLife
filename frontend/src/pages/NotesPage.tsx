@@ -1,37 +1,52 @@
-import { useState, useEffect, useMemo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { apiClient } from "../utils/api"; // ✅ 修复：导入 apiClient 以自动添加 token
-import { useNavigate, useLocation } from "react-router-dom";
-import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
+import { useEffect, useMemo, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { useLocation, useNavigate } from "react-router-dom";
+
 import FileExplorer from "../components/FileExplorer";
-import NoteEditor from "../components/NoteEditor";
-import AIAssistant from "../components/AIAssistant";
-import TagCloud from "../components/TagCloud";
-import BacklinksPanel from "../components/BacklinksPanel";
-import NoteSearch from "../components/NoteSearch";
-import TagSettings from "../components/TagSettings";
-import { quickCaptureAPI } from "../utils/api";
+import KnowledgeDiscussionPanel from "../components/knowledge/KnowledgeDiscussionPanel";
+import NotesKnowledgeChatPanel from "../components/notes/NotesKnowledgeChatPanel";
+import NotesPreviewPanel from "../components/notes/NotesPreviewPanel";
+import { useToast } from "../context/ToastContext";
 import {
-  getNextNotesUtilityPanel,
-  type NotesUtilityPanel,
-} from "./noteDensityState";
+  apiClient,
+  knowledgeWorkshopAPI,
+  quickCaptureAPI,
+  type KnowledgeDraftDTO,
+  type KnowledgeDiscussionMessageDTO,
+  type QuickCaptureRecordDTO,
+} from "../utils/api";
+import {
+  buildKnowledgeGeneratedSavePayload,
+  preserveKnowledgeDiscussionStateOnSaveFailure,
+  trimKnowledgeDiscussionHistory,
+  type KnowledgeDiscussionStateLike,
+} from "./knowledgeWorkshopState";
+import {
+  buildNotesKnowledgeContext,
+  buildNotesPreviewDocument,
+  type NotesKnowledgeNodeLike,
+} from "./notesKnowledgeWorkspaceState";
+import {
+  getNotesLeftPaneState,
+  getNotesRightPaneState,
+  getNotesWorkspaceGridClassName,
+} from "./notesWorkspaceLayoutState";
+import { getNotesDisplayName } from "./notesWorkspaceCopyState";
+import { getNotesWorkspaceVisualProfile } from "./notesWorkspaceVisualState";
 
 interface NoteItem {
   id: string;
   name: string;
-  type: 'file' | 'folder';
+  type: "file" | "folder";
   content?: string;
   parent_id?: string;
-  created_at?: string;
-  updated_at?: string;
-  children?: NoteItem[];
   tags?: string[];
   date?: string;
 }
 
 interface NoteInfo {
   id: string;
-  type: string;
+  type: "file" | "folder";
   name: string;
   content?: string;
   parent_id?: string;
@@ -45,11 +60,6 @@ interface ViewData {
   breadcrumbs: Array<{ id: string; name: string }>;
 }
 
-interface Breadcrumb {
-  id: string;
-  name: string;
-}
-
 interface ContextMenuState {
   show: boolean;
   x: number;
@@ -57,1062 +67,1045 @@ interface ContextMenuState {
   item: NoteItem | null;
 }
 
-interface SortConfig {
-  key: 'name' | 'date';
-  order: 'asc' | 'desc';
+interface KnowledgeCitationLike {
+  id: string;
+  title: string;
 }
 
-interface TagSettings {
-  showTagCloud: boolean;
-  autoTag: boolean;
+interface KnowledgeDiscussionUiState extends KnowledgeDiscussionStateLike {
+  citations: KnowledgeCitationLike[];
+  draft: KnowledgeDraftDTO | null;
 }
 
-// --- SVG Icons ---
-const Icons = {
-  ArrowLeft: ({className}: {className?: string}) => <svg viewBox="0 0 24 24" fill="currentColor" className={className}><path fillRule="evenodd" d="M11.03 3.97a.75.75 0 010 1.06l-6.22 6.22H21a.75.75 0 010 1.5H4.81l6.22 6.22a.75.75 0 11-1.06 1.06l-7.5-7.5a.75.75 0 010-1.06l7.5-7.5a.75.75 0 011.06 0z" clipRule="evenodd" /></svg>,
-  Robot: ({className}: {className?: string}) => <svg viewBox="0 0 24 24" fill="currentColor" className={className}><path d="M16.5 7.5h-9v9h9v-9z" /><path fillRule="evenodd" d="M8.25 2.25A.75.75 0 019 3v1.5h6V3a.75.75 0 011.5 0v1.5h.75c.966 0 1.75.784 1.75 1.75v11.25c0 .966-.784 1.75-1.75 1.75h-13.5c-.966 0-1.75-.784-1.75-1.75V6.25c0-.966.784-1.75 1.75-1.75h.75V3a.75.75 0 01.75-.75zM6 6.25v11.25a.25.25 0 00.25.25h11.5a.25.25 0 00.25-.25V6.25a.25.25 0 00-.25-.25H6.25a.25.25 0 00-.25.25z" clipRule="evenodd" /></svg>,
-  Sparkles: ({className}: {className?: string}) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m12 3-1.912 5.813a2 2 0 0 1 1.173-2.725l3.524 3.749-4.902 4.649a2 2 0 0 1-2.724 1.172L12 9.26l-3.16 2.787a2 2 0 0 1-2.724-1.172L1.515 7.837a2 2 0 0 1 1.173-2.725L5.5 3.26 9.875.666a2 2 0 0 1 2.25 0L12 3Z" /></svg>,
-  // New Icons for Menu
-  Info: ({className}: {className?: string}) => <svg viewBox="0 0 24 24" fill="currentColor" className={className}><path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm8.751-1.034a.75.75 0 011.498 0v5.25a.75.75 0 01-1.498 0v-5.25zM12 6.75a.75.75 0 01.75.75v.008a.75.75 0 01-.75.75h-.008a.75.75 0 01-.75-.75V7.5a.75.75 0 01.75-.75z" clipRule="evenodd" /></svg>,
-  SortAlpha: ({className}: {className?: string}) => <svg viewBox="0 0 24 24" fill="currentColor" className={className}><path fillRule="evenodd" d="M12 2.25a.75.75 0 01.75.75v15.19l2.47-2.47a.75.75 0 111.06 1.06l-3.75 3.75a.75.75 0 01-1.06 0l-3.75-3.75a.75.75 0 111.06-1.06l2.47 2.47V3a.75.75 0 01.75-.75z" clipRule="evenodd" /><path d="M3.56 6.72a.75.75 0 011.017-.162l4 2.75a.75.75 0 11-.854 1.238L4.5 8.313V18a.75.75 0 01-1.5 0V8.313l-.223.233a.75.75 0 11-1.054-1.092l1.837-1.734z" /></svg>,
-  SortTime: ({className}: {className?: string}) => <svg viewBox="0 0 24 24" fill="currentColor" className={className}><path fillRule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25zM12.75 6a.75.75 0 00-1.5 0v6c0 .414.336.75.75.75h4.5a.75.75 0 000-1.5h-3.75V6z" clipRule="evenodd" /></svg>,
-  Check: ({className}: {className?: string}) => <svg viewBox="0 0 24 24" fill="currentColor" className={className}><path fillRule="evenodd" d="M19.916 4.626a.75.75 0 01.208 1.04l-9 13.5a.75.75 0 01-1.154.114l-6-6a.75.75 0 011.06-1.06l5.353 5.353 8.493-12.74a.75.75 0 011.04-.207z" clipRule="evenodd" /></svg>,
-  ArrowUp: ({className}: {className?: string}) => <svg viewBox="0 0 24 24" fill="currentColor" className={className}><path fillRule="evenodd" d="M11.47 2.47a.75.75 0 011.06 0l7.5 7.5a.75.75 0 11-1.06 1.06l-6.22-6.22V21a.75.75 0 01-1.5 0V4.81l-6.22 6.22a.75.75 0 11-1.06-1.06l7.5-7.5z" clipRule="evenodd" /></svg>,
-  ArrowDown: ({className}: {className?: string}) => <svg viewBox="0 0 24 24" fill="currentColor" className={className}><path fillRule="evenodd" d="M12 2.25a.75.75 0 01.75.75v16.19l6.22-6.22a.75.75 0 111.06 1.06l-7.5 7.5a.75.75 0 01-1.06 0l-7.5-7.5a.75.75 0 111.06-1.06l6.22 6.22V3a.75.75 0 01.75-.75z" clipRule="evenodd" /></svg>,
-  // New Icons for File Operations
-  Move: ({className}: {className?: string}) => <svg viewBox="0 0 24 24" fill="currentColor" className={className}><path fillRule="evenodd" d="M16.5 4.478v.227a48.816 48.816 0 013.878.512.75.75 0 11-.256 1.478l-.209-.035-1.005 13.07a3 3 0 01-2.991 2.77H8.084a3 3 0 01-2.991-2.77L4.087 6.66l-.209.035a.75.75 0 01-.256-1.478A48.567 48.567 0 017.5 4.705v-.227c0-1.564 1.213-2.9 2.816-2.951a52.662 52.662 0 013.369 0c1.603.051 2.815 1.387 2.815 2.951zm-6.136-1.452a51.196 51.196 0 013.273 0C14.39 3.05 15 3.684 15 4.478v.113a49.488 49.488 0 00-6 0v-.113c0-.794.609-1.428 1.364-1.452zm-.355 5.945a.75.75 0 10-1.5.058l.347 9a.75.75 0 101.499-.058l-.346-9zm5.48.058a.75.75 0 10-1.498-.058l-.347 9a.75.75 0 001.5.058l.345-9z" clipRule="evenodd" /></svg>,
-  Trash: ({className}: {className?: string}) => <svg viewBox="0 0 24 24" fill="currentColor" className={className}><path fillRule="evenodd" d="M16.5 4.478v.227a48.816 48.816 0 013.878.512.75.75 0 11-.256 1.478l-.209-.035-1.005 13.07a3 3 0 01-2.991 2.77H8.084a3 3 0 01-2.991-2.77L4.087 6.66l-.209.035a.75.75 0 01-.256-1.478A48.567 48.567 0 017.5 4.705v-.227c0-1.564 1.213-2.9 2.816-2.951a52.662 52.662 0 013.369 0c1.603.051 2.815 1.387 2.815 2.951zm-6.136-1.452a51.196 51.196 0 013.273 0C14.39 3.05 15 3.684 15 4.478v.113a49.488 49.488 0 00-6 0v-.113c0-.794.609-1.428 1.364-1.452zm-.355 5.945a.75.75 0 10-1.5.058l.347 9a.75.75 0 101.499-.058l-.346-9zm5.48.058a.75.75 0 10-1.498-.058l-.347 9a.75.75 0 001.5.058l.345-9z" clipRule="evenodd" /></svg>,
-  FolderArrow: ({className}: {className?: string}) => <svg viewBox="0 0 24 24" fill="currentColor" className={className}><path d="M19.5 21a3 3 0 003-3v-4.5a3 3 0 00-3-3h-15a3 3 0 00-3 3V18a3 3 0 003 3h15zM1.5 10.146V6a3 3 0 013-3h5.379a2.25 2.25 0 011.59.659l2.122 2.121c.14.141.331.22.53.22H19.5a3 3 0 013 3v1.146A4.483 4.483 0 0019.5 9h-15a4.483 4.483 0 00-3 1.146z" /></svg>,
-  Knowledge: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>,
-  Link: ({className}: {className?: string}) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={className}><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 13.5l3-3m-6.75 7.5l-1.5 1.5a3.182 3.182 0 11-4.5-4.5l3-3a3.182 3.182 0 014.5 0m3 3a3.182 3.182 0 014.5 0l3 3a3.182 3.182 0 11-4.5 4.5l-1.5-1.5" /></svg>,
-  Tag: ({className}: {className?: string}) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={className}><path strokeLinecap="round" strokeLinejoin="round" d="M7.5 7.5h.01M3 10.5l7.586-7.586A2 2 0 0112 2.328h6a2 2 0 012 2v6a2 2 0 01-.586 1.414L11.828 19.33a2 2 0 01-2.828 0L3 13.328a2 2 0 010-2.828z" /></svg>,
-  Close: ({className}: {className?: string}) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={className}><path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6L6 18" /></svg>,
+const createInitialDiscussionState = (): KnowledgeDiscussionUiState => ({
+  messages: [],
+  citations: [],
+  draft: null,
+  pendingAction: null,
+  saveError: null,
+  isSaving: false,
+});
+
+const getErrorMessage = (error: unknown, fallbackMessage: string): string => {
+  if (
+    error &&
+    typeof error === "object" &&
+    "response" in error &&
+    error.response &&
+    typeof error.response === "object" &&
+    "data" in error.response &&
+    error.response.data &&
+    typeof error.response.data === "object" &&
+    "detail" in error.response.data &&
+    typeof error.response.data.detail === "string"
+  ) {
+    return error.response.data.detail;
+  }
+
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+
+  return fallbackMessage;
+};
+
+const getLatestMessageContent = (
+  messages: readonly KnowledgeDiscussionMessageDTO[],
+  role: "user" | "assistant"
+) => {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index]?.role === role) {
+      return messages[index]?.content ?? "";
+    }
+  }
+  return "";
 };
 
 const NotesPage = () => {
+  const location = useLocation();
   const navigate = useNavigate();
-  const location = useLocation(); // ✅ 新增：用于获取 URL 参数
-  const [currentId, setCurrentId] = useState<string>("root");
+  const toast = useToast();
+
+  const [currentId, setCurrentId] = useState("root");
   const [viewData, setViewData] = useState<ViewData>({
-    info: {id:'root', type:'folder', name:'Library'},
+    info: { id: "root", type: "folder", name: "Library" },
     items: [],
-    breadcrumbs: []
+    breadcrumbs: [],
   });
-  const [content, setContent] = useState<string>("");
   const [activeFile, setActiveFile] = useState<NoteItem | null>(null);
-
-  // UI States
-  const [viewMode, setViewMode] = useState<"split" | "edit" | "read">("read");
-  const [aiOpen, setAiOpen] = useState<boolean>(false);
-
-  // Sorting State
-  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'name', order: 'asc' }); // key: 'name' | 'date', order: 'asc' | 'desc'
-
-  // ✨ 新增：标签系统状态
-  const [allTags, setAllTags] = useState<string[]>([]); // 所有标签
-  const [selectedTags, setSelectedTags] = useState<string[]>([]); // 选中的标签（用于筛选）
-
-  // ✨ 新增：标签设置（从 localStorage 读取）
-  const [tagSettings, setTagSettings] = useState<TagSettings>(() => {
-    const saved = localStorage.getItem('tagSettings');
-    return saved ? JSON.parse(saved) : {
-      showTagCloud: false,  // 默认隐藏标签云
-      autoTag: true         // 默认开启自动标签
-    };
+  const [ctxMenu, setCtxMenu] = useState<ContextMenuState>({
+    show: false,
+    x: 0,
+    y: 0,
+    item: null,
   });
 
-  // 持久化设置到 localStorage
-  useEffect(() => {
-    localStorage.setItem('tagSettings', JSON.stringify(tagSettings));
-  }, [tagSettings]);
-
-  // ✅ 快捷键支持
-  useKeyboardShortcuts({
-    // Ctrl+N - 新建笔记
-    'ctrl+n': () => {
-      if (activeFile) {
-        // 如果当前有打开的文件，先保存
-        saveNote();
-      }
-      // 打开创建模态框
-      openCreateModal('file');
-    },
-
-    // Ctrl+S - 保存笔记
-    'ctrl+s': () => {
-      if (activeFile) {
-        saveNote();
-      }
-    },
-  });
-
-
-  // Modals
-  const [ctxMenu, setCtxMenu] = useState<ContextMenuState>({ show: false, x: 0, y: 0, item: null });
-  const [showCreateModal, setShowCreateModal] = useState<boolean>(false);
-  const [showInfoModal, setShowInfoModal] = useState<boolean>(false); // ✨ 新增信息弹窗
-  const [newItemName, setNewItemName] = useState<string>("");
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newItemName, setNewItemName] = useState("");
   const [newItemType, setNewItemType] = useState<"file" | "folder">("file");
-  const [newItemSourceType, setNewItemSourceType] = useState<'none' | 'url' | 'image' | 'pdf' | 'doc' | 'video'>('none');
-  const [newItemSourceUri, setNewItemSourceUri] = useState<string>('');
-  const [creatingItem, setCreatingItem] = useState<boolean>(false);
+  const [newItemSourceType, setNewItemSourceType] = useState<
+    "none" | "url" | "image" | "pdf" | "doc" | "video"
+  >("none");
+  const [newItemSourceUri, setNewItemSourceUri] = useState("");
+  const [creatingItem, setCreatingItem] = useState(false);
 
-  const openCreateModal = (type: 'file' | 'folder') => {
+  const [showRenameModal, setShowRenameModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showMoveModal, setShowMoveModal] = useState(false);
+  const [moveViewData, setMoveViewData] = useState<ViewData>({
+    info: { id: "root", type: "folder", name: "Library" },
+    items: [],
+    breadcrumbs: [],
+  });
+  const [isMoveLoading, setIsMoveLoading] = useState(false);
+
+  const [discussionState, setDiscussionState] = useState<KnowledgeDiscussionUiState>(
+    () => createInitialDiscussionState()
+  );
+  const [discussionInput, setDiscussionInput] = useState("");
+  const [isDiscussing, setIsDiscussing] = useState(false);
+  const [isRightPaneCollapsed, setIsRightPaneCollapsed] = useState(false);
+  const [generatedEntries, setGeneratedEntries] = useState<QuickCaptureRecordDTO[]>([]);
+  const [appendTargetId, setAppendTargetId] = useState<string | null>(null);
+  const [generatedReloadKey, setGeneratedReloadKey] = useState(0);
+
+  const openCreateModal = (type: "file" | "folder") => {
     setNewItemType(type);
-    setNewItemName('');
-    setNewItemSourceType('none');
-    setNewItemSourceUri('');
+    setNewItemName("");
+    setNewItemSourceType("none");
+    setNewItemSourceUri("");
     setShowCreateModal(true);
   };
 
   const closeCreateModal = () => {
     setShowCreateModal(false);
-    setNewItemName('');
-    setNewItemSourceType('none');
-    setNewItemSourceUri('');
+    setNewItemName("");
+    setNewItemSourceType("none");
+    setNewItemSourceUri("");
   };
 
-  // Modal States for File Operations
-  const [showRenameModal, setShowRenameModal] = useState<boolean>(false);
-  const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
-  const [showMoveModal, setShowMoveModal] = useState<boolean>(false);
-
-  // ✅ 新增：移动文件时选中的目标文件夹ID
-  const [selectedMoveTarget, setSelectedMoveTarget] = useState<string | null>(null);
-
-  // ✅ 新增：移动模态框专用的视图数据 (用于在模态框里浏览文件夹)
-  const [moveViewData, setMoveViewData] = useState<ViewData>({
-    info: {id:'root', name:'Library', type:'folder'},
-    items: [],
-    breadcrumbs: []
-  });
-  const [isMoveLoading, setIsMoveLoading] = useState<boolean>(false);
-  const [activeUtilityPanel, setActiveUtilityPanel] = useState<NotesUtilityPanel>(null);
-
-  // Ref Picker States
-  const [showRefModal, setShowRefModal] = useState<boolean>(false);
-
-  const [toastMsg, setToastMsg] = useState<string | null>(null); // Toast 消息状态
-
-  // Helper: Toast 触发器
-  const showToast = (msg: string) => {
-    setToastMsg(msg);
-    setTimeout(() => setToastMsg(null), 2000);
-  };
-
-  // 插入引用 (Link Insertion)
-  const handleInsertRef = (item: any) => {
-      const textToInsert = `[[note:${item.id}]]`;
-
-      // ✅ 修复1：使用 ID 直接获取 textarea，而不是依赖 activeElement
-      const textarea = document.getElementById("note-textarea") as HTMLTextAreaElement;
-
-      if (textarea) {
-        // 获取当前光标位置（如果没有焦点，则使用末尾）
-        const start = textarea.selectionStart || textarea.value.length;
-        const end = textarea.selectionEnd || textarea.value.length;
-        const text = textarea.value;
-
-        // 在光标位置插入
-        const newText = text.substring(0, start) + textToInsert + text.substring(end);
-        setContent(newText);
-
-        // 设置光标位置到插入文本之后
-        setTimeout(() => {
-          textarea.focus();
-          const newPosition = start + textToInsert.length;
-          textarea.setSelectionRange(newPosition, newPosition);
-        }, 0);
-      } else {
-        // 降级：如果找不到 textarea，则追加到末尾
-        setContent(prev => prev + textToInsert);
-      }
-
-      setShowRefModal(false);
-      showToast("✅ Link Inserted");
-  };
-
-  // Helper: 模态框内的文件夹加载
   const loadMoveNode = async (id: string) => {
-      setIsMoveLoading(true);
-      try {
-          const res = await apiClient.get(`/notes/view?id=${id}`);
-          setMoveViewData(res.data);
-      } catch (e) { console.error(e); }
-      setIsMoveLoading(false);
-  };
-
-  // ✅ 新增：修改打开模态框的逻辑 (初始化加载根目录)
-  const openMoveModal = () => {
-      setShowMoveModal(true);
-      loadMoveNode('root'); // 打开时默认从根目录开始
-  };
-
-  useEffect(() => { loadNode("root"); }, []);
-
-  useEffect(() => {
-    if (!activeFile) {
-      setActiveUtilityPanel(null);
-      return;
-    }
-
-    if (activeUtilityPanel === "tags" && !tagSettings.showTagCloud) {
-      setActiveUtilityPanel(null);
-    }
-  }, [activeFile, activeUtilityPanel, tagSettings.showTagCloud]);
-
-  // ✨ 新增：监听自定义事件（从 SmartLink 跳转）
-  useEffect(() => {
-    const handleLoadNote = (e: CustomEvent<{id: string}>) => {
-      const { id } = e.detail;
-      if (id) {
-        loadNode(id);
-      }
-    };
-
-    window.addEventListener('loadNote', handleLoadNote as EventListener);
-    return () => window.removeEventListener('loadNote', handleLoadNote as EventListener);
-  }, []);
-
-  // ✅ 新增：处理 URL 参数中的 id（从其他页面跳转过来）
-  useEffect(() => {
-    const urlParams = new URLSearchParams(location.search);
-    const noteId = urlParams.get('id');
-
-    if (noteId && noteId !== currentId) {
-      // 自动打开指定的笔记
-      loadNode(noteId);
-    }
-  }, [location.search]); // 依赖 URL 参数变化
-
-  // ✨ 新增：加载所有标签
-  useEffect(() => {
-    loadAllTags();
-  }, []);
-
-  const loadAllTags = async (): Promise<void> => {
+    setIsMoveLoading(true);
     try {
-      const res = await apiClient.get("/notes/tags");
-      setAllTags(res.data);
-    } catch (e) {
-      console.error("Failed to load tags:", e);
+      const res = await apiClient.get(`/notes/view?id=${id}`);
+      setMoveViewData(res.data);
+    } catch (error) {
+      toast.error("加载移动目录失败");
+    } finally {
+      setIsMoveLoading(false);
     }
   };
 
   const loadNode = async (id: string) => {
     try {
       const res = await apiClient.get(`/notes/view?id=${id}`);
-      const targetData = res.data;
+      const targetData = res.data as ViewData;
 
       setCurrentId(id);
 
-      if (targetData.info.type === 'folder') {
-        // A. 如果点击的是文件夹
+      if (targetData.info.type === "folder") {
         setViewData(targetData);
-        // ❌ 以前这里会清空 activeFile，导致文件关闭。现在注释掉或删掉这一行。
-        // setActiveFile(null);
-      } else {
-        // B. 如果点击的是文件
-        setActiveFile(targetData.info as NoteItem);
-        setContent(targetData.info.content || "");
+        setActiveFile(null);
+        return;
+      }
 
-        if (viewData.info.id !== targetData.info.parent_id) {
-           const parentRes = await apiClient.get(`/notes/view?id=${targetData.info.parent_id}`);
-           setViewData(parentRes.data);
+      setActiveFile(targetData.info as NoteItem);
+
+      if (targetData.info.parent_id && viewData.info.id !== targetData.info.parent_id) {
+        const parentRes = await apiClient.get(`/notes/view?id=${targetData.info.parent_id}`);
+        setViewData(parentRes.data as ViewData);
+      }
+    } catch (error) {
+      toast.error("加载笔记失败");
+    }
+  };
+
+  useEffect(() => {
+    void loadNode("root");
+  }, []);
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(location.search);
+    const noteId = urlParams.get("id");
+
+    if (noteId && noteId !== currentId) {
+      void loadNode(noteId);
+    }
+  }, [location.search]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadGeneratedEntries = async () => {
+      try {
+        const nextEntries = await knowledgeWorkshopAPI.listEntries({
+          contentKind: "generated",
+        });
+        if (!cancelled) {
+          setGeneratedEntries(nextEntries);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error("Failed to load generated entries:", error);
         }
       }
-    } catch (error) { console.error(error); }
-  };
+    };
 
-  // --- 排序逻辑 ---
-  const handleSort = (key: 'name' | 'date') => {
-    setSortConfig(prev => ({
-      key,
-      order: prev.key === key && prev.order === 'asc' ? 'desc' : 'asc'
-    }));
-    setCtxMenu({ ...ctxMenu, show: false });
-  };
+    void loadGeneratedEntries();
 
-  // 使用 useMemo 实时计算排序后的列表
+    return () => {
+      cancelled = true;
+    };
+  }, [generatedReloadKey]);
+
+  useEffect(() => {
+    setDiscussionState(createInitialDiscussionState());
+    setDiscussionInput("");
+    setAppendTargetId(null);
+  }, [currentId]);
+
   const sortedItems = useMemo(() => {
-    let items = [...viewData.items];
-
-    // ✨ 新增：标签筛选
-    if (selectedTags.length > 0) {
-      items = items.filter(item => {
-        // 文件夹不参与标签筛选
-        if (item.type === 'folder') return false;
-        // 检查文件是否包含任一选中的标签
-        return item.tags && selectedTags.some(tag => item.tags!.includes(tag));
-      });
-    }
-
-    return items.sort((a, b) => {
-      // 始终保持文件夹在上方
-      if (a.type !== b.type) return a.type === 'folder' ? -1 : 1;
-
-      let comparison = 0;
-      if (sortConfig.key === 'name') {
-        comparison = a.name.localeCompare(b.name, 'zh-CN');
-      } else {
-        comparison = new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime();
+    return [...viewData.items].sort((left, right) => {
+      if (left.type !== right.type) {
+        return left.type === "folder" ? -1 : 1;
       }
-      return sortConfig.order === 'asc' ? comparison : -comparison;
+      return left.name.localeCompare(right.name, "zh-CN");
     });
-  }, [viewData.items, sortConfig, selectedTags]); // ✨ 新增：依赖 selectedTags
+  }, [viewData.items]);
 
-  const saveNote = async (newTitle?: string, newContent?: string, newTags?: string[]): Promise<void> => {
-    // 安全检查
-    if (!activeFile || activeFile.type !== 'file') return;
-
-    const contentToSave = newContent !== undefined ? newContent : content;
-    const titleToSave = newTitle !== undefined ? newTitle : activeFile.name;
-    const tagsToSave = newTags !== undefined ? newTags : activeFile.tags || [];
-
-    try {
-        // ✅ 关键修复：使用 activeFile.id 而不是 currentId
-        // 因为当你点击左侧文件夹浏览时，currentId 已经变了，但你还在编辑原来的文件
-        const res = await apiClient.post("/notes/save", {
-            id: activeFile.id,
-            content: contentToSave,
-            name: titleToSave,
-            tags: tagsToSave,  // ✨ 手动标签
-            auto_tag: tagSettings.autoTag  // ✨ 是否启用自动标签
-        });
-
-        // ✨ 获取后端合并后的标签列表
-        const finalTags = res.data.tags || tagsToSave;
-
-        // 更新当前文件状态
-        setActiveFile(prev => prev ? { ...prev, name: titleToSave, content: contentToSave, tags: finalTags } : null);
-
-        // 更新列表显示 (只有当该文件在当前视图列表中时才更新)
-        setViewData(prev => ({
-            ...prev,
-            items: prev.items.map(item =>
-                // ✅ 关键修复：匹配 activeFile.id
-                item.id === activeFile.id ? { ...item, name: titleToSave, tags: finalTags } : item
-            )
-        }));
-
-        // ✨ 新增：刷新标签云
-        loadAllTags();
-
-        // ✅ 确保这里有 Toast
-        showToast("✅ Note Saved!");
-
-        // ✨ 新增：触发笔记保存事件，通知其他组件刷新（如 BacklinksPanel）
-        window.dispatchEvent(new CustomEvent('noteSaved'));
-
-    } catch (e) {
-        showToast("❌ Save Failed");
+  const selectedNode = useMemo<NotesKnowledgeNodeLike | null>(() => {
+    if (activeFile) {
+      return {
+        id: activeFile.id,
+        type: "file",
+        name: activeFile.name,
+        content: activeFile.content,
+      };
     }
-  };
+
+    if (viewData.info?.id) {
+      return {
+        id: viewData.info.id,
+        type: viewData.info.type,
+        name: viewData.info.name,
+        content: viewData.info.content,
+      };
+    }
+
+    return null;
+  }, [activeFile, viewData.info]);
+
+  const knowledgeContext = useMemo(
+    () =>
+      buildNotesKnowledgeContext({
+        selectedNode,
+        visibleItems: viewData.items,
+      }),
+    [selectedNode, viewData.items]
+  );
+
+  const previewDocument = useMemo(
+    () =>
+      buildNotesPreviewDocument({
+        selectedNode,
+      }),
+    [selectedNode]
+  );
+
+  const currentSourceCount = useMemo(
+    () => viewData.items.filter((item) => item.type === "file").length,
+    [viewData.items]
+  );
+
+  const contextLabel = activeFile
+    ? `当前笔记：${activeFile.name}`
+    : `${getNotesDisplayName(viewData.info.name)} · ${knowledgeContext.selectedEntryIds.length || currentSourceCount} 个文件来源`;
+  const visualProfile = getNotesWorkspaceVisualProfile("focus-chat");
+  const leftPaneState = getNotesLeftPaneState({
+    hasActiveFile: Boolean(activeFile),
+  });
+  const rightPaneState = getNotesRightPaneState({
+    collapsed: isRightPaneCollapsed,
+  });
+  const gridClassName = getNotesWorkspaceGridClassName({
+    hasActiveFile: Boolean(activeFile),
+    rightPaneCollapsed: isRightPaneCollapsed,
+  });
 
   const createItem = async () => {
-    if (!newItemName.trim()) return;
-    if (creatingItem) return;
+    if (!newItemName.trim() || creatingItem) {
+      return;
+    }
 
-    const parentId = viewData.info.type === 'file' ? viewData.info.parent_id : viewData.info.id;
+    const parentId = viewData.info.type === "file" ? viewData.info.parent_id : viewData.info.id;
     setCreatingItem(true);
-    try {
-      const createRes = await apiClient.post("/notes/create", { parent_id: parentId || 'root', name: newItemName, type: newItemType });
 
-      if (newItemType === 'file' && newItemSourceType !== 'none' && newItemSourceUri.trim()) {
+    try {
+      const createRes = await apiClient.post("/notes/create", {
+        parent_id: parentId || "root",
+        name: newItemName.trim(),
+        type: newItemType,
+      });
+
+      const createdId = createRes?.data?.item?.id as string | undefined;
+
+      if (newItemType === "file" && newItemSourceType !== "none" && newItemSourceUri.trim() && createdId) {
         try {
           const capture = await quickCaptureAPI.capture({
             source_type: newItemSourceType,
             source_uri: newItemSourceUri.trim(),
-            title: newItemName.trim()
+            title: newItemName.trim(),
           });
 
-          const createdId = createRes?.data?.item?.id;
-          if (createdId) {
-            await apiClient.post('/notes/save', {
-              id: createdId,
-              content: `# ${newItemName.trim()}\n\n> 来源类型：${newItemSourceType}\n> 来源地址：${newItemSourceUri.trim()}\n\n## 摘要\n${capture.summary || ''}\n`,
-              name: newItemName,
-              tags: capture.tags || []
-            });
-          }
-        } catch (captureError) {
-          console.error('Quick capture failed:', captureError);
-          showToast('⚠️ 笔记已创建，来源采集失败');
+          await apiClient.post("/notes/save", {
+            id: createdId,
+            content:
+              `# ${newItemName.trim()}\n\n` +
+              `> 来源类型：${newItemSourceType}\n` +
+              `> 来源地址：${newItemSourceUri.trim()}\n\n` +
+              `## 摘要\n${capture.summary || ""}\n`,
+            name: newItemName.trim(),
+            tags: capture.tags || [],
+          });
+        } catch (error) {
+          console.error("Quick capture failed:", error);
+          toast.warning("笔记已创建，但来源采集失败");
         }
       }
 
       closeCreateModal();
-      loadNode(parentId || 'root');
+      await loadNode(parentId || "root");
+      if (createdId && newItemType === "file") {
+        await loadNode(createdId);
+      }
+      toast.success(newItemType === "folder" ? "文件夹已创建" : "笔记已创建");
+    } catch (error) {
+      toast.error("创建失败");
     } finally {
       setCreatingItem(false);
     }
   };
 
-  // --- 右键菜单 ---
-  const handleContextMenu = (e, item) => {
-    e.preventDefault();
-    e.stopPropagation(); // 防止冒泡
-    setCtxMenu({ show: true, x: e.clientX, y: e.clientY, item: item });
-  };
-
-  const handleRename = () => {
-    if(!ctxMenu.item) return;
-    const newName = prompt("Rename to:", ctxMenu.item.name);
-    if (newName && newName.trim()) {
-      // 这里只是演示，实际需要后端 API 支持重命名
-      alert(`Renamed to ${newName} (Backend API needed)`);
-      setCtxMenu({ ...ctxMenu, show: false });
-    }
-  };
-
-  const handleDelete = async () => {
-    if(!ctxMenu.item) return;
-    if(confirm(`Delete ${ctxMenu.item.name}?`)) {
-      await apiClient.post("/notes/delete", { id: ctxMenu.item.id });
-      loadNode(viewData.info.id); // 刷新当前文件夹
-      setCtxMenu({ ...ctxMenu, show: false });
-    }
-  };
-
-  // === 交互函数：文件操作相关 ===
-  
-  // 1. 提交重命名 (优化版：同步更新 activeFile 防止编辑器刷新)
   const submitRename = async () => {
-      if (!newItemName || !ctxMenu.item) return;
-      try {
-          await apiClient.post("/notes/save", { id: ctxMenu.item.id, name: newItemName }); 
-          
-          // ✅ 关键：如果重命名的是当前打开的文件，直接更新 state，触发 NoteEditor 内部 useEffect 更新标题
-          // 因为 ID 没变，NoteEditor 不会卸载，也就不会发生淡入淡出的闪烁
-          if (activeFile && activeFile.id === ctxMenu.item.id) {
-              setActiveFile(prev => prev ? { ...prev, name: newItemName } : null);
-          }
+    if (!ctxMenu.item || !newItemName.trim()) {
+      return;
+    }
 
-          loadNode(viewData.info.id); // 刷新左侧列表 
-          setShowRenameModal(false); 
-          showToast("✅ Renamed Successfully"); 
-      } catch(e) { showToast("❌ Rename Failed"); } 
-  }; 
+    try {
+      await apiClient.post("/notes/save", {
+        id: ctxMenu.item.id,
+        name: newItemName.trim(),
+      });
 
-  // 2. 提交删除
+      if (activeFile?.id === ctxMenu.item.id) {
+        setActiveFile((current) =>
+          current
+            ? {
+                ...current,
+                name: newItemName.trim(),
+              }
+            : current
+        );
+      }
+
+      await loadNode(viewData.info.id);
+      setShowRenameModal(false);
+      toast.success("已重命名");
+    } catch (error) {
+      toast.error("重命名失败");
+    }
+  };
+
   const submitDelete = async () => {
-      if (!ctxMenu.item) return;
-      try {
-          await apiClient.post("/notes/delete", { id: ctxMenu.item.id });
-          loadNode(viewData.info.id);
-          if(activeFile?.id === ctxMenu.item.id) setActiveFile(null); // 如果删的是当前文件，关闭它
-          setShowDeleteModal(false);
-          showToast("🗑️ Deleted Item"); 
-      } catch(e) { showToast("❌ Delete Failed"); } 
-  }; 
+    if (!ctxMenu.item) {
+      return;
+    }
 
-  // 3. 提交移动 (核心新功能) 
-  // 3. 提交移动 (升级版：移动到当前视图所在的目录)
+    try {
+      await apiClient.post("/notes/delete", { id: ctxMenu.item.id });
+      if (activeFile?.id === ctxMenu.item.id) {
+        setActiveFile(null);
+      }
+      await loadNode(viewData.info.id);
+      setShowDeleteModal(false);
+      toast.success("已删除");
+    } catch (error) {
+      toast.error("删除失败");
+    }
+  };
+
   const submitMove = async () => {
-      const targetId = moveViewData.info.id;
-      
-      // 校验：不能移动到自己里面，也不能原地移动
-      if (!ctxMenu.item) return;
-      if (targetId === ctxMenu.item.id) return showToast("⚠️ Cannot move to itself");
-      if (targetId === ctxMenu.item.parent_id) return showToast("⚠️ Already here");
+    if (!ctxMenu.item) {
+      return;
+    }
 
-      try {
-          await apiClient.post("/notes/save", { id: ctxMenu.item.id, parent_id: targetId });
+    const targetId = moveViewData.info.id;
+    if (targetId === ctxMenu.item.id) {
+      toast.warning("不能移动到自己内部");
+      return;
+    }
+    if (targetId === ctxMenu.item.parent_id) {
+      toast.info("已经在当前目录");
+      return;
+    }
 
-          loadNode(viewData.info.id); // 刷新主界面列表
-          setShowMoveModal(false);
-          showToast(`✅ Moved to "${moveViewData.info.name}"`);
-      } catch(e) { showToast("❌ Move Failed"); }
+    try {
+      await apiClient.post("/notes/save", {
+        id: ctxMenu.item.id,
+        parent_id: targetId,
+      });
+      await loadNode(viewData.info.id);
+      setShowMoveModal(false);
+      toast.success(`已移动到 ${moveViewData.info.name}`);
+    } catch (error) {
+      toast.error("移动失败");
+    }
   };
 
-  // --- 专用 Handler: 打开引用选择器 (避免内联函数导致重渲染) --- 
-  const handleOpenLinkModal = () => { 
-      loadMoveNode('root'); 
-      setShowRefModal(true); 
-  }; 
+  const sendDiscussion = async () => {
+    if (isDiscussing || !discussionInput.trim()) {
+      return;
+    }
 
-  const handleToggleUtilityPanel = (panel: Exclude<NotesUtilityPanel, null>) => {
-    setActiveUtilityPanel((currentPanel) =>
-      getNextNotesUtilityPanel(currentPanel, panel)
-    );
+    if (knowledgeContext.mode === "selection" && knowledgeContext.selectedEntryIds.length === 0) {
+      toast.warning("当前文件夹里还没有可讨论的文件");
+      return;
+    }
+
+    const userMessage: KnowledgeDiscussionMessageDTO = {
+      role: "user",
+      content: discussionInput.trim(),
+    };
+    const history = trimKnowledgeDiscussionHistory(discussionState.messages);
+
+    setDiscussionState((current) => ({
+      ...current,
+      messages: [...current.messages, userMessage],
+      saveError: null,
+    }));
+    setDiscussionInput("");
+    setIsDiscussing(true);
+
+    try {
+      const response = await knowledgeWorkshopAPI.discuss(
+        knowledgeContext.mode === "entry"
+          ? {
+              mode: "entry",
+              message: userMessage.content,
+              history,
+              entry_id: knowledgeContext.selectedEntryId ?? undefined,
+            }
+          : {
+              mode: "selection",
+              message: userMessage.content,
+              history,
+              selection: {
+                content_kind: "collected",
+                selected_entry_ids: knowledgeContext.selectedEntryIds,
+              },
+            }
+      );
+
+      setDiscussionState((current) => ({
+        ...current,
+        messages: [
+          ...current.messages,
+          {
+            role: "assistant",
+            content: response.reply,
+          },
+        ],
+        citations: (response.citations ?? []).map((citation) => ({
+          id: citation.id,
+          title: citation.title,
+        })),
+        draft: response.draft,
+        pendingAction: null,
+        saveError: null,
+        isSaving: false,
+      }));
+    } catch (error) {
+      const message = getErrorMessage(error, "AI 对话失败");
+      toast.error(message);
+      setDiscussionState((current) => ({
+        ...current,
+        saveError: message,
+      }));
+    } finally {
+      setIsDiscussing(false);
+    }
   };
 
-  const utilityButtonClassName = (active: boolean) =>
-    `rounded-full border px-3 py-2 text-sm font-bold transition-all ${
-      active
-        ? "border-blue-500 bg-blue-500 text-white shadow-lg shadow-blue-500/25"
-        : "border-white/20 bg-white/80 text-slate-600 hover:bg-white dark:border-white/10 dark:bg-slate-800/80 dark:text-slate-300 dark:hover:bg-slate-700"
-    }`;
+  const handleDraftChange = (draft: KnowledgeDraftDTO) => {
+    setDiscussionState((current) => ({
+      ...current,
+      draft,
+      saveError: null,
+    }));
+  };
+
+  const handleKeepChatOnly = () => {
+    setDiscussionState((current) => ({
+      ...current,
+      draft: null,
+      pendingAction: null,
+      saveError: null,
+      isSaving: false,
+    }));
+  };
+
+  const handleCreateGenerated = async () => {
+    if (!discussionState.draft || discussionState.isSaving) {
+      return;
+    }
+
+    const payload = buildKnowledgeGeneratedSavePayload({
+      draft: discussionState.draft,
+      filters: {
+        contentKind: "collected",
+        projectId: null,
+        category: null,
+      },
+      discussion: {
+        mode: knowledgeContext.mode,
+        selectedEntryIds: knowledgeContext.selectedEntryIds,
+        sourceEntryIds: knowledgeContext.selectedEntryIds,
+        userPrompt: getLatestMessageContent(discussionState.messages, "user"),
+        assistantReply: getLatestMessageContent(discussionState.messages, "assistant"),
+        savedAt: new Date().toISOString(),
+      },
+    });
+
+    setDiscussionState((current) => ({
+      ...current,
+      isSaving: true,
+      pendingAction: "create",
+      saveError: null,
+    }));
+
+    try {
+      const response = await knowledgeWorkshopAPI.createGeneratedNote(payload);
+      setAppendTargetId(response.entry.id);
+      setGeneratedReloadKey((current) => current + 1);
+      setDiscussionState((current) => ({
+        ...current,
+        isSaving: false,
+        pendingAction: null,
+        draft: null,
+        saveError: null,
+      }));
+      toast.success("已保存到 Studio");
+    } catch (error) {
+      const message = getErrorMessage(error, "保存失败");
+      setDiscussionState((current) =>
+        preserveKnowledgeDiscussionStateOnSaveFailure(current, message)
+      );
+      toast.error(message);
+    }
+  };
+
+  const handleAppendGenerated = async () => {
+    if (!discussionState.draft || !appendTargetId || discussionState.isSaving) {
+      return;
+    }
+
+    const payload = buildKnowledgeGeneratedSavePayload({
+      draft: discussionState.draft,
+      filters: {
+        contentKind: "collected",
+        projectId: null,
+        category: null,
+      },
+      discussion: {
+        mode: knowledgeContext.mode,
+        selectedEntryIds: knowledgeContext.selectedEntryIds,
+        sourceEntryIds: knowledgeContext.selectedEntryIds,
+        userPrompt: getLatestMessageContent(discussionState.messages, "user"),
+        assistantReply: getLatestMessageContent(discussionState.messages, "assistant"),
+        savedAt: new Date().toISOString(),
+      },
+    });
+
+    setDiscussionState((current) => ({
+      ...current,
+      isSaving: true,
+      pendingAction: "append",
+      saveError: null,
+    }));
+
+    try {
+      await knowledgeWorkshopAPI.appendGeneratedNote(appendTargetId, {
+        content_markdown: payload.content_markdown,
+        tags: payload.tags,
+        source_capture_ids: payload.source_capture_ids,
+        source_filter_snapshot: payload.source_filter_snapshot,
+        discussion_metadata: payload.discussion_metadata,
+      });
+      setGeneratedReloadKey((current) => current + 1);
+      setDiscussionState((current) => ({
+        ...current,
+        isSaving: false,
+        pendingAction: null,
+        draft: null,
+        saveError: null,
+      }));
+      toast.success("已追加到现有生成内容");
+    } catch (error) {
+      const message = getErrorMessage(error, "追加失败");
+      setDiscussionState((current) =>
+        preserveKnowledgeDiscussionStateOnSaveFailure(current, message)
+      );
+      toast.error(message);
+    }
+  };
 
   return (
-    <div 
-      className="fixed inset-0 bg-transparent text-slate-800 dark:text-slate-100 font-sans overflow-hidden flex flex-col"
-      onClick={() => setCtxMenu({ ...ctxMenu, show: false })}
-      onContextMenu={(e) => setCtxMenu({ ...ctxMenu, show: false })} // 再次右键关闭之前的菜单
+    <div
+      className={`${visualProfile.pageShellClassName} min-h-screen px-4 pb-6 pt-20 text-slate-100 md:px-6`}
+      onClick={() => setCtxMenu((current) => ({ ...current, show: false }))}
+      onContextMenu={() => setCtxMenu((current) => ({ ...current, show: false }))}
     >
-      
-      {/* Header */}
-      <div className="h-16 absolute top-6 left-0 w-full flex items-center px-8 z-50 pointer-events-none">
-        {/* 左侧：Exit 按钮 */}
-        <div className="flex items-center gap-3 pointer-events-auto">
-          <button onClick={() => navigate('/')} className="flex items-center gap-2 bg-white/80 dark:bg-slate-800/80 backdrop-blur-md px-4 py-2 rounded-full border border-white/20 shadow-sm font-bold text-sm hover:scale-105 transition-transform text-slate-600 dark:text-slate-300">
-            <Icons.ArrowLeft className="w-4 h-4" /> <span>Exit</span>
-          </button>
-        </div>
-        {/* 中间：搜索框（绝对定位居中） */}
-        <div className="absolute left-1/2 -translate-x-1/2 pointer-events-auto w-96">
-          <NoteSearch onLoadNote={loadNode} />
-        </div>
-
-        {/* 右侧：AI Assist + 设置按钮 */}
-        <div className="ml-auto flex items-center gap-3 pointer-events-auto">
-          {activeFile && (
-            <button
-              onClick={() => handleToggleUtilityPanel('links')}
-              className={utilityButtonClassName(activeUtilityPanel === "links")}
-            >
-              <span className="flex items-center gap-2">
-                <Icons.Link className="w-4 h-4" />
-                <span>反链</span>
-              </span>
-            </button>
-          )}
-
-          {activeFile && tagSettings.showTagCloud && (
-            <button
-              onClick={() => handleToggleUtilityPanel('tags')}
-              className={utilityButtonClassName(activeUtilityPanel === "tags")}
-            >
-              <span className="flex items-center gap-2">
-                <Icons.Tag className="w-4 h-4" />
-                <span>标签</span>
-                {selectedTags.length > 0 && (
-                  <span className="rounded-full bg-white/20 px-1.5 py-0.5 text-[10px] text-current">
-                    {selectedTags.length}
-                  </span>
-                )}
-              </span>
-            </button>
-          )}
-
-          <button
-            onClick={() => setAiOpen(!aiOpen)}
-            className={`px-4 py-2 rounded-full border border-white/20 transition-all duration-300 backdrop-blur-md shadow-sm flex items-center gap-2 group font-bold ${
-              aiOpen
-                ? 'bg-blue-500 text-white border-blue-500 shadow-lg shadow-blue-500/30'
-                : 'bg-white/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700'
-            }`}
-          >
-            <Icons.Robot className="w-4 h-4" />
-            <span>AI对话</span>
-            <div className={`w-2 h-2 rounded-full ${aiOpen ? 'bg-white animate-pulse' : 'bg-green-500'}`}></div>
-          </button>
-
-          {/* 标签设置按钮 */}
-          <TagSettings
-            settings={tagSettings}
-            onSettingsChange={setTagSettings}
-          />
-        </div>
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute inset-x-0 top-0 h-64 bg-[linear-gradient(180deg,rgba(216,207,182,0.08),rgba(11,16,22,0))]" />
+        <div className="absolute -left-24 top-32 h-72 w-72 rounded-full bg-[#d8cfb6]/[0.06] blur-3xl" />
+        <div className="absolute right-[-4rem] top-44 h-80 w-80 rounded-full bg-[#6f859c]/[0.08] blur-3xl" />
       </div>
 
-      {/* Main Layout */}
-      <div className="flex-1 flex pt-24 pb-6 px-6 gap-6 overflow-hidden items-stretch">
-        {/* ✨ 修改：侧边栏容器 - 可滚动 */}
-        <div className="shrink-0 h-[calc(100vh-10rem)] flex flex-col gap-3 overflow-y-auto custom-scrollbar pr-1">
-            {/* 文件浏览器 - 限制高度 */}
-            <div className="shrink-0">
+      <div className="relative mx-auto flex h-[calc(100vh-6.5rem)] max-w-[1880px] flex-col gap-5">
+        <div className={`grid min-h-0 flex-1 gap-5 ${gridClassName}`}>
+          <div className={leftPaneState.containerClassName}>
+            {leftPaneState.showExplorer ? (
               <FileExplorer
-                  viewData={viewData}
-                  currentId={currentId}
-                  sortedItems={sortedItems}
-                  onLoadNode={loadNode}
-                  onCreateItem={(type) => openCreateModal(type)}
-                  onContextMenu={handleContextMenu}
-                  onDropItem={async (draggedId, targetId) => {
-                    try {
-                      await apiClient.post("/notes/save", { id: draggedId, parent_id: targetId });
-                      loadNode(viewData.info.id);
-                    } catch (e) {
-                      showToast("❌ Move Failed");
-                    }
-                  }}
+                viewData={viewData}
+                currentId={currentId}
+                sortedItems={sortedItems}
+                onLoadNode={loadNode}
+                onCreateItem={openCreateModal}
+                onContextMenu={(event: MouseEvent, item: NoteItem | null) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setCtxMenu({
+                    show: true,
+                    x: event.clientX,
+                    y: event.clientY,
+                    item,
+                  });
+                }}
+                onDropItem={async (draggedId: string, targetId: string) => {
+                  try {
+                    await apiClient.post("/notes/save", {
+                      id: draggedId,
+                      parent_id: targetId,
+                    });
+                    await loadNode(viewData.info.id);
+                    toast.success("已移动");
+                  } catch (error) {
+                    toast.error("移动失败");
+                  }
+                }}
+                className="h-full w-full"
+                listClassName="max-h-none"
+                showSettingsButton={false}
+                tone={visualProfile.leftTone === "quiet" ? "quiet-dark" : "default"}
               />
-            </div>
-        </div>
-        <div className="min-w-0 h-full flex flex-1 gap-4 overflow-hidden">
-        {/* --- 编辑器区域：移除 AnimatePresence，避免不必要的重挂载 --- */}
-        <div className="h-full min-w-0 flex-1 overflow-hidden flex justify-center">
-            <motion.div
-                // ✅ 修复：使用 activeFile?.id 作为 key，但只在真正切换笔记时才变化
-                key={activeFile?.id}
+            ) : null}
 
-                // ✅ 移除 initial 和 exit，不要进出场动画
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.2, ease: "easeInOut" }}
-                className="h-full w-full flex justify-center"
-            >
-                    <NoteEditor
-                        info={(activeFile || viewData.info) as any}
-                        content={content}
-                        setContent={setContent}
-                        onSave={saveNote}
-                        onLoadNode={loadNode}
-                        onDeleteNote={(deletedId) => {
-                          // 刷新当前文件夹
-                          loadNode(viewData.info.id);
-                          // 如果删除的是当前打开的笔记，关闭编辑器
-                          if (activeFile?.id === deletedId) {
-                            setActiveFile(null);
-                          }
-                        }}
+            {leftPaneState.showPreview ? (
+              <NotesPreviewPanel
+                title={previewDocument.title}
+                content={previewDocument.content}
+                empty={previewDocument.empty}
+                selectionType="file"
+                itemCount={currentSourceCount}
+                className={leftPaneState.previewPanelClassName}
+                showBackButton={leftPaneState.showBackButton}
+                onBack={() => {
+                  setActiveFile(null);
+                  setCurrentId(viewData.info.id);
+                  navigate(
+                    viewData.info.id === "root" ? "/notes" : `/notes?id=${viewData.info.id}`,
+                    { replace: true }
+                  );
+                }}
+              />
+            ) : null}
+          </div>
 
-                        // ✅ 修改：使用上面定义的稳定函数，不再使用内联箭头函数
-                        onInsertLink={handleOpenLinkModal}
-                        viewMode={viewMode} setViewMode={setViewMode}
-                        aiOpen={aiOpen}
-                        autoTag={tagSettings.autoTag}
-                    />
-            </motion.div>
+          <NotesKnowledgeChatPanel
+            contextLabel={contextLabel}
+            messages={discussionState.messages}
+            citations={discussionState.citations}
+            discussionInput={discussionInput}
+            isDiscussing={isDiscussing}
+            onDiscussionInputChange={setDiscussionInput}
+            onSendDiscussion={sendDiscussion}
+            onSelectCitation={(citationId) => {
+              void loadNode(citationId);
+            }}
+          />
 
-            {/* === Toast 和模态框（使用 AnimatePresence 实现退出动画） === */}
-            <AnimatePresence>
-                {/* 1. 绿色呼吸光晕 Toast */}
-                {toastMsg && (
-                  <motion.div
-                      initial={{ y: -50, opacity: 0 }}
-                      animate={{
-                          y: 0, opacity: 1,
-                          boxShadow: ["0 0 0 0px rgba(74, 222, 128, 0)", "0 0 0 4px rgba(74, 222, 128, 0.3)", "0 0 0 0px rgba(74, 222, 128, 0)"]
-                      }}
-                      exit={{ y: -50, opacity: 0 }}
-                      transition={{ boxShadow: { duration: 1.5, repeat: Infinity, ease: "easeInOut" } }}
-                      className="absolute top-6 left-1/2 -translate-x-1/2 z-[1000] px-6 py-3 rounded-full backdrop-blur-md bg-green-500/10 border border-green-500 text-green-600 dark:text-green-400 font-bold shadow-xl flex items-center gap-2"
-                  >
-                      <Icons.Check className="w-5 h-5" /> {toastMsg}
-                  </motion.div>
-                )}
+          {rightPaneState.showPanel ? (
+            <KnowledgeDiscussionPanel
+              draft={discussionState.draft}
+              isSaving={discussionState.isSaving}
+              saveError={discussionState.saveError}
+              generatedEntries={generatedEntries}
+              appendTargetId={appendTargetId}
+              projectNameById={{}}
+              collapseLabel={rightPaneState.actionLabel}
+              onDraftChange={handleDraftChange}
+              onSelectGeneratedEntry={(entryId) => {
+                setAppendTargetId(entryId);
+              }}
+              onAppendTargetChange={setAppendTargetId}
+              onCreateGenerated={handleCreateGenerated}
+              onAppendGenerated={handleAppendGenerated}
+              onKeepChatOnly={handleKeepChatOnly}
+              onToggleCollapse={() => setIsRightPaneCollapsed(true)}
+            />
+          ) : null}
 
-                {/* 2. 重命名模态框 (Rename Modal) */}
-                {showRenameModal && (
-                    <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
-                        className="fixed inset-0 z-[300] bg-black/40 backdrop-blur-md flex items-center justify-center" onClick={() => setShowRenameModal(false)}>
-                        <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-2xl w-80 border border-white/10" onClick={e => e.stopPropagation()}>
-                            <h3 className="font-bold text-xl mb-4 text-slate-800 dark:text-white">Rename Item</h3>
-                            <input autoFocus type="text" className="w-full p-4 rounded-xl bg-gray-100 dark:bg-black/20 border-none outline-none mb-6 font-bold dark:text-white"
-                                value={newItemName} onChange={e => setNewItemName(e.target.value)} onKeyDown={e => e.key === 'Enter' && submitRename()} />
-                            <div className="flex gap-3">
-                                <button onClick={() => setShowRenameModal(false)} className="flex-1 py-3 rounded-xl bg-gray-100 dark:bg-white/5 font-bold text-sm hover:opacity-80 dark:text-gray-300">Cancel</button>
-                                <button onClick={submitRename} className="flex-1 py-3 rounded-xl bg-blue-500 text-white font-bold text-sm hover:bg-blue-600">Save</button>
-                            </div>
-                        </div>
-                    </motion.div>
-                )}
-
-                {/* 3. 移动模态框 (Move Modal) */}
-                {showMoveModal && (
-                    <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-                        className="fixed inset-0 z-[300] bg-black/40 backdrop-blur-sm flex items-center justify-center"
-                        onClick={() => setShowMoveModal(false)}
-                    >
-                        <div
-                            className="bg-white/80 dark:bg-[#1e293b]/80 backdrop-blur-2xl p-0 rounded-2xl shadow-2xl w-[500px] max-w-[90vw] border border-white/40 dark:border-white/10 flex flex-col h-[500px] overflow-hidden"
-                            onClick={e => e.stopPropagation()}
-                        >
-                            {/* --- Header & Breadcrumbs --- */}
-                            <div className="p-4 border-b border-gray-200/50 dark:border-white/10 shrink-0 bg-white/50 dark:bg-white/5">
-                                <h3 className="text-base font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
-                                    <Icons.Move className="w-5 h-5 text-blue-500"/>
-                                    <span>Move Item</span>
-                                </h3>
-
-                                {/* Win11 Style Breadcrumb Bar */}
-                                <div className="flex items-center gap-1 bg-white dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm overflow-x-auto no-scrollbar">
-                                    {/* 根目录图标 */}
-                                    <button
-                                       onClick={() => loadMoveNode('root')}
-                                       className={`p-1 rounded hover:bg-gray-100 dark:hover:bg-white/10 transition-colors ${moveViewData.info.id === 'root' ? 'text-blue-500' : 'text-gray-500 dark:text-gray-400'}`}
-                                    >
-                                       <Icons.FolderArrow className="w-4 h-4" />
-                                    </button>
-
-                                    {/* 面包屑路径 */}
-                                    {moveViewData.breadcrumbs.map((crumb, idx) => (
-                                        <div key={crumb.id} className="flex items-center gap-1 shrink-0">
-                                            <span className="text-gray-300 dark:text-gray-600">/</span>
-                                            <button
-                                                onClick={() => loadMoveNode(crumb.id)}
-                                                className={`px-2 py-0.5 rounded hover:bg-gray-100 dark:hover:bg-white/10 transition-colors font-medium truncate max-w-[100px]
-                                                  ${idx === moveViewData.breadcrumbs.length - 1 ? 'text-slate-800 dark:text-white font-bold' : 'text-gray-500 dark:text-gray-400'}
-                                                `}
-                                            >
-                                                {crumb.name}
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* --- Folder List (Browser) --- */}
-                            <div className="flex-1 overflow-y-auto custom-scrollbar p-2 bg-gray-50/50 dark:bg-transparent">
-                                {isMoveLoading ? (
-                                    <div className="flex flex-col items-center justify-center h-full opacity-50 gap-2">
-                                        <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                                        <span className="text-xs font-bold">Loading...</span>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-1">
-                                        {/* 上一级入口 */}
-                                        {moveViewData.info.id !== 'root' && (
-                                            <div
-                                                onClick={() => loadMoveNode(moveViewData.info.parent_id || 'root')}
-                                                className="group flex items-center gap-3 p-3 rounded-xl cursor-pointer hover:bg-white dark:hover:bg-white/5 hover:shadow-sm border border-transparent hover:border-gray-200 dark:hover:border-white/5 transition-all"
-                                            >
-                                                <div className="w-10 h-10 rounded-xl bg-gray-200 dark:bg-white/10 flex items-center justify-center text-gray-500 group-hover:text-blue-500 transition-colors">
-                                                    <Icons.ArrowUp className="w-5 h-5"/>
-                                                </div>
-                                                <div className="flex-1">
-                                                    <div className="font-bold text-sm text-slate-700 dark:text-slate-200">..</div>
-                                                    <div className="text-[10px] text-gray-400 font-bold uppercase">Parent Directory</div>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* 子文件夹列表 */}
-                                        {moveViewData.items
-                                            .filter(i => i.type === 'folder' && i.id !== ctxMenu.item?.id)
-                                            .map(folder => (
-                                            <div
-                                                key={folder.id}
-                                                onClick={() => loadMoveNode(folder.id)}
-                                                className="group flex items-center gap-3 p-3 rounded-xl cursor-pointer hover:bg-white dark:hover:bg-white/5 hover:shadow-sm border border-transparent hover:border-gray-200 dark:hover:border-white/5 transition-all"
-                                            >
-                                                <div className="w-10 h-10 rounded-xl bg-yellow-100 dark:bg-yellow-500/10 flex items-center justify-center text-yellow-600 dark:text-yellow-500 group-hover:scale-110 transition-transform">
-                                                    <Icons.FolderArrow className="w-5 h-5"/>
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="font-bold text-sm text-slate-700 dark:text-slate-200 truncate">{folder.name}</div>
-                                                    <div className="text-[10px] text-gray-400 font-bold">{folder.date || 'Folder'}</div>
-                                                </div>
-                                                <Icons.ArrowDown className="w-4 h-4 text-gray-300 -rotate-90 group-hover:translate-x-1 transition-transform" />
-                                            </div>
-                                        ))}
-
-                                        {/* 空状态提示 */}
-                                        {moveViewData.items.filter(i => i.type === 'folder').length === 0 && (
-                                            <div className="py-10 text-center text-gray-400 text-xs font-bold opacity-60">
-                                                No subfolders here
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* --- Footer Action Bar --- */}
-                            <div className="p-4 border-t border-gray-200/50 dark:border-white/10 bg-white/50 dark:bg-white/5 backdrop-blur-md shrink-0 flex items-center justify-between gap-4">
-                                <div className="flex-1 min-w-0">
-                                    <div className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-0.5">Moving to</div>
-                                    <div className="font-bold text-sm text-slate-800 dark:text-white truncate flex items-center gap-2">
-                                        <Icons.FolderArrow className="w-4 h-4 text-blue-500" />
-                                        /{moveViewData.breadcrumbs.map(b => b.name).join('/')}
-                                    </div>
-                                </div>
-
-                                <div className="flex gap-2 shrink-0">
-                                    <button
-                                        onClick={() => { setShowMoveModal(false); setSelectedMoveTarget(null); }}
-                                        className="px-4 py-2.5 rounded-xl font-bold text-sm text-slate-600 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-white/10 transition-colors"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                      onClick={submitMove}
-                                      className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm shadow-lg shadow-blue-500/30 transition-all active:scale-95 flex items-center gap-2"
-                                    >
-                                        <span>Move Here</span>
-                                        <Icons.Check className="w-4 h-4" />
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </motion.div>
-                )}
-
-                {/* 4. 删除确认模态框 (Delete Modal) */}
-                {showDeleteModal && (
-                    <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
-                        className="fixed inset-0 z-[300] bg-black/40 backdrop-blur-md flex items-center justify-center" onClick={() => setShowDeleteModal(false)}>
-                        <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-2xl w-80 border border-white/10" onClick={e => e.stopPropagation()}>
-                            <div className="w-12 h-12 bg-red-100 dark:bg-red-500/20 rounded-full flex items-center justify-center text-red-500 mb-4 mx-auto">
-                                <Icons.Trash className="w-6 h-6" />
-                            </div>
-                            <h3 className="font-bold text-xl mb-2 text-center text-slate-800 dark:text-white">Delete Item?</h3>
-                            <div className="flex gap-3 mt-6">
-                                <button onClick={() => setShowDeleteModal(false)} className="flex-1 py-3 rounded-xl bg-gray-100 dark:bg-white/5 font-bold text-sm hover:opacity-80 dark:text-gray-300">Cancel</button>
-                                <button onClick={submitDelete} className="flex-1 py-3 rounded-xl bg-red-500 text-white font-bold text-sm hover:bg-red-600 shadow-lg shadow-red-500/30">Delete</button>
-                            </div>
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-        </div>
-        <AnimatePresence initial={false}>
-          {activeFile && activeUtilityPanel && (
-            <motion.aside
-              initial={{ opacity: 0, x: 24, width: 0 }}
-              animate={{ opacity: 1, x: 0, width: 320 }}
-              exit={{ opacity: 0, x: 24, width: 0 }}
-              transition={{ duration: 0.22, ease: "easeOut" }}
-              className="h-full shrink-0 overflow-hidden"
-            >
-              <div className="flex h-full w-80 flex-col overflow-hidden rounded-3xl border border-white/40 bg-white/70 shadow-xl backdrop-blur-2xl dark:border-white/10 dark:bg-[#1e293b]/70">
-                <div className="flex h-14 items-center justify-between border-b border-gray-200/50 bg-white/40 px-4 dark:border-white/10 dark:bg-white/5">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
-                      Utility
-                    </p>
-                    <p className="text-sm font-bold text-slate-800 dark:text-white">
-                      {activeUtilityPanel === "links" ? "双向链接" : "标签筛选"}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setActiveUtilityPanel(null)}
-                    className="rounded-full p-2 text-slate-500 transition hover:bg-black/5 hover:text-slate-800 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
-                  >
-                    <Icons.Close className="w-4 h-4" />
-                  </button>
-                </div>
-
-                <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-                  {activeUtilityPanel === "links" ? (
-                    <BacklinksPanel
-                      currentNoteId={activeFile.id}
-                      onLoadNode={loadNode}
-                    />
-                  ) : (
-                    <TagCloud
-                      tags={allTags.map(tag => ({ name: tag, count: 0 }))}
-                      selectedTags={selectedTags}
-                      onTagClick={(tag) => {
-                        if (selectedTags.includes(tag)) {
-                          setSelectedTags(selectedTags.filter(t => t !== tag));
-                        } else {
-                          setSelectedTags([...selectedTags, tag]);
-                        }
-                      }}
-                      onClear={() => setSelectedTags([])}
-                    />
-                  )}
-                </div>
-              </div>
-            </motion.aside>
-          )}
-        </AnimatePresence>
-        <AIAssistant isOpen={aiOpen} context={activeFile ? { type: 'note', id: activeFile.id } : null} />
+          {rightPaneState.showCollapsedRail ? (
+            <aside className={rightPaneState.railClassName}>
+              <button
+                type="button"
+                onClick={() => setIsRightPaneCollapsed(false)}
+                className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.05] text-lg text-white transition hover:bg-white/[0.1]"
+                aria-label={rightPaneState.actionLabel}
+                title={rightPaneState.actionLabel}
+              >
+                &gt;
+              </button>
+              <span className="mt-4 text-[11px] font-semibold tracking-[0.22em] text-slate-500 [writing-mode:vertical-rl]">
+                生成区
+              </span>
+            </aside>
+          ) : null}
         </div>
       </div>
 
-      {/* --- Modals --- */}
-      
-      {/* 1. 新建模态框 */}
-      {showCreateModal && (
-        <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={closeCreateModal}>
-          <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-2xl w-80 border border-white/10" onClick={e => e.stopPropagation()}>
-            <h3 className="font-bold text-lg mb-4 text-slate-800 dark:text-white">New {newItemType === 'folder' ? 'Folder' : 'Note'}</h3>
-            <input autoFocus type="text" className="w-full p-3 rounded-xl bg-gray-100 dark:bg-black/20 border-none outline-none mb-4 font-bold dark:text-white"
-              placeholder="Enter name..." value={newItemName} onChange={e => setNewItemName(e.target.value)} onKeyDown={e => e.key === 'Enter' && createItem()} />
-
-            {newItemType === 'file' && (
-              <div className="mb-4 space-y-2">
-                <select
-                  value={newItemSourceType}
-                  onChange={(event) => setNewItemSourceType(event.target.value as 'none' | 'url' | 'image' | 'pdf' | 'doc' | 'video')}
-                  className="w-full p-2.5 rounded-xl bg-gray-100 dark:bg-black/20 border-none outline-none text-sm dark:text-white"
-                >
-                  <option value="none">来源：无（普通新建）</option>
-                  <option value="url">来源：链接</option>
-                  <option value="image">来源：图片</option>
-                  <option value="pdf">来源：PDF</option>
-                  <option value="doc">来源：文档</option>
-                  <option value="video">来源：视频</option>
-                </select>
-
-                {newItemSourceType !== 'none' && (
-                  <input
-                    type="text"
-                    value={newItemSourceUri}
-                    onChange={(event) => setNewItemSourceUri(event.target.value)}
-                    placeholder="输入 URL 或本地文件路径"
-                    className="w-full p-2.5 rounded-xl bg-gray-100 dark:bg-black/20 border-none outline-none text-sm dark:text-white"
-                  />
-                )}
-              </div>
-            )}
-
-            <div className="flex gap-2">
-              <button onClick={closeCreateModal} className="flex-1 py-2 rounded-lg bg-gray-100 dark:bg-white/10 font-bold text-sm hover:opacity-80 dark:text-white">Cancel</button>
-              <button
-                onClick={createItem}
-                disabled={creatingItem || !newItemName.trim() || (newItemType === 'file' && newItemSourceType !== 'none' && !newItemSourceUri.trim())}
-                className="flex-1 py-2 rounded-lg bg-blue-500 text-white font-bold text-sm hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {creatingItem ? 'Creating...' : 'Create'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 2. 信息模态框 */}
-      {showInfoModal && (
-        <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowInfoModal(false)}>
-          <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-2xl w-80 border border-white/10" onClick={e => e.stopPropagation()}>
-            <h3 className="font-bold text-lg mb-4 flex items-center gap-2 text-slate-800 dark:text-white">
-              <Icons.Info className="text-blue-500" /> Details
-            </h3>
-            <div className="space-y-3 text-sm text-gray-600 dark:text-gray-300">
-              <div className="flex justify-between"><span className="opacity-50">Name:</span> <span className="font-bold">{ctxMenu.item?.name}</span></div>
-              <div className="flex justify-between"><span className="opacity-50">Type:</span> <span className="uppercase text-xs font-bold bg-gray-100 dark:bg-white/10 px-2 rounded">{ctxMenu.item?.type}</span></div>
-              <div className="flex justify-between"><span className="opacity-50">Created:</span> <span>{ctxMenu.item?.date}</span></div>
-              <div className="flex justify-between"><span className="opacity-50">ID:</span> <span className="font-mono text-xs">{ctxMenu.item?.id}</span></div>
-            </div>
-            <button onClick={() => setShowInfoModal(false)} className="w-full mt-6 py-2 rounded-lg bg-gray-100 dark:bg-white/10 font-bold text-sm hover:opacity-80 dark:text-white">Close</button>
-          </div>
-        </div>
-      )}
-
-      {/* 3. 右键菜单 */}
-      {ctxMenu.show && (
-        <div 
-          className="fixed z-[999] w-48 bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl border border-white/20 rounded-xl shadow-2xl py-1 overflow-hidden flex flex-col"
+      {ctxMenu.show ? (
+        <div
+          className="fixed z-[999] w-48 overflow-hidden rounded-xl border border-white/12 bg-[#11161d]/92 py-1 shadow-2xl backdrop-blur-xl"
           style={{ top: ctxMenu.y, left: ctxMenu.x }}
-          onClick={e => e.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
         >
           {ctxMenu.item ? (
             <>
-               <div className="px-4 py-2 text-[10px] font-bold uppercase opacity-40 border-b border-gray-200 dark:border-white/10 mb-1 text-slate-500 dark:text-slate-400 truncate">
-                 {ctxMenu.item!.name}
-               </div>
-
-               {/* 重命名按钮 */}
-               <button onClick={() => { setNewItemName(ctxMenu.item!.name); setShowRenameModal(true); setCtxMenu({...ctxMenu, show: false}); }} className="text-left px-4 py-2.5 text-sm font-bold hover:bg-blue-500 hover:text-white transition-colors dark:text-gray-200 flex items-center gap-3">
-                 <span className="opacity-70">✎</span> Rename
+              <div className="mb-1 border-b border-white/8 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                {ctxMenu.item.name}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setNewItemName(ctxMenu.item?.name ?? "");
+                  setShowRenameModal(true);
+                  setCtxMenu((current) => ({ ...current, show: false }));
+                }}
+                className="w-full px-4 py-2.5 text-left text-sm font-medium text-slate-200 transition hover:bg-white/8"
+              >
+                重命名
               </button>
-              
-              {/* #注释 找到右键菜单中的 Move 按钮，修改 onClick */}
-              {/* ✅ 修改：绑定新的打开函数 */}
-              <button onClick={() => { openMoveModal(); setCtxMenu({...ctxMenu, show: false}); }} className="text-left px-4 py-2.5 text-sm font-bold hover:bg-blue-500 hover:text-white transition-colors dark:text-gray-200 flex items-center gap-3">
-                 <Icons.FolderArrow className="w-4 h-4 opacity-70" /> Move to...
+              <button
+                type="button"
+                onClick={() => {
+                  void loadMoveNode("root");
+                  setShowMoveModal(true);
+                  setCtxMenu((current) => ({ ...current, show: false }));
+                }}
+                className="w-full px-4 py-2.5 text-left text-sm font-medium text-slate-200 transition hover:bg-white/8"
+              >
+                移动到...
               </button>
-
-              <div className="h-px bg-gray-200 dark:bg-white/10 my-1 mx-4"></div>
-              
-              {/* 删除按钮 */}
-              <button onClick={() => { setShowDeleteModal(true); setCtxMenu({...ctxMenu, show: false}); }} className="text-left px-4 py-2.5 text-sm font-bold text-red-500 hover:bg-red-500 hover:text-white transition-colors flex items-center gap-3">
-                 <Icons.Trash className="w-4 h-4 opacity-70" /> Delete
+              <div className="my-1 h-px bg-white/8" />
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDeleteModal(true);
+                  setCtxMenu((current) => ({ ...current, show: false }));
+                }}
+                className="w-full px-4 py-2.5 text-left text-sm font-medium text-rose-300 transition hover:bg-rose-400/10"
+              >
+                删除
               </button>
             </>
           ) : (
-            // --- 针对空白处的菜单 ---
             <>
-              <div className="px-3 py-2 text-[10px] font-bold uppercase opacity-50 border-b border-white/10 mb-1 text-slate-500 dark:text-slate-400">
+              <div className="mb-1 border-b border-white/8 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
                 Folder Actions
               </div>
-              <button onClick={() => { openCreateModal('folder'); setCtxMenu({...ctxMenu, show: false}); }} className="text-left px-4 py-2 text-sm font-bold hover:bg-blue-500 hover:text-white transition-colors dark:text-gray-200">New Folder</button>
-              <button onClick={() => { openCreateModal('file'); setCtxMenu({...ctxMenu, show: false}); }} className="text-left px-4 py-2 text-sm font-bold hover:bg-blue-500 hover:text-white transition-colors dark:text-gray-200">New Note</button>
-              
-              <div className="h-px bg-gray-200 dark:bg-white/10 my-1"></div>
-              <div className="px-3 py-1 text-[10px] font-bold opacity-40 uppercase">Sort By</div>
-              
-              <button onClick={() => handleSort('name')} className="w-full text-left px-4 py-2 text-sm font-bold hover:bg-blue-500 hover:text-white transition-colors dark:text-gray-200 flex items-center justify-between group">
-                <span className="flex items-center gap-2"><Icons.SortAlpha className="w-4 h-4 opacity-70"/> Name</span>
-                {sortConfig.key === 'name' && (
-                   <span className="text-blue-500 group-hover:text-white">{sortConfig.order === 'asc' ? <Icons.ArrowUp className="w-3 h-3"/> : <Icons.ArrowDown className="w-3 h-3"/>}</span>
-                )}
+              <button
+                type="button"
+                onClick={() => {
+                  openCreateModal("folder");
+                  setCtxMenu((current) => ({ ...current, show: false }));
+                }}
+                className="w-full px-4 py-2.5 text-left text-sm font-medium text-slate-200 transition hover:bg-white/8"
+              >
+                新建文件夹
               </button>
-              <button onClick={() => handleSort('date')} className="w-full text-left px-4 py-2 text-sm font-bold hover:bg-blue-500 hover:text-white transition-colors dark:text-gray-200 flex items-center justify-between group">
-                <span className="flex items-center gap-2"><Icons.SortTime className="w-4 h-4 opacity-70"/> Date</span>
-                {sortConfig.key === 'date' && (
-                   <span className="text-blue-500 group-hover:text-white">{sortConfig.order === 'asc' ? <Icons.ArrowUp className="w-3 h-3"/> : <Icons.ArrowDown className="w-3 h-3"/>}</span>
-                )}
+              <button
+                type="button"
+                onClick={() => {
+                  openCreateModal("file");
+                  setCtxMenu((current) => ({ ...current, show: false }));
+                }}
+                className="w-full px-4 py-2.5 text-left text-sm font-medium text-slate-200 transition hover:bg-white/8"
+              >
+                新建笔记
               </button>
             </>
           )}
         </div>
-      )}
+      ) : null}
 
-      {/* 4. 引用选择器 (Reference Picker Modal) */}
-      {showRefModal && (
-          <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-              className="fixed inset-0 z-[300] bg-black/40 backdrop-blur-sm flex items-center justify-center" 
-              onClick={() => setShowRefModal(false)}
+      <AnimatePresence>
+        {showCreateModal ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+            onClick={closeCreateModal}
           >
-              <div 
-                  className="bg-white/80 dark:bg-[#1e293b]/80 backdrop-blur-2xl p-0 rounded-2xl shadow-2xl w-[600px] max-w-[90vw] border border-white/40 dark:border-white/10 flex flex-col h-[600px] overflow-hidden" 
-                  onClick={e => e.stopPropagation()}
-              >
-                  {/* --- Header --- */}
-                  <div className="p-4 border-b border-gray-200/50 dark:border-white/10 shrink-0 bg-white/50 dark:bg-white/5 flex justify-between items-center">
-                      <div className="flex flex-col">
-                          <h3 className="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                              <Icons.SortAlpha className="w-5 h-5 text-blue-500"/>
-                              <span>Insert Note Link</span>
-                          </h3>
-                          <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider opacity-70">
-                              Select a file to reference
-                          </p>
-                      </div>
-                      
-                      <div className="flex items-center gap-1 bg-white dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-lg px-2 py-1 text-xs overflow-x-auto no-scrollbar max-w-[200px]">
-                          <button onClick={() => loadMoveNode('root')} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-white/10 text-blue-500"><Icons.FolderArrow className="w-3 h-3" /></button>
-                          {moveViewData.breadcrumbs.length > 0 && <span className="opacity-30">/</span>}
-                          <span className="truncate">{moveViewData.info.name}</span>
-                      </div>
-                  </div>
+            <div
+              className="w-[360px] rounded-3xl border border-white/10 bg-[#141a22] p-6 shadow-2xl"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <h3 className="mb-4 text-lg font-semibold text-white">
+                新建{newItemType === "folder" ? "文件夹" : "笔记"}
+              </h3>
+              <input
+                autoFocus
+                type="text"
+                className="mb-4 w-full rounded-xl border border-white/10 bg-[#1d2430] px-4 py-3 text-sm text-white outline-none"
+                placeholder="输入名称..."
+                value={newItemName}
+                onChange={(event) => setNewItemName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    void createItem();
+                  }
+                }}
+              />
 
-                  {/* --- Body --- */}
-                  <div className="flex-1 overflow-y-auto custom-scrollbar p-2 bg-gray-50/50 dark:bg-transparent">
-                      <div className="space-y-4 p-2">
-                          {moveViewData.info.id !== 'root' && (
-                              <div onClick={() => loadMoveNode(moveViewData.info.parent_id || 'root')} className="flex items-center gap-3 p-3 rounded-xl cursor-pointer hover:bg-white dark:hover:bg-white/5 border border-transparent hover:border-gray-200 dark:hover:border-white/5 transition-all opacity-70 hover:opacity-100">
-                                  <div className="w-8 h-8 rounded-lg bg-gray-200 dark:bg-white/10 flex items-center justify-center"><Icons.ArrowUp className="w-4 h-4"/></div>
-                                  <span className="font-bold text-sm">.. Up Level</span>
-                              </div>
-                          )}
-                          {moveViewData.items.filter(i => i.type === 'folder').map(folder => (
-                              <div key={folder.id} onClick={() => loadMoveNode(folder.id)} className="flex items-center gap-3 p-3 rounded-xl cursor-pointer hover:bg-white dark:hover:bg-white/5 border border-transparent hover:border-gray-200 dark:hover:border-white/5 transition-all">
-                                  <div className="w-8 h-8 rounded-lg bg-yellow-100 dark:bg-yellow-500/20 text-yellow-600 flex items-center justify-center"><Icons.FolderArrow className="w-4 h-4"/></div>
-                                  <span className="font-bold text-sm flex-1 truncate">{folder.name}</span>
-                                  <Icons.ArrowDown className="w-3 h-3 -rotate-90 opacity-30"/>
-                              </div>
-                          ))}
-                          {moveViewData.items.filter(i => i.type === 'file').map(file => (
-                              <div key={file.id} onClick={() => handleInsertRef(file)} className="group flex items-center gap-3 p-3 rounded-xl cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-500/10 border border-transparent hover:border-blue-200 dark:hover:border-blue-500/30 transition-all">
-                                  <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-500/20 text-blue-600 flex items-center justify-center group-hover:scale-110 transition-transform">
-                                      <Icons.SortAlpha className="w-4 h-4"/>
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                      <div className="font-bold text-sm text-slate-700 dark:text-slate-200 truncate">{file.name}</div>
-                                      <div className="text-[10px] text-gray-400">{file.date}</div>
-                                  </div>
-                                  <button className="px-3 py-1 bg-blue-500 text-white text-xs font-bold rounded-lg opacity-0 group-hover:opacity-100 transition-opacity shadow-lg">
-                                      Link
-                                  </button>
-                              </div>
-                          ))}
-                          {moveViewData.items.length === 0 && (
-                              <div className="py-20 text-center opacity-50">
-                                  <div className="text-4xl mb-2">📭</div>
-                                  <p className="font-bold">No notes found</p>
-                              </div>
-                          )}
-                      </div>
-                  </div>
+              {newItemType === "file" ? (
+                <div className="mb-4 space-y-2">
+                  <select
+                    value={newItemSourceType}
+                    onChange={(event) =>
+                      setNewItemSourceType(
+                        event.target.value as "none" | "url" | "image" | "pdf" | "doc" | "video"
+                      )
+                    }
+                    className="w-full rounded-xl border border-white/10 bg-[#1d2430] px-4 py-3 text-sm text-white outline-none"
+                  >
+                    <option value="none">普通新建</option>
+                    <option value="url">来源：链接</option>
+                    <option value="image">来源：图片</option>
+                    <option value="pdf">来源：PDF</option>
+                    <option value="doc">来源：文档</option>
+                    <option value="video">来源：视频</option>
+                  </select>
+
+                  {newItemSourceType !== "none" ? (
+                    <input
+                      type="text"
+                      value={newItemSourceUri}
+                      onChange={(event) => setNewItemSourceUri(event.target.value)}
+                      placeholder="输入 URL 或本地文件路径"
+                      className="w-full rounded-xl border border-white/10 bg-[#1d2430] px-4 py-3 text-sm text-white outline-none"
+                    />
+                  ) : null}
+                </div>
+              ) : null}
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={closeCreateModal}
+                  className="flex-1 rounded-xl border border-white/10 bg-white/5 py-3 text-sm font-medium text-slate-200 transition hover:bg-white/10"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void createItem()}
+                  disabled={
+                    creatingItem ||
+                    !newItemName.trim() ||
+                    (newItemType === "file" &&
+                      newItemSourceType !== "none" &&
+                      !newItemSourceUri.trim())
+                  }
+                  className="flex-1 rounded-xl bg-white py-3 text-sm font-semibold text-slate-950 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {creatingItem ? "创建中..." : "创建"}
+                </button>
               </div>
+            </div>
           </motion.div>
-      )}
+        ) : null}
 
+        {showRenameModal ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+            onClick={() => setShowRenameModal(false)}
+          >
+            <div
+              className="w-[360px] rounded-3xl border border-white/10 bg-[#141a22] p-6 shadow-2xl"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <h3 className="mb-4 text-lg font-semibold text-white">重命名</h3>
+              <input
+                autoFocus
+                type="text"
+                className="mb-4 w-full rounded-xl border border-white/10 bg-[#1d2430] px-4 py-3 text-sm text-white outline-none"
+                value={newItemName}
+                onChange={(event) => setNewItemName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    void submitRename();
+                  }
+                }}
+              />
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowRenameModal(false)}
+                  className="flex-1 rounded-xl border border-white/10 bg-white/5 py-3 text-sm font-medium text-slate-200 transition hover:bg-white/10"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void submitRename()}
+                  className="flex-1 rounded-xl bg-white py-3 text-sm font-semibold text-slate-950 transition hover:bg-slate-200"
+                >
+                  保存
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        ) : null}
+
+        {showDeleteModal ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+            onClick={() => setShowDeleteModal(false)}
+          >
+            <div
+              className="w-[360px] rounded-3xl border border-white/10 bg-[#141a22] p-6 shadow-2xl"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <h3 className="mb-3 text-lg font-semibold text-white">删除这条内容？</h3>
+              <p className="mb-6 text-sm leading-7 text-slate-400">
+                {ctxMenu.item?.name ?? "当前内容"} 会被删除。
+              </p>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteModal(false)}
+                  className="flex-1 rounded-xl border border-white/10 bg-white/5 py-3 text-sm font-medium text-slate-200 transition hover:bg-white/10"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void submitDelete()}
+                  className="flex-1 rounded-xl bg-rose-500 py-3 text-sm font-semibold text-white transition hover:bg-rose-400"
+                >
+                  删除
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        ) : null}
+
+        {showMoveModal ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+            onClick={() => setShowMoveModal(false)}
+          >
+            <div
+              className="flex h-[520px] w-[520px] flex-col overflow-hidden rounded-3xl border border-white/10 bg-[#141a22] shadow-2xl"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="border-b border-white/8 px-5 py-4">
+                <h3 className="text-lg font-semibold text-white">移动到...</h3>
+                <div className="mt-1 text-xs text-slate-500">{moveViewData.info.name}</div>
+              </div>
+
+              <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+                {isMoveLoading ? (
+                  <div className="py-12 text-center text-sm text-slate-500">加载中...</div>
+                ) : (
+                  <div className="space-y-2">
+                    {moveViewData.info.id !== "root" ? (
+                      <button
+                        type="button"
+                        onClick={() => void loadMoveNode(moveViewData.info.parent_id || "root")}
+                        className="w-full rounded-xl border border-white/8 bg-white/4 px-4 py-3 text-left text-sm text-slate-300 transition hover:bg-white/8"
+                      >
+                        返回上一级
+                      </button>
+                    ) : null}
+
+                    {moveViewData.items
+                      .filter(
+                        (item) => item.type === "folder" && item.id !== ctxMenu.item?.id
+                      )
+                      .map((folder) => (
+                        <button
+                          key={folder.id}
+                          type="button"
+                          onClick={() => void loadMoveNode(folder.id)}
+                          className="flex w-full items-center justify-between rounded-xl border border-white/8 bg-white/4 px-4 py-3 text-left text-sm text-slate-200 transition hover:bg-white/8"
+                        >
+                          <span>{folder.name}</span>
+                          <span className="text-slate-500">›</span>
+                        </button>
+                      ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="border-t border-white/8 px-5 py-4">
+                <div className="mb-3 text-xs text-slate-500">
+                  目标目录：
+                  {moveViewData.breadcrumbs.map((item) => getNotesDisplayName(item.name)).join(" / ") ||
+                    "资料库"}
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowMoveModal(false)}
+                    className="flex-1 rounded-xl border border-white/10 bg-white/5 py-3 text-sm font-medium text-slate-200 transition hover:bg-white/10"
+                  >
+                    取消
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void submitMove()}
+                    className="flex-1 rounded-xl bg-white py-3 text-sm font-semibold text-slate-950 transition hover:bg-slate-200"
+                  >
+                    移到这里
+                  </button>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 };

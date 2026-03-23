@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useTheme } from "../context/ThemeContext";
+import { getNotesDisplayName, getNotesExplorerCopy } from "../pages/notesWorkspaceCopyState";
 
 // --- SVG 图标 ---
 const Icons = {
@@ -21,9 +22,14 @@ const FileExplorer = ({
   onLoadNode,
   onCreateItem,
   onContextMenu,
-  onDropItem
+  onDropItem,
+  className = "",
+  listClassName = "",
+  showSettingsButton = true,
+  tone = "default",
 }) => {
   const navigate = useNavigate();
+  const copy = getNotesExplorerCopy();
   // ✅ 获取 setShowSettings
   const { setShowSettings } = useTheme();
 
@@ -38,28 +44,51 @@ const FileExplorer = ({
     }
   }, []);
 
+  const isQuietDark = tone === "quiet-dark";
+  const shellClassName = isQuietDark
+    ? "bg-[linear-gradient(180deg,rgba(19,24,30,0.84),rgba(12,16,22,0.8))] backdrop-blur-[22px] border border-white/[0.08] shadow-[0_28px_72px_rgba(15,23,42,0.24)]"
+    : "bg-white/60 dark:bg-[#1e293b]/60 backdrop-blur-2xl border border-white/40 dark:border-white/10 shadow-xl";
+  const headerClassName = isQuietDark
+    ? "border-b border-white/[0.08] bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))]"
+    : "border-b border-gray-200/50 dark:border-white/10 bg-white/30 dark:bg-white/5";
+  const footerClassName = isQuietDark
+    ? "border-t border-white/[0.08] bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))]"
+    : "border-t border-gray-200/50 dark:border-white/10 bg-white/30 dark:bg-white/5";
+  const titleClassName = isQuietDark
+    ? "text-white"
+    : "text-slate-800 dark:text-white";
+  const iconTintClassName = isQuietDark
+    ? "border border-white/[0.08] bg-white/[0.04] text-slate-400 hover:bg-white/[0.08] hover:text-white"
+    : "text-gray-500 dark:text-gray-300 hover:bg-white/50 dark:hover:bg-white/10";
+  const listBaseClassName = isQuietDark
+    ? "text-slate-200 hover:bg-white/[0.05] hover:shadow-none"
+    : "text-slate-700 dark:text-slate-200 hover:bg-white/50 dark:hover:bg-white/5 hover:shadow-sm";
+  const activeItemClassName = isQuietDark
+    ? "bg-[linear-gradient(135deg,rgba(242,239,230,0.18),rgba(242,239,230,0.08))] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.07)]"
+    : "bg-blue-500 text-white shadow-lg shadow-blue-500/30";
+  const secondaryTextClassName = isQuietDark
+    ? "text-slate-500"
+    : "text-gray-400 dark:text-gray-500";
+
   return (
     <motion.div
       initial={!hasVisitedBefore ? { opacity: 0, x: -60 } : {}}
       animate={!hasVisitedBefore ? { opacity: 1, x: 0 } : {}}
       transition={{ duration: 0.5, ease: "easeOut" }}
-      whileHover={{ scale: 1.02 }}
-      className="w-72 flex flex-col shrink-0 
-                    bg-white/60 dark:bg-[#1e293b]/60 backdrop-blur-2xl 
-                    border border-white/40 dark:border-white/10 
-                    rounded-3xl shadow-xl overflow-hidden transition-all duration-300">
+      whileHover={isQuietDark ? undefined : { scale: 1.02 }}
+      className={`${className || "w-72"} flex flex-col shrink-0 overflow-hidden rounded-[30px] transition-all duration-300 ${shellClassName}`}>
       
       {/* 顶部 */}
-      <div className="h-14 flex items-center justify-between px-5 border-b border-gray-200/50 dark:border-white/10 shrink-0 bg-white/30 dark:bg-white/5">
-        <span className="font-bold text-lg tracking-tight text-slate-800 dark:text-white flex items-center gap-2">
-           <Icons.Folder className="w-5 h-5 text-blue-500" /> 
-           <span className="truncate max-w-[120px]">{viewData.info.name}</span>
+      <div className={`flex h-14 shrink-0 items-center justify-between px-5 ${headerClassName}`}>
+        <span className={`flex items-center gap-2 text-[15px] font-semibold tracking-tight ${titleClassName}`}>
+           <Icons.Folder className="h-5 w-5 text-[#d8cfb6]" /> 
+           <span className="truncate max-w-[140px]">{getNotesDisplayName(viewData.info.name)}</span>
         </span>
         <div className="flex gap-1">
-          <button onClick={() => onCreateItem('folder')} className="p-1.5 hover:bg-white/50 dark:hover:bg-white/10 rounded-md text-gray-500 dark:text-gray-300 transition-colors" title="New Folder">
+          <button onClick={() => onCreateItem('folder')} className={`rounded-[14px] p-2 transition-colors ${iconTintClassName}`} title={copy.createFolderTitle}>
             <Icons.Folder className="w-4 h-4" />
           </button>
-          <button onClick={() => onCreateItem('file')} className="p-1.5 hover:bg-white/50 dark:hover:bg-white/10 rounded-md text-gray-500 dark:text-gray-300 transition-colors" title="New Note">
+          <button onClick={() => onCreateItem('file')} className={`rounded-[14px] p-2 transition-colors ${iconTintClassName}`} title={copy.createNoteTitle}>
             <Icons.Plus className="w-4 h-4" />
           </button>
         </div>
@@ -67,13 +96,13 @@ const FileExplorer = ({
 
       {/* 列表区域：右键空白处触发菜单 */}
       <div
-        className="flex-1 overflow-y-auto p-3 space-y-1 custom-scrollbar max-h-[35vh]"
+        className={`min-h-0 flex-1 overflow-y-auto p-3 custom-scrollbar space-y-1.5 ${listClassName}`}
         onContextMenu={(e) => onContextMenu(e, null)} // ✨ null 表示点击的是空白背景
       >
         {viewData.info.id !== 'root' && viewData.info.parent_id && (
           <div onClick={() => onLoadNode(viewData.info.parent_id)} 
-               className="flex items-center gap-3 p-2 rounded-lg cursor-pointer hover:bg-white/40 dark:hover:bg-white/10 text-gray-500 dark:text-gray-400 text-sm font-bold opacity-80 mb-2">
-            <Icons.ArrowLeft className="w-4 h-4" /> Up Level
+               className={`mb-2 flex cursor-pointer items-center gap-3 rounded-[16px] px-3 py-2 text-sm font-medium opacity-80 ${isQuietDark ? "text-slate-400 hover:bg-white/[0.05]" : "text-gray-500 dark:text-gray-400 hover:bg-white/40 dark:hover:bg-white/10"}`}>
+            <Icons.ArrowLeft className="w-4 h-4" /> {copy.upLevelLabel}
           </div>
         )}
 
@@ -83,38 +112,40 @@ const FileExplorer = ({
             onClick={() => onLoadNode(item.id)}
             onContextMenu={(e) => onContextMenu(e, item)} // ✨ 传入 item 对象
             className={`
-              group flex items-center gap-3 p-2.5 rounded-xl cursor-pointer transition-all duration-200 select-none
+              group flex cursor-pointer select-none items-center gap-3 rounded-[18px] px-3 py-3 transition-all duration-200
               ${currentId === item.id 
-                ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/30' 
-                : 'hover:bg-white/50 dark:hover:bg-white/5 hover:shadow-sm text-slate-700 dark:text-slate-200'}
+                ? activeItemClassName
+                : listBaseClassName}
             `}
           >
             <div className={`shrink-0 ${currentId === item.id ? 'text-white' : (item.type === 'folder' ? 'text-yellow-500' : 'text-blue-400')}`}>
               {item.type === 'folder' ? <Icons.Folder className="w-5 h-5" /> : <Icons.FileLines className="w-5 h-5" />}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="truncate text-sm font-bold">{item.name}</div>
-              <div className={`text-[10px] truncate ${currentId === item.id ? 'text-white/60' : 'text-gray-400 dark:text-gray-500'}`}>
+              <div className="truncate text-sm font-medium">{item.name}</div>
+              <div className={`text-[10px] truncate ${currentId === item.id ? 'text-white/60' : secondaryTextClassName}`}>
                 {item.date}
               </div>
             </div>
-            {item.type === 'folder' && <Icons.ChevronRight className={`w-3 h-3 opacity-0 group-hover:opacity-50 ${currentId === item.id ? 'text-white' : 'text-gray-400'}`} />}
+            {item.type === 'folder' && <Icons.ChevronRight className={`w-3 h-3 opacity-0 group-hover:opacity-50 ${currentId === item.id ? 'text-white' : secondaryTextClassName}`} />}
           </div>
         ))}
 
-        {sortedItems.length === 0 && <div className="text-center py-10 text-gray-400 text-xs font-medium">Empty Folder</div>}
+        {sortedItems.length === 0 && <div className={`py-10 text-center text-xs font-medium ${secondaryTextClassName}`}>{copy.emptyLabel}</div>}
       </div>
 
       {/* ✅ 新增：底部工具栏 (Settings) */}
-      <div className="p-3 border-t border-gray-200/50 dark:border-white/10 bg-white/30 dark:bg-white/5 shrink-0">
-          <button 
-            onClick={() => setShowSettings(true)} 
-            className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/50 dark:hover:bg-white/10 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer group" 
-          >
-             <Icons.Gear className="w-5 h-5 group-hover:rotate-90 transition-transform duration-500" />
-             <span className="text-sm font-bold">Settings</span>
-          </button>
-      </div>
+      {showSettingsButton ? (
+        <div className={`p-3 shrink-0 ${footerClassName}`}>
+            <button 
+              onClick={() => setShowSettings(true)} 
+              className={`group flex w-full cursor-pointer items-center gap-3 rounded-[18px] px-3 py-3 transition-colors ${isQuietDark ? "text-slate-300 hover:bg-white/[0.05]" : "text-slate-600 dark:text-slate-300 hover:bg-white/50 dark:hover:bg-white/10"}`} 
+            >
+               <Icons.Gear className="w-5 h-5 group-hover:rotate-90 transition-transform duration-500" />
+               <span className="text-sm font-medium">{copy.settingsLabel}</span>
+            </button>
+        </div>
+      ) : null}
     </motion.div>
   );
 };
