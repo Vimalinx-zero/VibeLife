@@ -11,7 +11,6 @@ const NAV_ITEMS = [
   { id: "notes", label: "Notes", path: "/notes" },
   { id: "schedule", label: "Schedule", path: "/schedule" },
   { id: "journal", label: "Journal", path: "/journal" },
-  { id: "capture", label: "Capture", path: "/quick-capture" },
 ];
 
 const routeMatches = (pathname: string, path: string) => {
@@ -26,11 +25,6 @@ const Icons = {
   Bolt: () => (
     <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
       <path d="M13 2.25a.75.75 0 01.71.99L12 8.25h4.25a.75.75 0 01.56 1.25l-7.5 8.25a.75.75 0 01-1.28-.69l1.44-4.81H5.25a.75.75 0 01-.58-1.22l7.75-8.5a.75.75 0 01.58-.28z" />
-    </svg>
-  ),
-  Plus: () => (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
-      <path d="M12 5.25a.75.75 0 01.75.75v5.25H18a.75.75 0 010 1.5h-5.25V18a.75.75 0 01-1.5 0v-5.25H6a.75.75 0 010-1.5h5.25V6a.75.75 0 01.75-.75z" />
     </svg>
   ),
   Sun: () => (
@@ -162,15 +156,6 @@ const TopBar = () => {
               </div>
 
               <div className="flex items-center justify-end gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => navigate("/quick-capture")}
-                  className="flex items-center gap-1.5 rounded-full bg-black/78 px-3 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-black/88 dark:bg-white/88 dark:text-slate-950 dark:hover:bg-white"
-                >
-                  <Icons.Plus />
-                  <span>Capture</span>
-                </button>
-
                 <button
                   type="button"
                   onClick={toggleDarkMode}

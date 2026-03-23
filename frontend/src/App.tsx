@@ -17,7 +17,6 @@ const Dashboard = lazy(() => import("./pages/Dashboard"));
 const NotesPage = lazy(() => import("./pages/NotesPage"));
 const WorkbenchPage = lazy(() => import("./pages/WorkbenchPage"));
 const ProjectsPage = lazy(() => import("./pages/ProjectsPage"));
-const QuickCapturePage = lazy(() => import("./pages/QuickCapturePage"));
 const SchedulePage = lazy(() => import("./pages/SchedulePage"));
 const JournalPage = lazy(() => import("./pages/JournalPage"));
 
@@ -93,7 +92,7 @@ const AppContent = () => {
                 <Route path="/notes" element={<NotesPage />} />
                 <Route path="/workbench" element={<WorkbenchPage />} />
                 <Route path="/projects" element={<ProjectsPage />} />
-                <Route path="/quick-capture" element={<QuickCapturePage />} />
+                <Route path="/quick-capture" element={<Navigate to="/notes" replace />} />
                 <Route path="/schedule" element={<SchedulePage />} />
                 <Route path="/journal" element={<JournalPage />} />
               </Route>

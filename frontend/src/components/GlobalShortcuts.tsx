@@ -35,8 +35,8 @@ const GlobalShortcuts = () => {
       toast.info('📝 笔记');
     },
     'alt+5': () => {
-      navigate('/quick-capture');
-      toast.info('⚡ 采集');
+      navigate('/notes');
+      toast.info('🧠 知识库');
     },
     'alt+6': () => {
       navigate('/schedule');

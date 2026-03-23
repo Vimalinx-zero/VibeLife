@@ -19,7 +19,7 @@ const DEFAULT_HOTKEYS = {
     projects: "alt+2",
     workbench: "alt+3",
     notes: "alt+4",
-    capture: "alt+5",
+    knowledge: "alt+5",
     schedule: "alt+6",
   },
   notes: {
@@ -37,7 +37,7 @@ const HOTKEY_NAMES: Record<string, string> = {
   projects: "项目",
   workbench: "工作台",
   notes: "笔记",
-  capture: "采集",
+  knowledge: "知识库",
   schedule: "日程",
   newNote: "新建笔记",
   saveNote: "保存笔记",
