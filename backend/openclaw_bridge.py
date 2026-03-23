@@ -1,6 +1,8 @@
 import json
 import os
 import re
+import shlex
+import shutil
 import signal
 import subprocess
 import threading
@@ -39,6 +41,29 @@ class OpenClawAgentResult(dict):
 
     def __str__(self) -> str:
         return str(self.get("reply", ""))
+
+
+def _resolve_openclaw_cli_prefix() -> List[str]:
+    configured = str(os.getenv("OPENCLAW_BIN", "")).strip()
+    if configured:
+        parts = shlex.split(configured)
+        if parts:
+            return parts
+
+    if shutil.which("openclaw"):
+        return ["openclaw"]
+
+    if shutil.which("npx"):
+        return ["npx", "--yes", "openclaw"]
+
+    if shutil.which("bunx"):
+        return ["bunx", "openclaw"]
+
+    raise OpenClawBridgeError("未找到 openclaw 命令")
+
+
+def _build_openclaw_command(*args: str) -> List[str]:
+    return [*_resolve_openclaw_cli_prefix(), *args]
 
 
 
@@ -311,7 +336,7 @@ def _run_openclaw_command(command: List[str], *, timeout_seconds: int) -> subpro
 
 def _get_openclaw_config_value(path: str, *, fallback: str, timeout_seconds: int) -> str:
     result = _run_openclaw_command(
-        ["openclaw", "config", "get", path, "--json"],
+        _build_openclaw_command("config", "get", path, "--json"),
         timeout_seconds=timeout_seconds,
     )
     if result.returncode != 0:
@@ -341,7 +366,7 @@ def ensure_openclaw_agent(
             return
 
         list_result = _run_openclaw_command(
-            ["openclaw", "agents", "list", "--json"],
+            _build_openclaw_command("agents", "list", "--json"),
             timeout_seconds=timeout_seconds,
         )
         if list_result.returncode != 0:
@@ -355,14 +380,13 @@ def ensure_openclaw_agent(
                     current_model = str(item.get("model", "")).strip()
                     if requested_model and current_model and current_model != requested_model:
                         update_result = _run_openclaw_command(
-                            [
-                                "openclaw",
+                            _build_openclaw_command(
                                 "config",
                                 "set",
                                 f"agents.list[{index}].model",
                                 json.dumps(requested_model, ensure_ascii=False),
                                 "--strict-json",
-                            ],
+                            ),
                             timeout_seconds=timeout_seconds,
                         )
                         if update_result.returncode != 0:
@@ -393,14 +417,15 @@ def ensure_openclaw_agent(
         )
 
         add_command = [
-            "openclaw",
-            "agents",
-            "add",
-            normalized_agent,
-            "--workspace",
-            workspace,
-            "--non-interactive",
-            "--json",
+            *_build_openclaw_command(
+                "agents",
+                "add",
+                normalized_agent,
+                "--workspace",
+                workspace,
+                "--non-interactive",
+                "--json",
+            ),
         ]
         if target_model:
             add_command.extend(["--model", target_model])
@@ -534,20 +559,21 @@ def run_openclaw_agent(
     ensure_openclaw_agent(target_agent, model=model)
 
     command = [
-        "openclaw",
-        "agent",
-        "--local",
-        "--json",
-        "--verbose",
-        "off",
-        "--agent",
-        target_agent,
-        "--thinking",
-        str(thinking),
-        "--timeout",
-        str(timeout_seconds),
-        "--message",
-        message,
+        *_build_openclaw_command(
+            "agent",
+            "--local",
+            "--json",
+            "--verbose",
+            "off",
+            "--agent",
+            target_agent,
+            "--thinking",
+            str(thinking),
+            "--timeout",
+            str(timeout_seconds),
+            "--message",
+            message,
+        ),
     ]
 
     env = os.environ.copy()

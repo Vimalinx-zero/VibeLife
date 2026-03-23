@@ -1,4 +1,5 @@
 import json
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -18,6 +19,49 @@ class OpenClawBridgeTest(unittest.TestCase):
     def setUp(self):
         openclaw_bridge._verified_agents.clear()
         openclaw_bridge._verified_agents.add(openclaw_bridge._verified_agent_key("main"))
+        self.cli_prefix_patcher = patch(
+            "openclaw_bridge._resolve_openclaw_cli_prefix",
+            return_value=["openclaw"],
+        )
+        self.cli_prefix_patcher.start()
+        self.addCleanup(self.cli_prefix_patcher.stop)
+
+    def test_resolve_openclaw_cli_command_prefers_openclaw_binary(self):
+        self.cli_prefix_patcher.stop()
+        with patch("openclaw_bridge.shutil.which") as which_mock:
+            which_mock.side_effect = lambda name: {
+                "openclaw": "/usr/local/bin/openclaw",
+                "npx": "/usr/bin/npx",
+                "bunx": "/usr/bin/bunx",
+            }.get(name)
+
+            command = openclaw_bridge._build_openclaw_command("agents", "list", "--json")
+
+        self.assertEqual(command, ["openclaw", "agents", "list", "--json"])
+
+    def test_resolve_openclaw_cli_command_falls_back_to_npx(self):
+        self.cli_prefix_patcher.stop()
+        with patch("openclaw_bridge.shutil.which") as which_mock:
+            which_mock.side_effect = lambda name: {
+                "openclaw": None,
+                "npx": "/usr/bin/npx",
+                "bunx": None,
+            }.get(name)
+
+            command = openclaw_bridge._build_openclaw_command("agents", "list", "--json")
+
+        self.assertEqual(command, ["npx", "--yes", "openclaw", "agents", "list", "--json"])
+
+    def test_resolve_openclaw_cli_command_respects_env_override(self):
+        self.cli_prefix_patcher.stop()
+        with patch.dict(os.environ, {"OPENCLAW_BIN": "npx openclaw"}, clear=False), patch(
+            "openclaw_bridge.shutil.which"
+        ) as which_mock:
+            which_mock.return_value = None
+
+            command = openclaw_bridge._build_openclaw_command("agents", "list", "--json")
+
+        self.assertEqual(command, ["npx", "openclaw", "agents", "list", "--json"])
 
     def test_ensure_openclaw_agent_reuses_existing_agent_even_with_warning_prefixed_json(self):
         list_output = (
