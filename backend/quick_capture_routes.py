@@ -97,6 +97,10 @@ def _normalize_tags(tags: list[str] | None) -> list[str]:
     return normalized
 
 
+def _summarize_text(value: str, limit: int = 240) -> str:
+    return " ".join(str(value or "").split())[:limit]
+
+
 def _extract_text_from_source(source_type: str, source_uri: str) -> tuple[str, dict]:
     metadata: dict = {"source_type": source_type, "source_uri": source_uri}
 
@@ -173,6 +177,191 @@ def serialize_quick_capture(
     if include_detail:
         payload["normalized_markdown"] = item.normalized_markdown
     return payload
+
+
+def serialize_file_capture(
+    item: models.FileItem,
+    *,
+    include_detail: bool = False,
+) -> dict:
+    normalized_markdown = str(item.content or "").strip()
+    payload = {
+        "id": item.id,
+        "title": item.name,
+        "source_type": "note",
+        "source_uri": item.id,
+        "summary": _summarize_text(normalized_markdown or item.name),
+        "tags": item.tags or [],
+        "project_id": None,
+        "created_at": item.date or "",
+        "updated_at": item.date or "",
+        "content_kind": "collected",
+        "category": None,
+        "source_capture_ids": [],
+        "source_filter_snapshot": None,
+        "discussion_metadata": None,
+    }
+    if include_detail:
+        payload["normalized_markdown"] = normalized_markdown
+    return payload
+
+
+def get_serialized_knowledge_entry(
+    db: Session,
+    *,
+    current_user_id: str,
+    entry_id: str,
+    include_detail: bool = False,
+) -> dict | None:
+    capture = (
+        db.query(models.QuickNoteCapture)
+        .filter(
+            models.QuickNoteCapture.user_id == current_user_id,
+            models.QuickNoteCapture.id == entry_id,
+        )
+        .first()
+    )
+    if capture is not None:
+        return serialize_quick_capture(capture, include_detail=include_detail)
+
+    file_item = (
+        db.query(models.FileItem)
+        .filter(
+            models.FileItem.user_id == current_user_id,
+            models.FileItem.type == "file",
+            models.FileItem.id == entry_id,
+        )
+        .first()
+    )
+    if file_item is not None:
+        return serialize_file_capture(file_item, include_detail=include_detail)
+
+    return None
+
+
+def list_serialized_collected_entries(
+    db: Session,
+    *,
+    current_user_id: str,
+    project_id: str | None = None,
+    category: str | None = None,
+    include_detail: bool = False,
+    limit: int = 100,
+) -> list[dict]:
+    capture_records = (
+        db.query(models.QuickNoteCapture)
+        .filter(
+            models.QuickNoteCapture.user_id == current_user_id,
+            models.QuickNoteCapture.content_kind == "collected",
+        )
+    )
+    if project_id:
+        capture_records = capture_records.filter(models.QuickNoteCapture.project_id == project_id)
+    if category:
+        capture_records = capture_records.filter(models.QuickNoteCapture.category == category)
+
+    entries = [
+        serialize_quick_capture(item, include_detail=include_detail)
+        for item in capture_records.order_by(
+            models.QuickNoteCapture.updated_at.desc(),
+            models.QuickNoteCapture.created_at.desc(),
+        )
+        .limit(limit)
+        .all()
+    ]
+
+    if not project_id and not category:
+        file_records = (
+            db.query(models.FileItem)
+            .filter(
+                models.FileItem.user_id == current_user_id,
+                models.FileItem.type == "file",
+            )
+            .order_by(models.FileItem.date.desc(), models.FileItem.name.asc())
+            .limit(limit)
+            .all()
+        )
+        entries.extend(
+            serialize_file_capture(item, include_detail=include_detail)
+            for item in file_records
+        )
+
+    entries.sort(
+        key=lambda item: item.get("updated_at") or item.get("created_at") or "",
+        reverse=True,
+    )
+    return entries[:limit]
+
+
+def search_serialized_file_entries(
+    db: Session,
+    *,
+    current_user_id: str,
+    query: str,
+    top_k: int = 10,
+    project_id: str | None = None,
+    category: str | None = None,
+) -> list[dict]:
+    if project_id or category:
+        return []
+
+    normalized_query = str(query or "").strip().lower()
+    if not normalized_query:
+        return []
+
+    results: list[dict] = []
+    file_records = (
+        db.query(models.FileItem)
+        .filter(
+            models.FileItem.user_id == current_user_id,
+            models.FileItem.type == "file",
+        )
+        .all()
+    )
+
+    for item in file_records:
+        title = str(item.name or "").lower()
+        content = str(item.content or "").lower()
+        tags_text = " ".join(str(tag or "").lower() for tag in (item.tags or []))
+
+        score = 0.0
+        if normalized_query in title:
+            score = max(score, 0.98)
+        if normalized_query in content:
+            score = max(score, 0.94)
+        if normalized_query in tags_text:
+            score = max(score, 0.88)
+        if score == 0.0:
+            tokens = [token for token in normalized_query.split() if token]
+            if tokens:
+                matches = sum(
+                    1
+                    for token in tokens
+                    if token in title or token in content or token in tags_text
+                )
+                if matches:
+                    score = 0.6 * (matches / len(tokens))
+
+        if score == 0.0:
+            continue
+
+        payload = serialize_file_capture(item, include_detail=False)
+        results.append(
+            {
+                "id": payload["id"],
+                "score": score,
+                "title": payload["title"],
+                "summary": payload["summary"],
+                "tags": payload["tags"],
+                "source_type": payload["source_type"],
+                "project_id": payload["project_id"],
+                "content_kind": payload["content_kind"],
+                "category": payload["category"],
+            }
+        )
+
+    results.sort(key=lambda item: item["score"], reverse=True)
+    return results[:top_k]
 
 
 def _index_quick_capture(record: models.QuickNoteCapture) -> None:
@@ -285,22 +474,54 @@ async def list_quick_captures(
     current_user_id: str = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ):
-    query = db.query(models.QuickNoteCapture).filter(
-        models.QuickNoteCapture.user_id == current_user_id
-    )
-    if project_id:
-        query = query.filter(models.QuickNoteCapture.project_id == project_id)
-    if content_kind:
-        query = query.filter(models.QuickNoteCapture.content_kind == content_kind)
-    if category:
-        query = query.filter(models.QuickNoteCapture.category == category)
+    if content_kind == "collected":
+        captures = list_serialized_collected_entries(
+            db,
+            current_user_id=current_user_id,
+            project_id=project_id,
+            category=category,
+            include_detail=True,
+        )
+    else:
+        capture_query = db.query(models.QuickNoteCapture).filter(
+            models.QuickNoteCapture.user_id == current_user_id
+        )
+        if project_id:
+            capture_query = capture_query.filter(models.QuickNoteCapture.project_id == project_id)
+        if content_kind:
+            capture_query = capture_query.filter(models.QuickNoteCapture.content_kind == content_kind)
+        if category:
+            capture_query = capture_query.filter(models.QuickNoteCapture.category == category)
 
-    records = query.order_by(
-        models.QuickNoteCapture.updated_at.desc(),
-        models.QuickNoteCapture.created_at.desc(),
-    ).limit(100).all()
+        capture_records = capture_query.order_by(
+            models.QuickNoteCapture.updated_at.desc(),
+            models.QuickNoteCapture.created_at.desc(),
+        ).limit(100).all()
+        captures = [serialize_quick_capture(item, include_detail=True) for item in capture_records]
+
+        if content_kind in {None, ""} and not project_id and not category:
+            captures.extend(
+                list_serialized_collected_entries(
+                    db,
+                    current_user_id=current_user_id,
+                    include_detail=True,
+                )
+            )
+
+        deduped: list[dict] = []
+        seen_ids: set[str] = set()
+        for item in captures:
+            if item["id"] in seen_ids:
+                continue
+            seen_ids.add(item["id"])
+            deduped.append(item)
+        deduped.sort(
+            key=lambda item: item.get("updated_at") or item.get("created_at") or "",
+            reverse=True,
+        )
+        captures = deduped[:100]
     return {
-        "captures": [serialize_quick_capture(item, include_detail=True) for item in records]
+        "captures": captures[:100]
     }
 
 
@@ -315,22 +536,21 @@ async def search_quick_capture(
     db: Session = Depends(get_db),
 ):
     vector_store = get_vector_store()
-    results = vector_store.search_similar(
+    vector_results = vector_store.search_similar(
         build_capture_vector(query), item_type="notes", top_k=top_k
     )
 
-    ids = [item["id"] for item in results]
-    if not ids:
-        return {"results": []}
-
-    rows = (
-        db.query(models.QuickNoteCapture)
-        .filter(
-            models.QuickNoteCapture.user_id == current_user_id,
-            models.QuickNoteCapture.id.in_(ids),
+    ids = [item["id"] for item in vector_results]
+    rows = []
+    if ids:
+        rows = (
+            db.query(models.QuickNoteCapture)
+            .filter(
+                models.QuickNoteCapture.user_id == current_user_id,
+                models.QuickNoteCapture.id.in_(ids),
+            )
+            .all()
         )
-        .all()
-    )
     if content_kind:
         rows = [item for item in rows if (item.content_kind or "collected") == content_kind]
     if project_id:
@@ -339,21 +559,41 @@ async def search_quick_capture(
         rows = [item for item in rows if item.category == category]
     row_map = {item.id: item for item in rows}
 
-    return {
-        "results": [
-            {
-                "id": item_id,
-                "score": score["similarity"],
-                "title": row_map[item_id].title,
-                "summary": row_map[item_id].summary,
-                "tags": row_map[item_id].tags,
-                "source_type": row_map[item_id].source_type,
-                "project_id": row_map[item_id].project_id,
-                "content_kind": row_map[item_id].content_kind or "collected",
-                "category": row_map[item_id].category,
-            }
-            for score in results
-            for item_id in [score["id"]]
-            if item_id in row_map
-        ]
-    }
+    merged_results = [
+        {
+            "id": item_id,
+            "score": score["similarity"],
+            "title": row_map[item_id].title,
+            "summary": row_map[item_id].summary,
+            "tags": row_map[item_id].tags,
+            "source_type": row_map[item_id].source_type,
+            "project_id": row_map[item_id].project_id,
+            "content_kind": row_map[item_id].content_kind or "collected",
+            "category": row_map[item_id].category,
+        }
+        for score in vector_results
+        for item_id in [score["id"]]
+        if item_id in row_map
+    ]
+
+    if content_kind in {None, "", "collected"}:
+        merged_results.extend(
+            search_serialized_file_entries(
+                db,
+                current_user_id=current_user_id,
+                query=query,
+                top_k=top_k,
+                project_id=project_id,
+                category=category,
+            )
+        )
+
+    deduped_results: list[dict] = []
+    seen_ids: set[str] = set()
+    for item in sorted(merged_results, key=lambda result: result["score"], reverse=True):
+        if item["id"] in seen_ids:
+            continue
+        seen_ids.add(item["id"])
+        deduped_results.append(item)
+
+    return {"results": deduped_results[:top_k]}

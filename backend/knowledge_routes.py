@@ -13,7 +13,12 @@ from ai.vector_store import get_vector_store
 from ai_routes import _generate_provider_reply, _resolve_provider_and_model
 from auth import get_current_user_id
 from database import get_db
-from quick_capture_routes import build_capture_vector, serialize_quick_capture
+from quick_capture_routes import (
+    build_capture_vector,
+    get_serialized_knowledge_entry,
+    list_serialized_collected_entries,
+    serialize_quick_capture,
+)
 
 
 router = APIRouter()
@@ -216,35 +221,51 @@ def _merge_unique_strings(*groups: List[str]) -> List[str]:
     return merged
 
 
-def _build_capture_context(entry: models.QuickNoteCapture) -> Dict[str, Any]:
+def _entry_value(entry: Any, key: str, default: Any = None) -> Any:
+    if isinstance(entry, dict):
+        return entry.get(key, default)
+    return getattr(entry, key, default)
+
+
+def _build_capture_context(entry: Any) -> Dict[str, Any]:
     return {
-        "id": entry.id,
-        "title": entry.title,
-        "content_kind": entry.content_kind or "collected",
-        "project_id": entry.project_id,
-        "category": entry.category,
-        "tags": entry.tags or [],
-        "summary": entry.summary,
-        "content": _clip_text(entry.normalized_markdown or entry.summary or "", MAX_ENTRY_CONTEXT_CHARS),
+        "id": _entry_value(entry, "id"),
+        "title": _entry_value(entry, "title"),
+        "content_kind": _entry_value(entry, "content_kind", "collected") or "collected",
+        "project_id": _entry_value(entry, "project_id"),
+        "category": _entry_value(entry, "category"),
+        "tags": _entry_value(entry, "tags", []) or [],
+        "summary": _entry_value(entry, "summary", ""),
+        "content": _clip_text(
+            _entry_value(entry, "normalized_markdown")
+            or _entry_value(entry, "summary")
+            or "",
+            MAX_ENTRY_CONTEXT_CHARS,
+        ),
     }
 
 
-def _build_selection_context(entries: List[models.QuickNoteCapture]) -> List[Dict[str, Any]]:
+def _build_selection_context(entries: List[Any]) -> List[Dict[str, Any]]:
     remaining = MAX_SELECTION_CONTEXT_CHARS
     context_entries: List[Dict[str, Any]] = []
     for entry in entries[:MAX_SELECTION_ENTRIES]:
-        summary = _clip_text(entry.summary or entry.normalized_markdown or "", min(remaining, 500))
+        summary = _clip_text(
+            _entry_value(entry, "summary")
+            or _entry_value(entry, "normalized_markdown")
+            or "",
+            min(remaining, 500),
+        )
         if not summary:
             continue
         remaining -= len(summary)
         context_entries.append(
             {
-                "id": entry.id,
-                "title": entry.title,
-                "content_kind": entry.content_kind or "collected",
-                "project_id": entry.project_id,
-                "category": entry.category,
-                "tags": entry.tags or [],
+                "id": _entry_value(entry, "id"),
+                "title": _entry_value(entry, "title"),
+                "content_kind": _entry_value(entry, "content_kind", "collected") or "collected",
+                "project_id": _entry_value(entry, "project_id"),
+                "category": _entry_value(entry, "category"),
+                "tags": _entry_value(entry, "tags", []) or [],
                 "summary": summary,
             }
         )
@@ -299,7 +320,7 @@ def _build_draft(
     reply: str,
     citations: List[Dict[str, Any]],
     mode: str,
-    entry: Optional[models.QuickNoteCapture] = None,
+    entry: Optional[Any] = None,
     selection: Optional[KnowledgeSelectionRequest] = None,
 ) -> Dict[str, Any]:
     merged_tags: List[str] = []
@@ -314,9 +335,9 @@ def _build_draft(
     if not merged_tags:
         merged_tags = ["总结"]
 
-    project_id = entry.project_id if entry else selection.project_id if selection else None
-    category = entry.category if entry else selection.category if selection else None
-    title_base = entry.title if entry else _normalize_excerpt(message, 24) or "知识讨论"
+    project_id = _entry_value(entry, "project_id") if entry else selection.project_id if selection else None
+    category = _entry_value(entry, "category") if entry else selection.category if selection else None
+    title_base = _entry_value(entry, "title") if entry else _normalize_excerpt(message, 24) or "知识讨论"
     if mode == "selection":
         title_base = f"{title_base} - 汇总"
 
@@ -339,13 +360,11 @@ async def discuss_knowledge(
     history = [item.model_dump() for item in payload.history][-MAX_DISCUSSION_HISTORY:]
 
     if payload.mode == "entry":
-        entry = (
-            db.query(models.QuickNoteCapture)
-            .filter(
-                models.QuickNoteCapture.user_id == current_user_id,
-                models.QuickNoteCapture.id == payload.entry_id,
-            )
-            .first()
+        entry = get_serialized_knowledge_entry(
+            db,
+            current_user_id=current_user_id,
+            entry_id=payload.entry_id,
+            include_detail=True,
         )
         if entry is None:
             raise HTTPException(status_code=404, detail="Knowledge entry not found")
@@ -366,12 +385,12 @@ async def discuss_knowledge(
             raise HTTPException(status_code=502, detail="AI 未返回可展示内容")
 
         citation = {
-            "id": entry.id,
-            "title": entry.title,
-            "content_kind": entry.content_kind or "collected",
-            "project_id": entry.project_id,
-            "category": entry.category,
-            "tags": entry.tags or [],
+            "id": entry["id"],
+            "title": entry["title"],
+            "content_kind": entry.get("content_kind") or "collected",
+            "project_id": entry.get("project_id"),
+            "category": entry.get("category"),
+            "tags": entry.get("tags") or [],
         }
         return {
             "reply": reply,
@@ -387,23 +406,60 @@ async def discuss_knowledge(
         }
 
     selection = payload.selection
-    query = db.query(models.QuickNoteCapture).filter(
-        models.QuickNoteCapture.user_id == current_user_id
-    )
-    query = query.filter(models.QuickNoteCapture.content_kind == selection.content_kind)
-    if selection.project_id:
-        query = query.filter(models.QuickNoteCapture.project_id == selection.project_id)
-    if selection.category:
-        query = query.filter(models.QuickNoteCapture.category == selection.category)
-
-    entries = query.order_by(
-        models.QuickNoteCapture.updated_at.desc(),
-        models.QuickNoteCapture.created_at.desc(),
-    ).all()
     if selection.selected_entry_ids:
-        selected_set = set(selection.selected_entry_ids)
-        entries = [entry for entry in entries if entry.id in selected_set]
-    entries = entries[:MAX_SELECTION_ENTRIES]
+        entries = []
+        for entry_id in selection.selected_entry_ids:
+            entry = get_serialized_knowledge_entry(
+                db,
+                current_user_id=current_user_id,
+                entry_id=entry_id,
+                include_detail=True,
+            )
+            if entry is None:
+                continue
+            if (entry.get("content_kind") or "collected") != selection.content_kind:
+                continue
+            if selection.project_id and entry.get("project_id") != selection.project_id:
+                continue
+            if selection.category and entry.get("category") != selection.category:
+                continue
+            entries.append(entry)
+            if len(entries) >= MAX_SELECTION_ENTRIES:
+                break
+    elif selection.content_kind == "generated":
+        generated_entries = (
+            db.query(models.QuickNoteCapture)
+            .filter(
+                models.QuickNoteCapture.user_id == current_user_id,
+                models.QuickNoteCapture.content_kind == "generated",
+            )
+        )
+        if selection.project_id:
+            generated_entries = generated_entries.filter(
+                models.QuickNoteCapture.project_id == selection.project_id
+            )
+        if selection.category:
+            generated_entries = generated_entries.filter(
+                models.QuickNoteCapture.category == selection.category
+            )
+        entries = [
+            serialize_quick_capture(item, include_detail=True)
+            for item in generated_entries.order_by(
+                models.QuickNoteCapture.updated_at.desc(),
+                models.QuickNoteCapture.created_at.desc(),
+            )
+            .limit(MAX_SELECTION_ENTRIES)
+            .all()
+        ]
+    else:
+        entries = list_serialized_collected_entries(
+            db,
+            current_user_id=current_user_id,
+            project_id=selection.project_id,
+            category=selection.category,
+            include_detail=True,
+            limit=MAX_SELECTION_ENTRIES,
+        )
 
     context_entries = _build_selection_context(entries)
     reply = await _generate_knowledge_reply(
@@ -428,12 +484,12 @@ async def discuss_knowledge(
 
     citations = [
         {
-            "id": entry.id,
-            "title": entry.title,
-            "content_kind": entry.content_kind or "collected",
-            "project_id": entry.project_id,
-            "category": entry.category,
-            "tags": entry.tags or [],
+            "id": _entry_value(entry, "id"),
+            "title": _entry_value(entry, "title"),
+            "content_kind": _entry_value(entry, "content_kind", "collected") or "collected",
+            "project_id": _entry_value(entry, "project_id"),
+            "category": _entry_value(entry, "category"),
+            "tags": _entry_value(entry, "tags", []) or [],
         }
         for entry in entries[: len(context_entries)]
     ]

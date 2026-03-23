@@ -166,6 +166,30 @@ class KnowledgeWorkshopApiTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         return response.json()["capture"]
 
+    def create_note_item(
+        self,
+        headers,
+        *,
+        name: str,
+        item_type: str = "file",
+        parent_id: str = "root",
+        content: str = "",
+        tags: list[str] | None = None,
+    ):
+        response = self.client.post(
+            "/api/notes/create",
+            headers=headers,
+            json={
+                "name": name,
+                "type": item_type,
+                "parent_id": parent_id,
+                "content": content,
+                "tags": tags or [],
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        return response.json()["item"]
+
     def test_quick_capture_list_filters_by_content_kind_project_and_category(self):
         _user_id, headers = self.register_user()
         self.create_capture(
@@ -252,6 +276,144 @@ class KnowledgeWorkshopApiTest(unittest.TestCase):
         target = next(item for item in results if item["id"] == generated_id)
         self.assertEqual(target["content_kind"], "generated")
         self.assertEqual(target["category"], "research")
+
+    def test_quick_capture_list_includes_folder_files_as_collected_sources(self):
+        _user_id, headers = self.register_user()
+        folder = self.create_note_item(headers, name="知识库", item_type="folder")
+        file_item = self.create_note_item(
+            headers,
+            name="化学笔记.md",
+            parent_id=folder["id"],
+            content="# 化学\n\n这是来自文件夹的知识来源。",
+            tags=["化学", "笔记"],
+        )
+
+        response = self.client.get(
+            "/api/quick-capture",
+            headers=headers,
+            params={"content_kind": "collected"},
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        captures = response.json()["captures"]
+        target = next((item for item in captures if item["id"] == file_item["id"]), None)
+        self.assertIsNotNone(target)
+        self.assertEqual(target["title"], "化学笔记.md")
+        self.assertEqual(target["source_type"], "note")
+        self.assertEqual(target["content_kind"], "collected")
+        self.assertEqual(target["tags"], ["化学", "笔记"])
+        self.assertIn("来自文件夹的知识来源", target["normalized_markdown"])
+
+    def test_discuss_entry_mode_supports_folder_file_sources(self):
+        user_id, headers = self.register_user()
+        folder = self.create_note_item(headers, name="知识库", item_type="folder")
+        file_item = self.create_note_item(
+            headers,
+            name="物理总结.md",
+            parent_id=folder["id"],
+            content="# 物理\n\n这是文件来源里的重点内容。",
+            tags=["物理", "总结"],
+        )
+        captured_calls: dict[str, object] = {}
+
+        async def fake_generate(**kwargs):
+            captured_calls.update(kwargs)
+            return "这是基于文件来源的 AI 回复"
+
+        with patch("knowledge_routes._generate_knowledge_reply", side_effect=fake_generate):
+            response = self.client.post(
+                "/api/knowledge/discuss",
+                headers=headers,
+                json={
+                    "mode": "entry",
+                    "message": "帮我提炼一下这份文件",
+                    "entry_id": file_item["id"],
+                    "history": [],
+                },
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertEqual(payload["context_mode"], "entry")
+        self.assertEqual(payload["reply"], "这是基于文件来源的 AI 回复")
+        self.assertEqual(payload["citations"][0]["id"], file_item["id"])
+        self.assertEqual(payload["citations"][0]["title"], "物理总结.md")
+        self.assertEqual(captured_calls["current_user_id"], user_id)
+        self.assertEqual(captured_calls["context"]["entry"]["id"], file_item["id"])
+        self.assertIn("文件来源里的重点内容", captured_calls["context"]["entry"]["content"])
+
+    def test_quick_capture_search_includes_folder_file_sources(self):
+        _user_id, headers = self.register_user()
+        folder = self.create_note_item(headers, name="知识库", item_type="folder")
+        file_item = self.create_note_item(
+            headers,
+            name="英语复盘.md",
+            parent_id=folder["id"],
+            content="# 英语\n\n这份文件里有晨读复盘和背诵重点。",
+            tags=["英语", "复盘"],
+        )
+
+        response = self.client.get(
+            "/api/quick-capture/search",
+            headers=headers,
+            params={"query": "晨读复盘"},
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        results = response.json()["results"]
+        target = next((item for item in results if item["id"] == file_item["id"]), None)
+        self.assertIsNotNone(target)
+        self.assertEqual(target["title"], "英语复盘.md")
+        self.assertEqual(target["source_type"], "note")
+        self.assertEqual(target["content_kind"], "collected")
+
+    def test_discuss_selection_mode_supports_folder_file_sources(self):
+        _user_id, headers = self.register_user()
+        folder = self.create_note_item(headers, name="知识库", item_type="folder")
+        file_a = self.create_note_item(
+            headers,
+            name="数学整理.md",
+            parent_id=folder["id"],
+            content="# 数学\n\n这里有公式整理。",
+            tags=["数学"],
+        )
+        file_b = self.create_note_item(
+            headers,
+            name="生物整理.md",
+            parent_id=folder["id"],
+            content="# 生物\n\n这里有实验结论。",
+            tags=["生物"],
+        )
+        captured_calls: dict[str, object] = {}
+
+        async def fake_generate(**kwargs):
+            captured_calls.update(kwargs)
+            return "这是基于多个文件来源的 AI 回复"
+
+        with patch("knowledge_routes._generate_knowledge_reply", side_effect=fake_generate):
+            response = self.client.post(
+                "/api/knowledge/discuss",
+                headers=headers,
+                json={
+                    "mode": "selection",
+                    "message": "帮我汇总这些文件",
+                    "history": [],
+                    "selection": {
+                        "content_kind": "collected",
+                        "selected_entry_ids": [file_a["id"], file_b["id"]],
+                    },
+                },
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertEqual(payload["context_mode"], "selection")
+        self.assertEqual(payload["reply"], "这是基于多个文件来源的 AI 回复")
+        self.assertEqual([item["id"] for item in payload["citations"]], [file_a["id"], file_b["id"]])
+        self.assertEqual(
+            [item["id"] for item in captured_calls["context"]["entries"]],
+            [file_a["id"], file_b["id"]],
+        )
 
     def test_discuss_entry_mode_returns_reply_citations_and_draft(self):
         user_id, headers = self.register_user()
