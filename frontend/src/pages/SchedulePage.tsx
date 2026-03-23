@@ -22,6 +22,7 @@ import {
   resetScheduleUiStateAfterSubmitSuccess,
   ScheduleManualAddDraft,
   ScheduleSidebarTab,
+  selectScheduleDate,
   setActiveScheduleSidebarTab,
   toggleManualAddExpanded,
   updateManualAddDraft,
@@ -56,7 +57,6 @@ const SchedulePage: React.FC = () => {
     createInitialSchedulePageUiState(today.getDate())
   );
   const [events, setEvents] = useState<ScheduleEvent[]>([]);
-  const [showDetailPopup, setShowDetailPopup] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -151,11 +151,7 @@ const SchedulePage: React.FC = () => {
   }, [loadEvents]);
 
   const handleSelectDate = useCallback((day: number) => {
-    setUiState((previous) => ({
-      ...previous,
-      selectedDate: day,
-    }));
-    setShowDetailPopup(true);
+    setUiState((previous) => selectScheduleDate(previous, day));
   }, []);
 
   const handleDraftChange = useCallback(
@@ -174,7 +170,6 @@ const SchedulePage: React.FC = () => {
   }, []);
 
   const prevMonth = useCallback(() => {
-    setShowDetailPopup(false);
     setCurrentMonth((previousMonth) => {
       if (previousMonth === 0) {
         setCurrentYear((previousYear) => previousYear - 1);
@@ -186,7 +181,6 @@ const SchedulePage: React.FC = () => {
   }, []);
 
   const nextMonth = useCallback(() => {
-    setShowDetailPopup(false);
     setCurrentMonth((previousMonth) => {
       if (previousMonth === 11) {
         setCurrentYear((previousYear) => previousYear + 1);
@@ -214,7 +208,6 @@ const SchedulePage: React.FC = () => {
       });
 
       setUiState((previous) => resetScheduleUiStateAfterSubmitSuccess(previous));
-      setShowDetailPopup(true);
       toast.success('日程已添加');
       await loadEvents();
     } catch (error) {
@@ -426,55 +419,6 @@ const SchedulePage: React.FC = () => {
                 onUpdateEvent={handleUpdateEvent}
               />
             </GlassCard>
-
-            {showDetailPopup && hasValidSelectedDate && selectedDate && (
-              <div className="absolute top-4 -left-3 z-30 w-[300px] rounded-2xl border border-white/40 bg-white/92 p-4 shadow-2xl backdrop-blur-md dark:border-white/15 dark:bg-black/80">
-                <div className="mb-3 flex items-center justify-between gap-2">
-                  <p className="text-sm font-bold text-gray-900 dark:text-white">
-                    {currentMonth + 1}月{selectedDate}日详情
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setShowDetailPopup(false)}
-                    className="rounded-md bg-black/5 px-2 py-1 text-xs dark:bg-white/10"
-                  >
-                    关闭
-                  </button>
-                </div>
-
-                {selectedEvents.length > 0 ? (
-                  <div className="max-h-64 space-y-2 overflow-auto">
-                    {selectedEvents.map((event) => (
-                      <div
-                        key={event.id}
-                        className="rounded-lg border border-white/30 bg-black/5 p-2.5 dark:border-white/10 dark:bg-white/5"
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className={`h-2.5 w-2.5 rounded-full ${getTypeColor(event.type)}`} />
-                          <span className="text-xs font-semibold text-gray-900 dark:text-white">
-                            {event.title}
-                          </span>
-                        </div>
-                        {event.time && (
-                          <p className="mt-1 text-[11px] text-gray-500">
-                            {event.time}
-                          </p>
-                        )}
-                        {event.description && (
-                          <p className="mt-1 text-[11px] text-gray-500">
-                            {event.description}
-                          </p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-gray-500">
-                    当天暂无进程，右侧可直接添加。
-                  </p>
-                )}
-              </div>
-            )}
           </div>
         </div>
       </main>

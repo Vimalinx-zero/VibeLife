@@ -7,6 +7,7 @@ import {
   preserveScheduleUiStateOnRefresh,
   preserveScheduleUiStateOnSubmitFailure,
   resetScheduleUiStateAfterSubmitSuccess,
+  selectScheduleDate,
   setActiveScheduleSidebarTab,
   toggleManualAddExpanded,
   updateManualAddDraft,
@@ -61,6 +62,25 @@ test("setActiveScheduleSidebarTab switches tabs without dropping draft or date",
   assert.equal(switchedState.isManualAddExpanded, true);
   assert.equal(switchedState.manualAddDraft.title, "切到今日待办也别丢");
   assert.equal(switchedState.manualAddDraft.time, "14:00");
+});
+
+test("selectScheduleDate switches the right sidebar back to schedule immediately", () => {
+  const baseState = toggleManualAddExpanded(
+    setActiveScheduleSidebarTab(
+      updateManualAddDraft(createInitialSchedulePageUiState(14), {
+        title: "切日期别丢草稿",
+        description: "右栏要立刻切回来",
+      }),
+      "todos"
+    )
+  );
+
+  const nextState = selectScheduleDate(baseState, 21);
+
+  assert.equal(nextState.selectedDate, 21);
+  assert.equal(nextState.activeSidebarTab, "schedule");
+  assert.equal(nextState.isManualAddExpanded, true);
+  assert.deepEqual(nextState.manualAddDraft, baseState.manualAddDraft);
 });
 
 test("preserveScheduleUiStateOnRefresh keeps selected date and composer state", () => {

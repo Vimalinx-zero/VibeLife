@@ -40,6 +40,15 @@ export const setActiveScheduleSidebarTab = (
   activeSidebarTab: nextTab,
 });
 
+export const selectScheduleDate = (
+  state: SchedulePageUiState,
+  selectedDate: number
+): SchedulePageUiState => ({
+  ...state,
+  selectedDate,
+  activeSidebarTab: DEFAULT_SCHEDULE_SIDEBAR_TAB,
+});
+
 export const toggleManualAddExpanded = (
   state: SchedulePageUiState
 ): SchedulePageUiState => ({

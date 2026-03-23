@@ -149,7 +149,7 @@ const ScheduleSidebarPanel = ({
           )}
         </div>
         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-          右侧主区改成标签页，避免内容继续把页面往下顶。
+          点日期后右侧会直接切到当天安排。
         </p>
       </section>
 
