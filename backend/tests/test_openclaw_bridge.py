@@ -19,6 +19,7 @@ class OpenClawBridgeTest(unittest.TestCase):
     def setUp(self):
         openclaw_bridge._verified_agents.clear()
         openclaw_bridge._verified_agents.add(openclaw_bridge._verified_agent_key("main"))
+        openclaw_bridge._agent_run_locks.clear()
         self.cli_prefix_patcher = patch(
             "openclaw_bridge._resolve_openclaw_cli_prefix",
             return_value=["openclaw"],
@@ -256,7 +257,7 @@ class OpenClawBridgeTest(unittest.TestCase):
         with patch("openclaw_bridge.ensure_openclaw_agent"), patch(
             "openclaw_bridge.subprocess.Popen", return_value=FakeProcess()
         ), patch(
-            "openclaw_bridge.time.monotonic", side_effect=[0, 0, 121]
+            "openclaw_bridge.time.monotonic", side_effect=[0, 0, 0, 0, 121]
         ), patch("openclaw_bridge.time.sleep"), patch(
             "openclaw_bridge._read_latest_session_reply",
             side_effect=["", "会话恢复回复"],
@@ -269,6 +270,39 @@ class OpenClawBridgeTest(unittest.TestCase):
         self.assertEqual(result["reply"], "会话恢复回复")
         self.assertEqual(result["raw_payloads"], parsed["payloads"])
         self.assertEqual(result["parsed"], parsed)
+
+    def test_run_openclaw_agent_retries_when_session_file_is_temporarily_locked(self):
+        class FakeProcess:
+            def __init__(self, returncode, stdout="", stderr=""):
+                self.returncode = returncode
+                self.pid = 123
+                self._stdout = stdout
+                self._stderr = stderr
+
+            def poll(self):
+                return self.returncode
+
+            def communicate(self):
+                return self._stdout, self._stderr
+
+        processes = [
+            FakeProcess(1, stderr="session file locked (timeout 10000ms)"),
+            FakeProcess(0, stdout='{"content":"重试成功"}'),
+        ]
+
+        with patch("openclaw_bridge.ensure_openclaw_agent"), patch(
+            "openclaw_bridge.subprocess.Popen", side_effect=processes
+        ) as popen_mock, patch(
+            "openclaw_bridge._read_latest_session_reply", return_value=""
+        ), patch("openclaw_bridge.time.sleep") as sleep_mock:
+            result = openclaw_bridge.run_openclaw_agent(
+                "test message",
+                timeout_seconds=30,
+            )
+
+        self.assertEqual(result["reply"], "重试成功")
+        self.assertEqual(popen_mock.call_count, 2)
+        sleep_mock.assert_any_call(openclaw_bridge.SESSION_LOCK_RETRY_DELAY_SECONDS)
 
 
 if __name__ == "__main__":

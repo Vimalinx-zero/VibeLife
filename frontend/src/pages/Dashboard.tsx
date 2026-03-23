@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { apiClient } from "../utils/api"; // ✅ 修复：导入 apiClient 以自动添加 token
+import { aiAPI, apiClient } from "../utils/api"; // ✅ 修复：导入 apiClient 以自动添加 token
 import GlassCard from "../components/GlassCard";
 import { useTheme } from "../context/ThemeContext";
 import { useAuth } from "../context/AuthContext";  // ✅ 导入 AuthContext
@@ -185,12 +185,12 @@ function Dashboard() {
 
     try {
       setCoachGenerating(true);
-      const response = await apiClient.post('/ai/workbench/prepare', {
+      const response = await aiAPI.prepareWorkbench({
         date_key: dateKey,
         max_items: coachData?.adaptive?.recommended_plan_items || 3
       });
 
-      const prepared = normalizeWorkbenchPrepareData(response.data);
+      const prepared = normalizeWorkbenchPrepareData(response);
       setLastPreparedWorkbench(prepared);
       dispatchWorkbenchAiRefresh();
       await Promise.all([fetchDashboardData(), loadCoach()]);

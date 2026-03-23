@@ -262,7 +262,7 @@ class CoachPlanApiTest(unittest.TestCase):
                 '"todos":[{"text":"plan item 1","priority":2,"subject":"general","due_date":"2026-03-16"},'
                 '{"text":"plan item 2","priority":1,"subject":"general","due_date":"2026-03-16"}]}'
             ),
-        ):
+        ) as run_mock:
             response = self.client.post(
                 "/api/ai/coach/today/plan",
                 headers=headers,
@@ -293,6 +293,10 @@ class CoachPlanApiTest(unittest.TestCase):
         self.assertEqual(len(new_ai_todos), 2)
         self.assertEqual({todo.text for todo in new_ai_todos}, {"plan item 1", "plan item 2"})
         self.assertEqual(len({todo.plan_batch_id for todo in new_ai_todos}), 1)
+        self.assertEqual(
+            run_mock.call_args.kwargs["timeout_seconds"],
+            180,
+        )
 
         other_user_todos = self.list_todos(other_user_id)
         self.assertEqual({todo.id for todo in other_user_todos}, {"todo_ai_other_user"})

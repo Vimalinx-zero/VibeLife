@@ -14,6 +14,7 @@ import openclaw_bridge
 DEFAULT_ESTIMATED_MINUTES = 20
 DEFAULT_RECOMMENDED_PLAN_ITEMS = 3
 MAX_CONTEXT_TODOS = 12
+OPENCLAW_PLAN_TIMEOUT_SECONDS = 180
 _refresh_locks_guard = threading.Lock()
 _refresh_locks: dict[str, threading.Lock] = {}
 
@@ -453,6 +454,7 @@ def refresh_today_plan(
             auth_token=auth_token,
             current_user_id=current_user_id,
             invoking_agent_id=invoking_openclaw_agent_id,
+            timeout_seconds=OPENCLAW_PLAN_TIMEOUT_SECONDS,
         )
         parsed = _parse_json_object(raw_response)
         todos = _normalize_plan_todos(

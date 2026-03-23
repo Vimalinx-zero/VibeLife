@@ -26,6 +26,7 @@ const apiClient: AxiosInstance = axios.create({
 
 const AI_CHAT_TIMEOUT_MS = 180000;
 const MUSIC_IMPORT_TIMEOUT_MS = 120000;
+const WORKBENCH_PREPARE_TIMEOUT_MS = 180000;
 
 // ✨ 新增：请求拦截器 - 自动添加 JWT token
 apiClient.interceptors.request.use(
@@ -164,6 +165,20 @@ export interface ProjectPanelChatResponseDTO {
   runMeta: ProjectPanelChatRunMetaDTO;
 }
 
+export interface WorkbenchPrepareRequestDTO {
+  date_key: string;
+  max_items?: number;
+}
+
+export interface WorkbenchPrepareResponseDTO {
+  success: boolean;
+  date_key: string;
+  daily_plan: unknown;
+  project_digest: unknown;
+  coach_message: string;
+  provider: string;
+}
+
 export const aiAPI = {
   chatForProjectPanel: (payload: {
     message: string;
@@ -174,6 +189,15 @@ export const aiAPI = {
     return apiClient
       .post<ProjectPanelChatResponseDTO>("/ai/chat", payload, {
         timeout: AI_CHAT_TIMEOUT_MS,
+      })
+      .then((res) => res.data);
+  },
+  prepareWorkbench: (
+    payload: WorkbenchPrepareRequestDTO
+  ): Promise<WorkbenchPrepareResponseDTO> => {
+    return apiClient
+      .post<WorkbenchPrepareResponseDTO>("/ai/workbench/prepare", payload, {
+        timeout: WORKBENCH_PREPARE_TIMEOUT_MS,
       })
       .then((res) => res.data);
   },

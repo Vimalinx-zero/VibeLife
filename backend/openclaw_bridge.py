@@ -7,6 +7,7 @@ import signal
 import subprocess
 import threading
 import time
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -16,6 +17,8 @@ OPENCLAW_STATE_ROOT = Path.home() / ".openclaw"
 DEFAULT_OPENCLAW_WORKSPACE = str(Path.home() / ".openclaw" / "workspace")
 DEFAULT_VIBELIFE_WORKSPACE = str(Path.home() / ".openclaw" / "workspace-vibelife")
 DEFAULT_OPENCLAW_MODEL = "rightcodes/gpt-5.4"
+SESSION_LOCK_RETRY_DELAY_SECONDS = 2
+SESSION_LOCK_MAX_RETRIES = 2
 
 
 def _verified_agent_key(agent: str, model: Optional[str] = None) -> str:
@@ -30,6 +33,8 @@ def _verified_agent_key(agent: str, model: Optional[str] = None) -> str:
 
 _verified_agents = {_verified_agent_key("main")}
 _verified_agents_lock = threading.Lock()
+_agent_run_locks: dict[str, threading.Lock] = {}
+_agent_run_locks_guard = threading.Lock()
 
 
 class OpenClawBridgeError(RuntimeError):
@@ -272,6 +277,27 @@ def _build_openclaw_result(reply: str, parsed: Any) -> OpenClawAgentResult:
         raw_payloads=raw_payloads,
         parsed=parsed,
     )
+
+
+def _is_session_lock_error(text: str) -> bool:
+    return "session file locked" in str(text or "").strip().lower()
+
+
+@contextmanager
+def _acquire_agent_run_lock(agent_id: str, *, timeout_seconds: int):
+    normalized_agent_id = str(agent_id).strip() or "main"
+    with _agent_run_locks_guard:
+        lock = _agent_run_locks.setdefault(normalized_agent_id, threading.Lock())
+
+    wait_seconds = max(float(timeout_seconds), 0.0)
+    acquired = lock.acquire(timeout=wait_seconds)
+    if not acquired:
+        raise OpenClawBridgeError(f'OpenClaw agent "{normalized_agent_id}" 正忙，请稍后重试')
+
+    try:
+        yield
+    finally:
+        lock.release()
 
 
 def _resolve_openclaw_agent_id(agent: str, current_user_id: Optional[str]) -> str:
@@ -556,106 +582,126 @@ def run_openclaw_agent(
         current_user_id,
         invoking_agent_id,
     )
-    ensure_openclaw_agent(target_agent, model=model)
+    overall_deadline = time.monotonic() + timeout_seconds
 
-    command = [
-        *_build_openclaw_command(
-            "agent",
-            "--local",
-            "--json",
-            "--verbose",
-            "off",
-            "--agent",
-            target_agent,
-            "--thinking",
-            str(thinking),
-            "--timeout",
-            str(timeout_seconds),
-            "--message",
-            message,
-        ),
-    ]
+    with _acquire_agent_run_lock(target_agent, timeout_seconds=timeout_seconds):
+        ensure_openclaw_agent(target_agent, model=model)
+        session_lock_retry_count = 0
 
-    env = os.environ.copy()
-    if model:
-        env["OPENCLAW_MODEL"] = str(model)
-    if base_url:
-        env["VIBELIFE_API_BASE_URL"] = base_url.rstrip("/")
-    if auth_token:
-        env["VIBELIFE_API_TOKEN"] = auth_token
-        env["VIBELIFE_API_AUTH_TOKEN"] = auth_token
-    if current_user_id:
-        env["VIBELIFE_CURRENT_USER_ID"] = current_user_id
-    env["VIBELIFE_OPENCLAW_AGENT_ID"] = target_agent
+        while True:
+            remaining_timeout_seconds = max(1, int(overall_deadline - time.monotonic()))
+            if remaining_timeout_seconds <= 0:
+                raise OpenClawBridgeError("OpenClaw 调用超时")
 
-    try:
-        process = subprocess.Popen(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            cwd=REPO_ROOT,
-            env=env,
-            start_new_session=True,
-        )
-    except FileNotFoundError as exc:
-        raise OpenClawBridgeError("未找到 openclaw 命令") from exc
+            command = [
+                *_build_openclaw_command(
+                    "agent",
+                    "--local",
+                    "--json",
+                    "--verbose",
+                    "off",
+                    "--agent",
+                    target_agent,
+                    "--thinking",
+                    str(thinking),
+                    "--timeout",
+                    str(remaining_timeout_seconds),
+                    "--message",
+                    message,
+                ),
+            ]
 
-    deadline = time.monotonic() + timeout_seconds
-    stdout = ""
-    stderr = ""
+            env = os.environ.copy()
+            if model:
+                env["OPENCLAW_MODEL"] = str(model)
+            if base_url:
+                env["VIBELIFE_API_BASE_URL"] = base_url.rstrip("/")
+            if auth_token:
+                env["VIBELIFE_API_TOKEN"] = auth_token
+                env["VIBELIFE_API_AUTH_TOKEN"] = auth_token
+            if current_user_id:
+                env["VIBELIFE_CURRENT_USER_ID"] = current_user_id
+            env["VIBELIFE_OPENCLAW_AGENT_ID"] = target_agent
 
-    while time.monotonic() < deadline:
-        recovered_text = _read_latest_session_reply(target_agent, message)
-        if recovered_text:
-            _terminate_openclaw_process(process)
-            return _build_openclaw_result(recovered_text, None)
+            try:
+                process = subprocess.Popen(
+                    command,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    cwd=REPO_ROOT,
+                    env=env,
+                    start_new_session=True,
+                )
+            except FileNotFoundError as exc:
+                raise OpenClawBridgeError("未找到 openclaw 命令") from exc
 
-        if process.poll() is not None:
-            stdout, stderr = process.communicate()
-            break
+            deadline = time.monotonic() + remaining_timeout_seconds
+            stdout = ""
+            stderr = ""
 
-        time.sleep(1)
-    else:
-        recovered_text = _read_latest_session_reply(target_agent, message)
-        stdout, stderr = _terminate_openclaw_process(process)
-        parsed = _parse_openclaw_output(stdout)
-        if recovered_text:
-            return _build_openclaw_result(recovered_text, parsed)
+            while time.monotonic() < deadline:
+                recovered_text = _read_latest_session_reply(target_agent, message)
+                if recovered_text:
+                    _terminate_openclaw_process(process)
+                    return _build_openclaw_result(recovered_text, None)
 
-        text = _clean_assistant_reply(_extract_assistant_text(parsed))
-        if text:
-            return _build_openclaw_result(text, parsed)
+                if process.poll() is not None:
+                    stdout, stderr = process.communicate()
+                    break
 
-        raise OpenClawBridgeError("OpenClaw 调用超时")
+                time.sleep(1)
+            else:
+                recovered_text = _read_latest_session_reply(target_agent, message)
+                stdout, stderr = _terminate_openclaw_process(process)
+                parsed = _parse_openclaw_output(stdout)
+                if recovered_text:
+                    return _build_openclaw_result(recovered_text, parsed)
 
-    stdout = (stdout or "").strip()
-    stderr = (stderr or "").strip()
-    recovered_text = _read_latest_session_reply(target_agent, message)
+                text = _clean_assistant_reply(_extract_assistant_text(parsed))
+                if text:
+                    return _build_openclaw_result(text, parsed)
 
-    if process.returncode != 0:
-        if recovered_text:
+                raise OpenClawBridgeError("OpenClaw 调用超时")
+
+            stdout = (stdout or "").strip()
+            stderr = (stderr or "").strip()
+            recovered_text = _read_latest_session_reply(target_agent, message)
+
+            if process.returncode != 0:
+                if recovered_text:
+                    parsed = _parse_openclaw_output(stdout)
+                    return _build_openclaw_result(recovered_text, parsed)
+
+                error_text = stderr or stdout or "unknown error"
+                remaining_retry_budget = overall_deadline - time.monotonic()
+                if (
+                    _is_session_lock_error(error_text)
+                    and session_lock_retry_count < SESSION_LOCK_MAX_RETRIES
+                    and remaining_retry_budget > SESSION_LOCK_RETRY_DELAY_SECONDS
+                ):
+                    session_lock_retry_count += 1
+                    time.sleep(SESSION_LOCK_RETRY_DELAY_SECONDS)
+                    continue
+
+                raise OpenClawBridgeError(f"OpenClaw 调用失败: {error_text}")
+
+            if not stdout:
+                if recovered_text:
+                    return _build_openclaw_result(recovered_text, None)
+                raise OpenClawBridgeError("OpenClaw 未返回内容")
+
             parsed = _parse_openclaw_output(stdout)
-            return _build_openclaw_result(recovered_text, parsed)
-        error_text = stderr or stdout or "unknown error"
-        raise OpenClawBridgeError(f"OpenClaw 调用失败: {error_text}")
 
-    if not stdout:
-        if recovered_text:
-            return _build_openclaw_result(recovered_text, None)
-        raise OpenClawBridgeError("OpenClaw 未返回内容")
+            if recovered_text:
+                return _build_openclaw_result(recovered_text, parsed)
 
-    parsed = _parse_openclaw_output(stdout)
+            text = _clean_assistant_reply(_extract_assistant_text(parsed))
+            if text:
+                return _build_openclaw_result(text, parsed)
 
-    if recovered_text:
-        return _build_openclaw_result(recovered_text, parsed)
+            fallback = _build_openclaw_fallback(parsed)
+            if fallback:
+                return _build_openclaw_result(fallback, parsed)
 
-    text = _clean_assistant_reply(_extract_assistant_text(parsed))
-    if text:
-        return _build_openclaw_result(text, parsed)
-
-    fallback = _build_openclaw_fallback(parsed)
-    if fallback:
-        return _build_openclaw_result(fallback, parsed)
-
-    return _build_openclaw_result(stdout, parsed)
+            return _build_openclaw_result(stdout, parsed)

@@ -208,9 +208,10 @@ class WorkbenchPrepareApiTest(unittest.TestCase):
 
     def test_prepare_fails_when_daily_plan_refresh_fails_without_mutating_manual_todos(self):
         user_id, headers = self.register_user()
+        todo_id = f"todo_manual_keep_{time.time_ns()}"
         self.insert_manual_todo(
             user_id=user_id,
-            todo_id="todo_manual_keep",
+            todo_id=todo_id,
             text_value="manual keep",
         )
 
@@ -226,7 +227,7 @@ class WorkbenchPrepareApiTest(unittest.TestCase):
 
         self.assertEqual(response.status_code, 422, response.text)
         user_todos = self.list_todos(user_id)
-        self.assertEqual([todo.id for todo in user_todos], ["todo_manual_keep"])
+        self.assertEqual([todo.id for todo in user_todos], [todo_id])
 
     def test_prepare_does_not_modify_project_records(self):
         user_id, headers = self.register_user()
