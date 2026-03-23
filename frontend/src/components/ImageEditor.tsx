@@ -116,19 +116,19 @@ const ImageEditor = ({ onImageSelected, onClose }: ImageEditorProps) => {
       formData.append('file', blob, 'image.jpg');
 
       // 上传到后端
-      const enhanceRes = await axios.post('http://localhost:8000/api/images/upload', formData, {
+      const enhanceRes = await axios.post(`${window.__VIBELIFE_API_ORIGIN__}/api/images/upload`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 
       if (enhanceRes.data.success) {
         // 返回增强后的图片URL
-        const enhancedUrl = `http://localhost:8000${enhanceRes.data.enhanced_url}`;
+        const enhancedUrl = `${window.__VIBELIFE_API_ORIGIN__}${enhanceRes.data.enhanced_url}`;
 
         // 调用回调，传递图片信息
         if (onImageSelected) {
           onImageSelected({
             url: enhancedUrl,
-            originalUrl: `http://localhost:8000${enhanceRes.data.original_url}`,
+            originalUrl: `${window.__VIBELIFE_API_ORIGIN__}${enhanceRes.data.original_url}`,
             metadata: enhanceRes.data.metadata
           });
         }
